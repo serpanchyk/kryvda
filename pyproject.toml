@@ -1,0 +1,74 @@
+[project]
+name = "telegram-monitor"
+version = "0.1.0"
+description = "Foundation for monitoring an agreed pool of Telegram channels."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv]
+managed = true
+package = false
+
+[tool.uv.workspace]
+members = [
+    "apps/api",
+    "apps/telegram-scraper",
+    "apps/ai-worker",
+    "packages/*",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13",
+    "httpx>=0.28",
+    "pre-commit>=4.0",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+ignore_missing_imports = true
+explicit_package_bases = true
+namespace_packages = true
+mypy_path = [
+    "apps/api/src",
+    "apps/telegram-scraper/src",
+    "apps/ai-worker/src",
+    "packages/monitoring-common/src",
+]
+files = ["apps", "packages"]
+exclude = ["(^|/)tests/"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*", "*.tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+warn_return_any = false
+
+[tool.pytest.ini_options]
+testpaths = ["apps", "packages"]
+addopts = "-v --import-mode=importlib --cov=apps --cov=packages --cov-report=term-missing --cov-fail-under=80"
+asyncio_mode = "auto"
+pythonpath = [
+    "apps/api/src",
+    "apps/telegram-scraper/src",
+    "apps/ai-worker/src",
+    "packages/monitoring-common/src",
+]
+
+[tool.coverage.run]
+data_file = ".pytest_cache/.coverage"
+omit = ["*/tests/*", "*__init__.py"]

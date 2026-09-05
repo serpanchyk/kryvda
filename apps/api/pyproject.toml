@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "telegram-monitor-api"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "monitoring-common",
+    "uvicorn[standard]>=0.32",
+]
+
+[tool.uv.sources]
+monitoring-common = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/telegram_monitor_api"]

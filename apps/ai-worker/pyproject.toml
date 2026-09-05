@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "telegram-monitor-ai-worker"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["monitoring-common"]
+
+[tool.uv.sources]
+monitoring-common = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/telegram_monitor_ai_worker"]

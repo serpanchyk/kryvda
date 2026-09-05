@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    env_file:
+      - ./infra/postgres/.env
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      POSTGRES_DSN: postgresql://${POSTGRES_USER:-telegram_monitor}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-telegram_monitor}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  telegram-scraper:
+    build:
+      context: .
+      dockerfile: apps/telegram-scraper/Dockerfile
+    environment:
+      POSTGRES_DSN: postgresql://${POSTGRES_USER:-telegram_monitor}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-telegram_monitor}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ai-worker:
+    build:
+      context: .
+      dockerfile: apps/ai-worker/Dockerfile
+    environment:
+      POSTGRES_DSN: postgresql://${POSTGRES_USER:-telegram_monitor}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-telegram_monitor}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
