@@ -22,12 +22,11 @@ collection health; AI execution and the product UI remain shells.
 - PostgreSQL is the lightweight queue through a leased-job table. Live collection jobs take
   priority over throttled historical backfill jobs.
 - Configuration priority is constructor arguments, environment, `.env`, `config.yaml`, then
-  file secrets. See `docs/system/foundation/configuration.md`.
+  file secrets. See `system/foundation/configuration.md`.
 - The reviewed source seed contains INSIDER UA, Україна Сейчас, Реальна війна, Україна Online,
   and Times of Ukraine. Production collection authenticates with a dedicated Telegram account.
 
 ## Documentation
 
-`docs/VISION.md` describes target capability. `docs/system/` describes the implemented
-foundation. Future work belongs in `docs/tasks/backlog/`; operational records belong in
-`docs/problems/backlog/`.
+`VISION.md` describes target capability. `system/` describes the implemented foundation. Future
+work belongs in `tasks/backlog/`; operational records belong in `problems/backlog/`.

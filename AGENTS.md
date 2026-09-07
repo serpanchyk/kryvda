@@ -20,7 +20,7 @@ post collection, structured AI analysis, and later entity/claim aggregation.
 - Use typed async I/O at runtime boundaries and structured JSON logs; never use `print()`.
 - Keep secrets out of git; document every setting in the appropriate `.env.example`.
 - Use Docker Compose as the normal runtime path.
-- Update `PROJECT_CONTEXT.md` and relevant `docs/system/` material whenever architecture,
+- Update `docs/CURRENT_STATE.md` and relevant `docs/system/` material whenever architecture,
   configuration, or runtime behavior changes.
 - Commit all completed task changes before handing work back to the user.
 - Before completion run `uv lock`, `uv sync --frozen --all-packages`, `uv run pre-commit run
