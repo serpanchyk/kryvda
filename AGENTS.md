@@ -26,3 +26,16 @@ post collection, structured AI analysis, and later entity/claim aggregation.
 - Before completion run `uv lock`, `uv sync --frozen --all-packages`, `uv run pre-commit run
   --all-files`, `uv run pytest`, and frontend checks when frontend files change. Report any
   skipped check and why.
+
+## Validation Guardrails
+
+- Run `uv run pre-commit run --all-files` immediately after adding or substantially changing
+  Python modules, not only at the end. It enforces a 100-character limit, including long SQL
+  and string literals; if a hook reformats files, rerun the full hook suite before continuing.
+- Treat strict mypy and runtime imports as separate checks. In particular, verify third-party
+  annotations at runtime: a type accepted by mypy may not be subscriptable or otherwise valid
+  in the installed library version. Instantiate Pydantic settings in a way that satisfies mypy
+  when required environment-backed fields are declared.
+- Add focused tests together with every new production module, then run `uv run pytest` before
+  adding more scope. The repository enforces 80% total coverage, so account for the coverage
+  effect of newly introduced runtime-boundary code and use typed fakes for external services.
