@@ -5,8 +5,14 @@
 ```bash
 cp .env.example .env
 cp infra/postgres/.env.example infra/postgres/.env
+uv run telegram-monitor-authorize
 docker compose up --build
 ```
+
+Before authorization, add `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, and
+`TELEGRAM_PHONE_NUMBER` to the ignored root `.env`. Copy the printed session-string assignment
+back into that file before starting Compose. The database seeds the approved public sources on
+its first initialization.
 
 The API health endpoint is `http://localhost:8000/health`; the frontend is
 `http://localhost:5173`.

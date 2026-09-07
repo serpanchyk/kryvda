@@ -23,6 +23,8 @@ collection health; AI execution and the product UI remain shells.
   priority over throttled historical backfill jobs.
 - Configuration priority is constructor arguments, environment, `.env`, `config.yaml`, then
   file secrets. See `docs/system/foundation/configuration.md`.
+- The reviewed source seed contains INSIDER UA, Україна Сейчас, Реальна війна, Україна Online,
+  and Times of Ukraine. Production collection authenticates with a dedicated Telegram account.
 
 ## Documentation
 

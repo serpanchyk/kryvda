@@ -58,4 +58,15 @@ CREATE TABLE analysis_jobs (
 CREATE INDEX analysis_jobs_available_idx ON analysis_jobs (status, priority, available_at);
 CREATE INDEX raw_posts_channel_published_idx ON raw_posts (channel_id, published_at DESC);
 
--- Populate this reviewed migration with the agreed channel list before first deployment.
+INSERT INTO monitored_channels (configured_reference, username, title, access_kind)
+VALUES
+    ('insiderUKR', 'insiderUKR', 'INSIDER UA', 'public'),
+    ('u_now', 'u_now', 'Україна Сейчас', 'public'),
+    ('voynareal', 'voynareal', 'Реальна війна', 'public'),
+    ('UaOnlii', 'UaOnlii', 'Україна Online', 'public'),
+    ('times_ukraina', 'times_ukraina', 'Times of Ukraine', 'public')
+ON CONFLICT (configured_reference) DO UPDATE
+SET username = EXCLUDED.username,
+    title = EXCLUDED.title,
+    access_kind = EXCLUDED.access_kind,
+    updated_at = now();

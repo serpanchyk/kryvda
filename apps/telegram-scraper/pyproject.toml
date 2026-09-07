@@ -12,6 +12,9 @@ dependencies = [
     "telethon>=1.40",
 ]
 
+[project.scripts]
+telegram-monitor-authorize = "telegram_monitor_scraper.authorize:main"
+
 [tool.uv.sources]
 monitoring-common = { workspace = true }
 
