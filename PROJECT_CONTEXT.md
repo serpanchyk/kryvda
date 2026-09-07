@@ -2,16 +2,16 @@
 
 ## Current State
 
-Only the runnable repository foundation exists. API, scraper, and AI worker processes boot;
-the API exposes `/health`; the frontend is a Vite shell. No product pipeline or persistence
-schema exists yet.
+The Telegram collection foundation persists an agreed fixed channel pool, raw posts and
+revisions, and PostgreSQL analysis jobs. The API exposes service health and read-only channel
+collection health; AI execution and the product UI remain shells.
 
 ## Service Map
 
 | Boundary | Responsibility | Dependencies |
 | --- | --- | --- |
-| API | Future read/write HTTP surface | PostgreSQL (future) |
-| Telegram scraper | Future channel/post collection | PostgreSQL job handoff (future) |
+| API | Health and collection-status HTTP surface | PostgreSQL |
+| Telegram scraper | Fixed channel/post collection | PostgreSQL job handoff |
 | AI worker | Future post analysis | PostgreSQL job handoff (future), AI provider (future) |
 | Frontend | Future investigation and registry UI | API |
 | monitoring-common | Settings, JSON logging, contracts | None |
@@ -19,8 +19,8 @@ schema exists yet.
 ## Runtime Decisions
 
 - Docker Compose starts all services plus PostgreSQL 16.
-- PostgreSQL will become the lightweight queue through a leased-job table; no queue table or
-  implementation is present at this stage.
+- PostgreSQL is the lightweight queue through a leased-job table. Live collection jobs take
+  priority over throttled historical backfill jobs.
 - Configuration priority is constructor arguments, environment, `.env`, `config.yaml`, then
   file secrets. See `docs/system/foundation/configuration.md`.
 

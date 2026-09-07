@@ -1,5 +1,6 @@
 # Runtime
 
-Docker Compose starts PostgreSQL, the FastAPI API shell, Telegram scraper shell, AI worker
-shell, and the built frontend. PostgreSQL is the only stateful dependency. A later migration
-will introduce the leased-job table used to hand work from scraper to AI worker.
+Docker Compose starts PostgreSQL, the FastAPI API, Telegram collection worker, AI worker,
+and the built frontend. PostgreSQL is the only stateful dependency and provides the leased-job
+table used to hand analysis work from scraper to AI worker. The scraper runs as a single
+restartable instance and polls active approved channels every five minutes by default.
