@@ -21,6 +21,8 @@ collection health; AI execution and the product UI remain shells.
 - Docker Compose starts all services plus PostgreSQL 16.
 - PostgreSQL is the lightweight queue through a leased-job table. Live collection jobs take
   priority over throttled historical backfill jobs.
+- Public Telegram sources resolve through their configured handles; stored peer IDs are durable
+  source identity, not standalone Telethon lookup values.
 - Configuration priority is constructor arguments, environment, `.env`, `config.yaml`, then
   file secrets. See `system/foundation/configuration.md`.
 - The reviewed source seed contains INSIDER UA, Україна Сейчас, Реальна війна, Україна Online,
