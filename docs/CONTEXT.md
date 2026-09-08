@@ -19,3 +19,36 @@ Collection of a Channel's historical Raw Posts before ongoing monitoring.
 ## Collection Cursor
 
 The durable position from which a Channel's collection safely resumes.
+
+## Semantic Annotation
+
+**Golden Dataset**:
+A manually reviewed, versioned set of Post Revisions used to validate annotation and model output.
+_Avoid_: Ground truth, final benchmark
+
+**Entity Mention**:
+The exact textual occurrence of a monitoring-relevant actor in a Post Revision.
+_Avoid_: Generic NER result
+
+**Canonical Entity**:
+A registry identity that unifies Entity Mentions referring to the same actor.
+_Avoid_: Surface form, guessed identity
+
+**Claim**:
+An atomic proposition expressed, reported, quoted, denied, hypothesized, or questioned in a Post
+Revision.
+_Avoid_: Narrative, information wave
+
+**Stance**:
+An attributed evaluative position toward an Entity Mention, supported by text in a Post Revision.
+_Avoid_: Information attack
+
+**Rhetorical Feature**:
+An observable text-grounded device, such as ridicule or an accusation, separately annotated from
+Stance.
+_Avoid_: Attack flag
+
+**Information Attack**:
+An aggregate analytic finding about a similar negative narrative across multiple Channels in a
+close time period; never a property of one Post Revision.
+_Avoid_: Post-level label

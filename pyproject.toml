@@ -20,8 +20,10 @@ members = [
 
 [dependency-groups]
 dev = [
+    "dvc>=3.66",
     "mypy>=1.13",
     "httpx>=0.28",
+    "jsonschema>=4.23",
     "pre-commit>=4.0",
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
@@ -59,7 +61,7 @@ check_untyped_defs = true
 warn_return_any = false
 
 [tool.pytest.ini_options]
-testpaths = ["apps", "packages"]
+testpaths = ["apps", "packages", "experiments/datasets/golden_v0/tests"]
 addopts = "-v --import-mode=importlib --cov=apps --cov=packages --cov-report=term-missing --cov-fail-under=80"
 asyncio_mode = "auto"
 pythonpath = [
@@ -67,6 +69,7 @@ pythonpath = [
     "apps/telegram-scraper/src",
     "apps/ai-worker/src",
     "packages/monitoring-common/src",
+    "experiments/datasets/golden_v0/src",
 ]
 
 [tool.coverage.run]

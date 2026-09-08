@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://telegram-monitor.local/schemas/golden_v0/annotation_schema_v1.json",
+  "title": "Golden v0 annotation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["example_id", "schema_version", "source", "selection", "annotations"],
+  "properties": {
+    "example_id": {"type": "string", "pattern": "^golden_v0-[0-9]{3}$"},
+    "schema_version": {"const": "annotation_schema_v1"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel_id", "channel_reference", "raw_post_id", "post_revision_id",
+        "telegram_message_id", "published_at", "text"
+      ],
+      "properties": {
+        "channel_id": {"type": "integer", "minimum": 1},
+        "channel_reference": {"type": "string", "minLength": 1},
+        "raw_post_id": {"type": "integer", "minimum": 1},
+        "post_revision_id": {"type": "integer", "minimum": 1},
+        "telegram_message_id": {"type": "integer", "minimum": 1},
+        "published_at": {"type": "string", "format": "date-time"},
+        "text": {"type": "string"}
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["facets", "reason", "is_keyword_false_positive"],
+      "properties": {
+        "facets": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "reason": {"type": "string", "minLength": 1},
+        "is_keyword_false_positive": {"type": "boolean"}
+      }
+    },
+    "annotations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entities", "stances", "claims", "rhetorical_features"],
+      "properties": {
+        "entities": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+        "stances": {"type": "array", "items": {"$ref": "#/$defs/stance"}},
+        "claims": {"type": "array", "items": {"$ref": "#/$defs/claim"}},
+        "rhetorical_features": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/rhetorical_feature"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": {"type": "integer", "minimum": 0},
+        "end": {"type": "integer", "minimum": 1}
+      }
+    },
+    "perspective": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_kind"],
+      "properties": {
+        "source_kind": {
+          "enum": ["channel_editorial", "named_entity", "external_unnamed", "unknown"]
+        },
+        "source_entity_id": {"type": "string"}
+      }
+    },
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "mention_span", "surface_form", "registry_entity_id", "canonical_name", "entity_type",
+        "registry_status", "resolution_source", "subject_role"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^e[1-9][0-9]*$"},
+        "mention_span": {"$ref": "#/$defs/span"},
+        "surface_form": {"type": "string", "minLength": 1},
+        "registry_entity_id": {"type": ["string", "null"]},
+        "canonical_name": {"type": ["string", "null"]},
+        "entity_type": {
+          "enum": ["person", "organization", "state_institution", "media_outlet", "political_actor"]
+        },
+        "registry_status": {"enum": ["candidate", "monitored", "ignored"]},
+        "resolution_source": {"enum": ["registry", "annotator_knowledge", "unresolved"]},
+        "subject_role": {"enum": ["primary", "secondary"]}
+      }
+    },
+    "stance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entity_id", "perspective", "value", "evidence_spans"],
+      "properties": {
+        "entity_id": {"type": "string"},
+        "perspective": {"$ref": "#/$defs/perspective"},
+        "value": {
+          "enum": ["positive", "neutral", "negative", "mixed", "insufficient_context"]
+        },
+        "evidence_spans": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/span"},
+          "minItems": 1
+        }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "normalized_text", "entity_ids", "evidence_spans", "attribution",
+        "presentation", "epistemic_status"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^c[1-9][0-9]*$"},
+        "normalized_text": {"type": "string", "minLength": 1},
+        "entity_ids": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "evidence_spans": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/span"},
+          "minItems": 1
+        },
+        "attribution": {"$ref": "#/$defs/perspective"},
+        "presentation": {"enum": ["editorial", "direct_quote", "reported", "repost"]},
+        "epistemic_status": {
+          "enum": ["asserted", "alleged", "denied", "hypothetical", "questioned"]
+        }
+      }
+    },
+    "rhetorical_feature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feature_type", "evidence_span", "perspective"],
+      "properties": {
+        "feature_type": {
+          "enum": [
+            "derogatory_labeling", "ridicule", "delegitimization",
+            "foreign_control_accusation", "corruption_accusation",
+            "criminality_accusation", "grant_discrediting", "hypocrisy_claim",
+            "call_for_punishment"
+          ]
+        },
+        "evidence_span": {"$ref": "#/$defs/span"},
+        "target_entity_id": {"type": "string"},
+        "target_claim_id": {"type": "string"},
+        "perspective": {"$ref": "#/$defs/perspective"}
+      }
+    }
+  }
+}

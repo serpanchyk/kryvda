@@ -23,6 +23,12 @@ post collection, structured AI analysis, and later entity/claim aggregation.
 - Update `docs/CURRENT_STATE.md` and relevant `docs/system/` material whenever architecture,
   configuration, or runtime behavior changes.
 - Commit all completed task changes before handing work back to the user.
+- Version datasets, annotation exports, experiment outputs, and model artifacts with DVC; never
+  add their contents directly to Git. Commit the corresponding `.dvc` metadata, `dvc.lock` when
+  it changes, code, schemas, and documentation together.
+- Before handing off a task that changes DVC-tracked material, run `dvc status` and the relevant
+  dataset validator. Run `dvc push` when a project DVC remote is configured; do not invent a
+  remote or place credentials in DVC configuration.
 - Before completion run `uv lock`, `uv sync --frozen --all-packages`, `uv run pre-commit run
   --all-files`, `uv run pytest`, and frontend checks when frontend files change. Report any
   skipped check and why.
@@ -39,3 +45,5 @@ post collection, structured AI analysis, and later entity/claim aggregation.
 - Add focused tests together with every new production module, then run `uv run pytest` before
   adding more scope. The repository enforces 80% total coverage, so account for the coverage
   effect of newly introduced runtime-boundary code and use typed fakes for external services.
+- Keep experimental code under `experiments/`. Promote it into an application package only after
+  its dataset schema and evaluation contract are stable.

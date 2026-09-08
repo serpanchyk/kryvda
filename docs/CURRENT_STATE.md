@@ -3,9 +3,10 @@
 ## Current State
 
 The Telegram collection foundation persists an agreed fixed channel pool, raw posts and
-revisions, current channel avatars, and PostgreSQL analysis jobs. The API exposes service health,
-read-only channel collection health, and current-avatar URLs; AI execution and the product UI
-remain shells.
+revisions, current channel avatars, and PostgreSQL analysis jobs. A DVC-versioned `golden_v0`
+annotation pilot and offline DSPy experiment area define the future semantic-extraction contract.
+The API exposes service health, read-only channel collection health, and current-avatar URLs; AI
+execution and the product UI remain shells.
 
 ## Service Map
 
@@ -30,6 +31,8 @@ remain shells.
   and Times of Ukraine. Production collection authenticates with a dedicated Telegram account.
 - Current Telegram channel avatars are stored in a shared Docker volume, not PostgreSQL; their
   stable relative URLs use `/channel-images/{channel_id}` and are refreshed every collection poll.
+- `golden_v0` is an offline, DVC-tracked pilot for annotation-schema validation. It does not make
+  the AI worker a runtime dependency on DVC or implement DSPy inference yet.
 
 ## Documentation
 
