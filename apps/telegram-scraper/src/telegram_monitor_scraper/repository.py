@@ -36,6 +36,36 @@ class CollectionRepository:
             title,
         )
 
+    async def update_channel_avatar(self, channel_id: int, content_type: str) -> None:
+        """Record the API URL and media type for a stored current avatar.
+
+        Args:
+            channel_id: Internal monitored-channel identifier.
+            content_type: MIME type detected from the stored image.
+        """
+        await self._pool.execute(
+            """UPDATE monitored_channels
+               SET avatar_url = '/channel-images/' || $1, avatar_content_type = $2,
+                   avatar_updated_at = now(), updated_at = now()
+               WHERE id = $1""",
+            channel_id,
+            content_type,
+        )
+
+    async def clear_channel_avatar(self, channel_id: int) -> None:
+        """Clear metadata after Telegram reports no current profile image.
+
+        Args:
+            channel_id: Internal monitored-channel identifier.
+        """
+        await self._pool.execute(
+            """UPDATE monitored_channels
+               SET avatar_url = NULL, avatar_content_type = NULL, avatar_updated_at = NULL,
+                   updated_at = now()
+               WHERE id = $1""",
+            channel_id,
+        )
+
     async def latest_message_id(self, channel_id: int) -> int:
         value = await self._pool.fetchval(
             "SELECT latest_message_id FROM collection_cursors WHERE channel_id = $1", channel_id
@@ -148,11 +178,22 @@ class CollectionRepository:
             complete,
         )
 
-    async def record_success(self, channel_id: int) -> None:
+    async def record_success(self, channel_id: int, clear_error: bool = True) -> None:
+        """Record completed post collection while retaining a simultaneous avatar failure.
+
+        Args:
+            channel_id: Internal monitored-channel identifier.
+            clear_error: Whether this collection cycle completed without an avatar error.
+        """
         await self._pool.execute(
-            """UPDATE monitored_channels SET last_collected_at = now(), last_error = NULL,
-               last_error_at = NULL, updated_at = now() WHERE id = $1""",
+            """UPDATE monitored_channels
+               SET last_collected_at = now(),
+                   last_error = CASE WHEN $2 THEN NULL ELSE last_error END,
+                   last_error_at = CASE WHEN $2 THEN NULL ELSE last_error_at END,
+                   updated_at = now()
+               WHERE id = $1""",
             channel_id,
+            clear_error,
         )
 
     async def record_error(self, channel_id: int, message: str) -> None:

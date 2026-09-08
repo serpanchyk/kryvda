@@ -1,12 +1,14 @@
 """Telegram collection worker entry point."""
 
 import asyncio
+from pathlib import Path
 
 import asyncpg
 from monitoring_common.config import BaseServiceSettings
 from monitoring_common.logging import setup_logging
 from pydantic import SecretStr
 
+from telegram_monitor_scraper.avatar_storage import ChannelAvatarStorage
 from telegram_monitor_scraper.client import TelethonChannelClient
 from telegram_monitor_scraper.collector import Collector
 from telegram_monitor_scraper.repository import CollectionRepository
@@ -21,6 +23,7 @@ class ScraperSettings(BaseServiceSettings):
     telegram_phone_number: SecretStr
     telegram_session_string: SecretStr
     collection_poll_interval_seconds: int = 300
+    channel_image_storage_path: Path = Path("/var/lib/telegram-monitor/channel-images")
 
 
 async def run(stop_event: asyncio.Event | None = None) -> None:
@@ -36,7 +39,11 @@ async def run(stop_event: asyncio.Event | None = None) -> None:
         settings.telegram_session_string.get_secret_value(),
     )
     await client.connect(settings.telegram_phone_number.get_secret_value())
-    collector = Collector(CollectionRepository(pool), client)
+    collector = Collector(
+        CollectionRepository(pool),
+        client,
+        ChannelAvatarStorage(settings.channel_image_storage_path),
+    )
     stop = stop_event or asyncio.Event()
     logger.info("telegram collection worker started")
     try:

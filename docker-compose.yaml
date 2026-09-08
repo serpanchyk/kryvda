@@ -22,6 +22,8 @@ services:
       POSTGRES_DSN: postgresql://${POSTGRES_USER:-telegram_monitor}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-telegram_monitor}
     ports:
       - "${API_PORT:-8000}:8000"
+    volumes:
+      - channel-images:/var/lib/telegram-monitor/channel-images:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,6 +45,8 @@ services:
       TELEGRAM_SESSION_STRING: ${TELEGRAM_SESSION_STRING:?TELEGRAM_SESSION_STRING must be set}
       COLLECTION_POLL_INTERVAL_SECONDS: ${COLLECTION_POLL_INTERVAL_SECONDS:-300}
     restart: unless-stopped
+    volumes:
+      - channel-images:/var/lib/telegram-monitor/channel-images
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,3 +73,4 @@ services:
 
 volumes:
   postgres-data:
+  channel-images:

@@ -3,9 +3,8 @@
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
-import pytest
 from telegram_monitor_scraper.collector import Collector
-from telegram_monitor_scraper.models import MonitoredChannel, TelegramPost
+from telegram_monitor_scraper.models import ChannelAvatar, MonitoredChannel, TelegramPost
 
 
 class FakeRepository:
@@ -17,6 +16,9 @@ class FakeRepository:
         self.cursor_exists = True
         self.persisted: list[tuple[int, str]] = []
         self.identities: list[tuple[int, int, str | None, str | None]] = []
+        self.avatar_updates: list[tuple[int, str]] = []
+        self.cleared_avatars: list[int] = []
+        self.errors: list[str] = []
 
     async def active_channels(self) -> list[MonitoredChannel]:
         return [self.channel]
@@ -34,6 +36,12 @@ class FakeRepository:
 
     async def backfill_before_message_id(self, channel_id: int) -> int | None:
         return self.backfill_cursor
+
+    async def update_channel_avatar(self, channel_id: int, content_type: str) -> None:
+        self.avatar_updates.append((channel_id, content_type))
+
+    async def clear_channel_avatar(self, channel_id: int) -> None:
+        self.cleared_avatars.append(channel_id)
 
     async def backfill_complete(self, channel_id: int) -> bool:
         return self.complete
@@ -53,11 +61,11 @@ class FakeRepository:
         self.backfill_cursor = message_id
         self.complete = complete
 
-    async def record_success(self, channel_id: int) -> None:
+    async def record_success(self, channel_id: int, clear_error: bool = True) -> None:
         return None
 
     async def record_error(self, channel_id: int, message: str) -> None:
-        pytest.fail(message)
+        self.errors.append(message)
 
 
 class FakeClient:
@@ -84,6 +92,21 @@ class FakeClient:
     async def resolve(self, channel: MonitoredChannel) -> tuple[int, str | None, str | None]:
         return 1, "example_channel", "Example"
 
+    async def avatar(self, channel: MonitoredChannel) -> ChannelAvatar | None:
+        return ChannelAvatar(b"\xff\xd8\xffavatar", "image/jpeg")
+
+
+class FakeAvatarStorage:
+    def __init__(self) -> None:
+        self.saved: list[tuple[int, bytes]] = []
+        self.deleted: list[int] = []
+
+    async def save(self, channel_id: int, content: bytes) -> None:
+        self.saved.append((channel_id, content))
+
+    async def delete(self, channel_id: int) -> None:
+        self.deleted.append(channel_id)
+
 
 def post(message_id: int, days_old: int = 0) -> TelegramPost:
     return TelegramPost(
@@ -98,12 +121,19 @@ def post(message_id: int, days_old: int = 0) -> TelegramPost:
 
 async def test_live_posts_are_collected_before_backfill() -> None:
     repository = FakeRepository()
-    collector = Collector(repository, FakeClient([post(20)], [post(10), post(9, 366)]))  # type: ignore[arg-type]
+    storage = FakeAvatarStorage()
+    collector = Collector(
+        repository,
+        FakeClient([post(20)], [post(10), post(9, 366)]),
+        storage,  # type: ignore[arg-type]
+    )
 
     await collector.collect_once()
 
     assert repository.persisted == [(20, "live"), (10, "backfill")]
     assert repository.identities == [(1, 1, "example_channel", "Example")]
+    assert repository.avatar_updates == [(1, "image/jpeg")]
+    assert storage.saved == [(1, b"\xff\xd8\xffavatar")]
     assert repository.complete is True
     assert repository.live_cursor == 20
 
@@ -111,9 +141,46 @@ async def test_live_posts_are_collected_before_backfill() -> None:
 async def test_new_channel_sets_live_cursor_before_collecting_history() -> None:
     repository = FakeRepository()
     repository.cursor_exists = False
-    collector = Collector(repository, FakeClient([post(20)], [post(10), post(9, 366)]))  # type: ignore[arg-type]
+    collector = Collector(
+        repository,
+        FakeClient([post(20)], [post(10), post(9, 366)]),
+        FakeAvatarStorage(),  # type: ignore[arg-type]
+    )
 
     await collector.collect_once()
 
     assert repository.live_cursor == 100
     assert repository.persisted == [(10, "backfill")]
+
+
+async def test_missing_avatar_clears_storage_and_metadata() -> None:
+    class NoAvatarClient(FakeClient):
+        async def avatar(self, channel: MonitoredChannel) -> ChannelAvatar | None:
+            return None
+
+    repository = FakeRepository()
+    storage = FakeAvatarStorage()
+    collector = Collector(repository, NoAvatarClient([], []), storage)  # type: ignore[arg-type]
+
+    await collector.collect_once()
+
+    assert storage.deleted == [1]
+    assert repository.cleared_avatars == [1]
+
+
+async def test_avatar_error_does_not_block_post_collection() -> None:
+    class FailingAvatarClient(FakeClient):
+        async def avatar(self, channel: MonitoredChannel) -> ChannelAvatar | None:
+            raise RuntimeError("avatar download failed")
+
+    repository = FakeRepository()
+    collector = Collector(
+        repository,
+        FailingAvatarClient([post(20)], []),
+        FakeAvatarStorage(),  # type: ignore[arg-type]
+    )
+
+    await collector.collect_once()
+
+    assert repository.persisted == [(20, "live")]
+    assert repository.errors == ["avatar download failed"]

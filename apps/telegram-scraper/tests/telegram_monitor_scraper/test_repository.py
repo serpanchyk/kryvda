@@ -77,10 +77,12 @@ async def test_repository_records_collection_health_and_deletion() -> None:
     repository = CollectionRepository(pool)  # type: ignore[arg-type]
 
     await repository.update_channel_identity(1, 2, "source", "Source")
+    await repository.update_channel_avatar(1, "image/jpeg")
+    await repository.clear_channel_avatar(1)
     await repository.advance_live_cursor(1, 3)
     await repository.advance_backfill_cursor(1, 2, complete=False)
     await repository.record_success(1)
     await repository.record_error(1, "failure")
     await repository.mark_deleted(1, [3])
 
-    assert len(pool.executed) == 6
+    assert len(pool.executed) == 8

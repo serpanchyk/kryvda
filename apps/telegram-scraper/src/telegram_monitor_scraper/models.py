@@ -25,3 +25,11 @@ class TelegramPost:
     edited_at: datetime | None
     metadata: dict[str, Any]
     attachments: list[dict[str, Any]]
+
+
+@dataclass(frozen=True, slots=True)
+class ChannelAvatar:
+    """Represent a channel profile image returned by Telegram."""
+
+    content: bytes
+    content_type: str

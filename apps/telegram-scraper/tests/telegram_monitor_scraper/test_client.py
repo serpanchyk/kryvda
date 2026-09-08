@@ -15,12 +15,16 @@ class FakeTelegramClient:
     def __init__(self) -> None:
         self.iter_messages_calls: list[tuple[object, dict[str, Any]]] = []
         self.messages: list[Any] = []
+        self.avatar: bytes | None = None
 
     async def get_entity(self, reference: int | str) -> object:
         return reference
 
     async def get_messages(self, entity: object, limit: int) -> list[SimpleNamespace]:
         return [SimpleNamespace(id=73)]
+
+    async def download_profile_photo(self, entity: object, file: type[bytes]) -> bytes | None:
+        return self.avatar
 
     async def iter_messages(self, entity: object, **kwargs: Any) -> AsyncIterator[Any]:
         self.iter_messages_calls.append((entity, kwargs))
@@ -91,3 +95,23 @@ async def test_backfill_normalizes_messages_after_the_initial_request() -> None:
     posts = [post async for post in client.older_posts(channel, before_message_id=None)]
 
     assert [post.message_id for post in posts] == [10]
+
+
+async def test_avatar_download_normalizes_a_jpeg() -> None:
+    fake_client = FakeTelegramClient()
+    fake_client.avatar = b"\xff\xd8\xffavatar"
+    client = TelethonChannelClient.__new__(TelethonChannelClient)
+    client._client = cast(Any, fake_client)
+
+    avatar = await client.avatar(MonitoredChannel(1, "example_channel", None, "public"))
+
+    assert avatar is not None
+    assert avatar.content == b"\xff\xd8\xffavatar"
+    assert avatar.content_type == "image/jpeg"
+
+
+async def test_avatar_download_returns_none_without_a_profile_image() -> None:
+    client = TelethonChannelClient.__new__(TelethonChannelClient)
+    client._client = cast(Any, FakeTelegramClient())
+
+    assert await client.avatar(MonitoredChannel(1, "example_channel", None, "public")) is None

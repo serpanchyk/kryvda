@@ -6,7 +6,7 @@ from typing import Any
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
-from telegram_monitor_scraper.models import MonitoredChannel, TelegramPost
+from telegram_monitor_scraper.models import ChannelAvatar, MonitoredChannel, TelegramPost
 
 
 class TelethonChannelClient:
@@ -30,6 +30,23 @@ class TelethonChannelClient:
         """Resolve a configured handle and return durable identity plus current display data."""
         entity = await self._client.get_entity(self._entity_reference(channel))
         return int(entity.id), getattr(entity, "username", None), getattr(entity, "title", None)
+
+    async def avatar(self, channel: MonitoredChannel) -> ChannelAvatar | None:
+        """Download the channel's current profile image when Telegram provides one.
+
+        Args:
+            channel: Source whose current profile image will be retrieved.
+
+        Returns:
+            Current image payload and MIME type, or ``None`` without a profile image.
+        """
+        entity = await self._client.get_entity(self._entity_reference(channel))
+        content = await self._client.download_profile_photo(entity, file=bytes)
+        if content is None:
+            return None
+        if not isinstance(content, bytes):
+            raise TypeError("Telegram returned a non-bytes channel profile image")
+        return ChannelAvatar(content, self._content_type(content))
 
     async def newer_posts(
         self, channel: MonitoredChannel, minimum_message_id: int
@@ -86,3 +103,26 @@ class TelethonChannelClient:
             },
             attachments=media,
         )
+
+    @staticmethod
+    def _content_type(content: bytes) -> str:
+        """Detect the image MIME type required by the HTTP response.
+
+        Args:
+            content: Raw image payload returned by Telegram.
+
+        Returns:
+            MIME type for a supported profile-image format.
+
+        Raises:
+            ValueError: If Telegram returns an unsupported image format.
+        """
+        if content.startswith(b"\xff\xd8\xff"):
+            return "image/jpeg"
+        if content.startswith(b"\x89PNG\r\n\x1a\n"):
+            return "image/png"
+        if content.startswith((b"GIF87a", b"GIF89a")):
+            return "image/gif"
+        if content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+            return "image/webp"
+        raise ValueError("Telegram returned an unsupported channel profile image format")
