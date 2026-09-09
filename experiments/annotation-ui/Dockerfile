@@ -14,7 +14,9 @@ COPY apps/telegram-scraper/pyproject.toml apps/telegram-scraper/pyproject.toml
 COPY packages/monitoring-common/pyproject.toml packages/monitoring-common/pyproject.toml
 RUN uv sync --frozen --only-group annotation --no-install-workspace
 COPY experiments/annotation-ui/src/ experiments/annotation-ui/src/
-COPY experiments/datasets/golden_v0/annotation_schema_v1.json experiments/datasets/golden_v0/
+COPY experiments/datasets/golden_v0/annotation_schema_v1.json \
+    experiments/datasets/golden_v0/annotation_import_schema_v1.json \
+    experiments/datasets/golden_v0/
 COPY experiments/datasets/golden_v0/src/ experiments/datasets/golden_v0/src/
 COPY --from=frontend /web/dist /static
 ENV PYTHONPATH=/workspace/experiments/annotation-ui/src:/workspace/experiments/datasets/golden_v0/src

@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { chatgptPrompt, parseAnnotationRecord } from "./json-record.js";
+import {
+  chatgptPrompt,
+  mutablePayload,
+  parseAnnotationPayload,
+} from "./json-record.js";
 import { codePointSpan, spanText } from "./spans.js";
 import "./style.css";
 
@@ -96,6 +100,7 @@ async function api(path, method = "GET", body) {
 
 function App() {
   const [schema, setSchema] = useState(null),
+    [importSchema, setImportSchema] = useState(null),
     [state, setState] = useState({ records: {}, registry: [] });
   const [posts, setPosts] = useState([]),
     [channels, setChannels] = useState([]),
@@ -114,6 +119,7 @@ function App() {
     [tab, setTab] = useState("entities"),
     [editorMode, setEditorMode] = useState("form"),
     [jsonText, setJsonText] = useState(""),
+    [importPreview, setImportPreview] = useState(null),
     [savedOnly, setSavedOnly] = useState(false);
   const textRef = useRef(null),
     current = useRef(null),
@@ -135,6 +141,9 @@ function App() {
   useEffect(() => {
     api("schema")
       .then(setSchema)
+      .catch((e) => setError(e.message));
+    api("import-schema")
+      .then(setImportSchema)
       .catch((e) => setError(e.message));
     refresh().catch((e) => setError(e.message));
     api("channels")
@@ -181,18 +190,19 @@ function App() {
     }
   }
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty || importPreview) return;
     const timer = setTimeout(() => persist(), 1000);
     return () => clearTimeout(timer);
-  }, [item, dirty]);
+  }, [item, dirty, importPreview]);
   const open = async (source) => {
     if (saving.current) return;
-    if (dirty && !(await persist())) return;
+    if (dirty && !importPreview && !(await persist())) return;
     try {
       setItem(await api("start/" + source.post_revision_id, "POST"));
       setSelected(null);
       setEditorMode("form");
       setJsonText("");
+      setImportPreview(null);
       setNotice("");
       setError("");
       setDirty(false);
@@ -207,17 +217,19 @@ function App() {
   }
   async function copyChatgptPrompt() {
     try {
-      await navigator.clipboard.writeText(chatgptPrompt(schema, record));
+      await navigator.clipboard.writeText(
+        chatgptPrompt(importSchema, record.source, mutablePayload(record)),
+      );
       setNotice("Пакет для ChatGPT скопійовано");
       setError("");
     } catch {
       setError("Не вдалося скопіювати пакет. Дозвольте доступ до буфера обміну.");
     }
   }
-  async function importAndComplete() {
+  async function previewImport() {
     let imported;
     try {
-      imported = parseAnnotationRecord(jsonText);
+      imported = parseAnnotationPayload(jsonText);
     } catch (e) {
       setError(`Не вдалося прочитати JSON: ${e.message}`);
       return;
@@ -227,13 +239,37 @@ function App() {
     setBusy(true);
     try {
       const updated = await api(
-        "records/" + record.source.post_revision_id,
-        "PUT",
-        { ...item, record: imported, status: "completed" },
+        "records/" + record.source.post_revision_id + "/import-preview",
+        "POST",
+        { version: item.version, payload: imported },
+      );
+      setItem({ ...item, record: updated.record });
+      setDirty(false);
+      setImportPreview(updated.candidates);
+      setEditorMode("form");
+      setNotice("JSON перевірено: перегляньте результат перед збереженням");
+      setError("");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      saving.current = false;
+      setBusy(false);
+    }
+  }
+  async function confirmImport() {
+    if (saving.current) return;
+    saving.current = true;
+    setBusy(true);
+    try {
+      const updated = await api(
+        "records/" + record.source.post_revision_id + "/complete-import",
+        "POST",
+        { version: item.version, payload: mutablePayload(record) },
       );
       setItem(updated);
       setDirty(false);
-      setNotice("JSON перевірено та додано до golden_v0");
+      setImportPreview(null);
+      setNotice("Перевірену анотацію додано до golden_v0");
       setError("");
       await refresh();
     } catch (e) {
@@ -672,9 +708,11 @@ function App() {
             <section className="editor">
               <div className="toolbar">
                 <span aria-live="polite">{notice || "Готово до розмітки"}</span>
-                <button disabled={busy} onClick={() => persist()}>
-                  Зберегти
-                </button>
+                {!importPreview && (
+                  <button disabled={busy} onClick={() => persist()}>
+                    Зберегти
+                  </button>
+                )}
               </div>
               <fieldset disabled={busy}>
                 <div className="editor-mode" aria-label="Режим розмітки">
@@ -695,10 +733,10 @@ function App() {
                 </div>
                 {editorMode === "json" ? (
                   <section className="json-import">
-                    <h2>Повний JSON-запис</h2>
+                    <h2>JSON-чернетка анотації</h2>
                     <p className="muted">
-                      Скопіюйте пакет, надішліть його ChatGPT і вставте повну відповідь.
-                      Поля source, example_id та schema_version мають лишитися точними.
+                      Скопіюйте пакет, надішліть його ChatGPT і вставте відповідь лише зі
+                      змінними полями selection та annotations.
                     </p>
                     <button onClick={copyChatgptPrompt} type="button">
                       Скопіювати пакет для ChatGPT
@@ -716,15 +754,15 @@ function App() {
                     </label>
                     <button
                       className="primary"
-                      disabled={!jsonText.trim()}
-                      onClick={importAndComplete}
+                      disabled={!jsonText.trim() || !importSchema}
+                      onClick={previewImport}
                       type="button"
                     >
-                      Імпортувати та завершити
+                      Перевірити та відкрити preview
                     </button>
                     <small>
-                      Перевірка схеми, доказів і незмінності джерела відбувається перед
-                      збереженням.
+                      Нічого не зберігається на цьому етапі. Спершу ви побачите результат
+                      у формі та підтвердите його.
                     </small>
                   </section>
                 ) : (
@@ -776,7 +814,29 @@ function App() {
                         ),
                       tab,
                     )}
-                    {tab === "entities" && (
+                    {tab === "entities" && importPreview && (
+                      <label>
+                        Канонічна назва
+                        <textarea
+                          rows="2"
+                          value={entry.canonical_name || ""}
+                          onChange={(event) =>
+                            changeGroup(
+                              record.annotations.entities.map((old, i) =>
+                                i === index
+                                  ? { ...old, canonical_name: event.target.value || null }
+                                  : old,
+                              ),
+                            )
+                          }
+                        />
+                        <small>
+                          Порожнє значення лишає згадку невизначеною. Після підтвердження
+                          нова назва стане candidate у довіднику.
+                        </small>
+                      </label>
+                    )}
+                    {tab === "entities" && !importPreview && (
                       <div className="registry">
                         <label>
                           Канонічна сутність
@@ -811,26 +871,41 @@ function App() {
                   </>
                 )}
               </fieldset>
-              {editorMode === "form" && <footer>
-                <button
-                  className="primary"
-                  disabled={busy}
-                  onClick={async () => {
-                    if (await persist("completed")) {
-                      const next = queue.find(
-                        (p) =>
-                          p.post_revision_id !==
-                            record.source.post_revision_id &&
-                          !state.records[p.post_revision_id],
-                      );
-                      if (next) await open(next);
-                    }
-                  }}
-                >
-                  Завершити й перейти далі →
-                </button>
-                <small>Перевіряємо форму та зберігаємо в golden_v0</small>
-              </footer>}
+              {editorMode === "form" && (
+                <footer>
+                  {importPreview ? (
+                    <>
+                      <div className="preview-notice">
+                        Preview: не збережено. Після підтвердження буде додано{" "}
+                        {importPreview.length} candidate-сутностей.
+                      </div>
+                      <button className="primary" disabled={busy} onClick={confirmImport}>
+                        Підтвердити та зберегти
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className="primary"
+                        disabled={busy}
+                        onClick={async () => {
+                          if (await persist("completed")) {
+                            const next = queue.find(
+                              (p) =>
+                                p.post_revision_id !== record.source.post_revision_id &&
+                                !state.records[p.post_revision_id],
+                            );
+                            if (next) await open(next);
+                          }
+                        }}
+                      >
+                        Завершити й перейти далі →
+                      </button>
+                      <small>Перевіряємо форму та зберігаємо в golden_v0</small>
+                    </>
+                  )}
+                </footer>
+              )}
             </section>
           </>
         )}

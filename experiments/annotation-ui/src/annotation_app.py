@@ -15,6 +15,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "datasets/golden_v0/data"
+IMPORT_SCHEMA_PATH = ROOT / "datasets/golden_v0/annotation_import_schema_v1.json"
 
 
 def atomic_write(path: Path, text: str) -> None:
@@ -34,6 +35,97 @@ def create_app(data: Path = DATA) -> FastAPI:
     lock = asyncio.Lock()
     schema = load_schema()
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    import_schema = json.loads(IMPORT_SCHEMA_PATH.read_text(encoding="utf-8"))
+    import_validator = Draft202012Validator(import_schema, format_checker=FormatChecker())
+
+    def record_errors(record: dict[str, Any]) -> list[str]:
+        """Collect full-record schema and semantic errors before persistence."""
+        errors = [error.message for error in validator.iter_errors(record)]
+        errors.extend(_semantic_errors(record, 1))
+        annotations = record.get("annotations")
+        if not isinstance(annotations, dict):
+            return errors
+        selection = record.get("selection")
+        if isinstance(selection, dict) and selection.get("is_keyword_false_positive"):
+            if any(annotations.values()):
+                errors.append("False-positive examples must have empty annotations")
+        for group in ("stances", "claims", "rhetorical_features"):
+            entries = annotations.get(group, [])
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                perspective = entry.get("perspective", entry.get("attribution", {}))
+                if (
+                    isinstance(perspective, dict)
+                    and perspective.get("source_kind") == "named_entity"
+                ):
+                    if not perspective.get("source_entity_id"):
+                        errors.append("Named source requires an entity")
+        return errors
+
+    def registry_key(name: str, entity_type: str) -> tuple[str, str]:
+        """Produce the stable candidate-match key for a resolved entity."""
+        return (" ".join(name.split()).casefold(), entity_type)
+
+    def next_registry_id(registry: list[dict[str, Any]]) -> str:
+        """Allocate a local registry ID without reusing an existing entry."""
+        numbers = [
+            int(entry["id"].removeprefix("local-"))
+            for entry in registry
+            if isinstance(entry.get("id"), str) and entry["id"].removeprefix("local-").isdigit()
+        ]
+        return f"local-{max(numbers, default=0) + 1}"
+
+    def materialize_import(
+        state: dict[str, Any], previous: dict[str, Any], payload: dict[str, Any]
+    ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+        """Freeze source fields and derive registry fields from an import payload."""
+        record = {
+            key: json.loads(json.dumps(previous["record"][key], ensure_ascii=False))
+            for key in ("example_id", "schema_version", "source")
+        }
+        record["selection"] = payload["selection"]
+        record["annotations"] = json.loads(json.dumps(payload["annotations"], ensure_ascii=False))
+        registry = json.loads(json.dumps(state["registry"], ensure_ascii=False))
+        by_key = {
+            registry_key(entry["canonical_name"], entry["entity_type"]): entry for entry in registry
+        }
+        new_candidates: list[dict[str, Any]] = []
+        for entity in record["annotations"]["entities"]:
+            canonical_name = entity.pop("canonical_name")
+            if canonical_name is None:
+                entity.update(
+                    registry_entity_id=None,
+                    canonical_name=None,
+                    registry_status="candidate",
+                    resolution_source="unresolved",
+                )
+                continue
+            cleaned_name = " ".join(canonical_name.split())
+            key = registry_key(cleaned_name, entity["entity_type"])
+            entry = by_key.get(key)
+            if entry is None:
+                entry = {
+                    "id": next_registry_id(registry),
+                    "canonical_name": cleaned_name,
+                    "aliases": [entity["surface_form"]],
+                    "entity_type": entity["entity_type"],
+                    "status": "candidate",
+                }
+                registry.append(entry)
+                by_key[key] = entry
+                new_candidates.append(entry)
+            elif entity["surface_form"] not in entry["aliases"]:
+                entry["aliases"].append(entity["surface_form"])
+            entity.update(
+                registry_entity_id=entry["id"],
+                canonical_name=entry["canonical_name"],
+                registry_status=entry["status"],
+                resolution_source="registry",
+            )
+        return record, registry, new_candidates
 
     def read_state() -> dict[str, Any]:
         path = data / "editor.json"
@@ -99,6 +191,10 @@ def create_app(data: Path = DATA) -> FastAPI:
     @app.get("/api/schema")
     async def get_schema() -> dict[str, Any]:
         return dict(schema)
+
+    @app.get("/api/import-schema")
+    async def get_import_schema() -> dict[str, Any]:
+        return dict(import_schema)
 
     @app.get("/api/state")
     async def get_state() -> dict[str, Any]:
@@ -203,23 +299,59 @@ def create_app(data: Path = DATA) -> FastAPI:
             if status not in ("draft", "completed"):
                 raise HTTPException(422, "Invalid status")
             if status == "completed":
-                errors = [e.message for e in validator.iter_errors(record)]
-                if errors:
-                    raise HTTPException(422, errors)
-                errors.extend(_semantic_errors(record, 1))
-                if record.get("selection", {}).get("is_keyword_false_positive"):
-                    if any(record.get("annotations", {}).values()):
-                        errors.append("False-positive examples must have empty annotations")
-                for group in ("stances", "claims", "rhetorical_features"):
-                    for entry in record.get("annotations", {}).get(group, []):
-                        perspective = entry.get("perspective", entry.get("attribution", {}))
-                        if perspective.get("source_kind") == "named_entity":
-                            if not perspective.get("source_entity_id"):
-                                errors.append("Named source requires an entity")
+                errors = record_errors(record)
                 if errors:
                     raise HTTPException(422, errors)
             item = {"record": record, "status": status, "version": previous["version"] + 1}
             state["records"][str(revision_id)] = item
+            await asyncio.to_thread(save_state, state)
+            return item
+
+    @app.post("/api/records/{revision_id}/import-preview")
+    async def import_preview(revision_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+        """Validate mutable JSON and return a full, unsaved record for review."""
+        async with lock:
+            state = await asyncio.to_thread(read_state)
+            previous = state["records"].get(str(revision_id))
+            if previous is None:
+                raise HTTPException(404, "Start the revision first")
+            if payload.get("version") != previous["version"]:
+                raise HTTPException(409, "Newer version exists; reload before editing")
+            mutable = payload.get("payload")
+            if not isinstance(mutable, dict):
+                raise HTTPException(422, "Import payload must be an object")
+            errors = [error.message for error in import_validator.iter_errors(mutable)]
+            if errors:
+                raise HTTPException(422, errors)
+            record, _, candidates = materialize_import(state, previous, mutable)
+            errors = record_errors(record)
+            if errors:
+                raise HTTPException(422, errors)
+            return {"record": record, "candidates": candidates}
+
+    @app.post("/api/records/{revision_id}/complete-import")
+    async def complete_import(revision_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+        """Confirm a reviewed import, populate candidates, and save a completed record."""
+        async with lock:
+            state = await asyncio.to_thread(read_state)
+            previous = state["records"].get(str(revision_id))
+            if previous is None:
+                raise HTTPException(404, "Start the revision first")
+            if payload.get("version") != previous["version"]:
+                raise HTTPException(409, "Newer version exists; reload before editing")
+            mutable = payload.get("payload")
+            if not isinstance(mutable, dict):
+                raise HTTPException(422, "Import payload must be an object")
+            errors = [error.message for error in import_validator.iter_errors(mutable)]
+            if errors:
+                raise HTTPException(422, errors)
+            record, registry, _ = materialize_import(state, previous, mutable)
+            errors = record_errors(record)
+            if errors:
+                raise HTTPException(422, errors)
+            item = {"record": record, "status": "completed", "version": previous["version"] + 1}
+            state["records"][str(revision_id)] = item
+            state["registry"] = registry
             await asyncio.to_thread(save_state, state)
             return item
 
@@ -238,7 +370,7 @@ def create_app(data: Path = DATA) -> FastAPI:
             ):
                 raise HTTPException(422, "Invalid entity type")
             entry = {
-                "id": f"local-{len(state['registry']) + 1}",
+                "id": next_registry_id(state["registry"]),
                 "canonical_name": entity["canonical_name"].strip(),
                 "aliases": [entity.get("surface_form", entity["canonical_name"])],
                 "entity_type": entity["entity_type"],

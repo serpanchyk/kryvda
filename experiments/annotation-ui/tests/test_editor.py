@@ -104,6 +104,90 @@ def test_malformed_completion_retains_draft(tmp_path, monkeypatch):
     assert client.get("/api/state").json()["records"]["9"]["version"] == 1
 
 
+def test_import_preview_is_unsaved_and_confirmation_creates_candidate(tmp_path, monkeypatch):
+    connection = SourceConnection()
+
+    async def connect(dsn: str, timeout: int) -> SourceConnection:
+        return connection
+
+    monkeypatch.setenv("ANNOTATION_POSTGRES_DSN", "postgresql://test")
+    monkeypatch.setattr("annotation_app.asyncpg.connect", connect)
+    client = TestClient(create_app(tmp_path))
+    item = client.post("/api/start/9").json()
+    payload = {
+        "selection": {
+            "facets": ["entity"],
+            "reason": "Перевірка candidate",
+            "is_keyword_false_positive": False,
+        },
+        "annotations": {
+            "entities": [
+                {
+                    "id": "e1",
+                    "mention_span": {"start": 2, "end": 5},
+                    "surface_form": "ЦПК",
+                    "canonical_name": " Центр протидії корупції ",
+                    "entity_type": "organization",
+                    "subject_role": "primary",
+                }
+            ],
+            "stances": [],
+            "claims": [],
+            "rhetorical_features": [],
+        },
+    }
+    preview = client.post(
+        "/api/records/9/import-preview", json={"version": item["version"], "payload": payload}
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["record"]["annotations"]["entities"][0]["registry_entity_id"] == "local-1"
+    assert preview.json()["candidates"][0]["canonical_name"] == "Центр протидії корупції"
+    assert client.get("/api/state").json()["registry"] == []
+    assert client.get("/api/state").json()["records"]["9"]["version"] == 1
+    completed = client.post(
+        "/api/records/9/complete-import", json={"version": item["version"], "payload": payload}
+    )
+    assert completed.status_code == 200, completed.text
+    state = client.get("/api/state").json()
+    assert state["records"]["9"]["status"] == "completed"
+    assert state["registry"][0]["aliases"] == ["ЦПК"]
+
+
+def test_import_rejects_false_positive_with_annotations(tmp_path, monkeypatch):
+    connection = SourceConnection()
+
+    async def connect(dsn: str, timeout: int) -> SourceConnection:
+        return connection
+
+    monkeypatch.setenv("ANNOTATION_POSTGRES_DSN", "postgresql://test")
+    monkeypatch.setattr("annotation_app.asyncpg.connect", connect)
+    client = TestClient(create_app(tmp_path))
+    item = client.post("/api/start/9").json()
+    payload = {
+        "selection": {
+            "facets": ["false_positive"],
+            "reason": "Шум",
+            "is_keyword_false_positive": True,
+        },
+        "annotations": {"entities": [], "stances": [], "claims": [], "rhetorical_features": []},
+    }
+    payload["annotations"]["entities"].append(
+        {
+            "id": "e1",
+            "mention_span": {"start": 2, "end": 5},
+            "surface_form": "ЦПК",
+            "canonical_name": None,
+            "entity_type": "organization",
+            "subject_role": "primary",
+        }
+    )
+    response = client.post(
+        "/api/records/9/import-preview", json={"version": item["version"], "payload": payload}
+    )
+    assert response.status_code == 422
+    assert "False-positive examples" in response.text
+
+
 def test_draft_snapshot_and_finalize(tmp_path):
     record = {
         "example_id": "golden_v0-001",

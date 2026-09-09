@@ -37,11 +37,12 @@ execution and the product UI remain shells.
 ## Documentation
 
 The experimental annotation editor reads PostgreSQL Post Revisions in read-only transactions
-and provides a Ukrainian form or full-record JSON import, evidence selection, local drafts,
-registry candidates, and validated golden_v0 exports. JSON import copies a ChatGPT package with
-the frozen source and schema, then completes only records passing the same protected validation.
-It runs independently on localhost through experimental Compose; see
-`../experiments/annotation-ui/README.md`. Production services remain unchanged.
+and provides a Ukrainian form or mutable-JSON import, evidence selection, local drafts, registry
+candidates, and validated golden_v0 exports. JSON import copies a frozen post and a constrained
+schema, then opens an editable unsaved preview. Confirmation runs protected validation and only
+then adds new canonical names as local candidate registry entries. It runs independently on
+localhost through experimental Compose; see `../experiments/annotation-ui/README.md`. Production
+services remain unchanged.
 
 `VISION.md` describes target capability. `system/` describes the implemented foundation. Future
 work belongs in `tasks/backlog/`; operational records belong in `problems/backlog/`.

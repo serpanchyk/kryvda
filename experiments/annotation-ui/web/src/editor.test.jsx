@@ -6,6 +6,9 @@ test("annotator selects Unicode evidence, saves a draft and finalizes a control"
   const schema = JSON.parse(
     readFileSync("../../datasets/golden_v0/annotation_schema_v1.json", "utf8"),
   );
+  const importSchema = JSON.parse(
+    readFileSync("../../datasets/golden_v0/annotation_import_schema_v1.json", "utf8"),
+  );
   const source = {
     post_revision_id: 1,
     raw_post_id: 1,
@@ -38,6 +41,7 @@ test("annotator selects Unicode evidence, saves a draft and finalizes a control"
     vi.fn(async (url, options) => {
       let result;
       if (url === "/api/schema") result = schema;
+      else if (url === "/api/import-schema") result = importSchema;
       else if (url === "/api/state")
         result = { records: started ? { 1: item } : {}, registry: [] };
       else if (url === "/api/channels") result = [{ id: 1, title: "Канал" }];
@@ -49,6 +53,22 @@ test("annotator selects Unicode evidence, saves a draft and finalizes a control"
         const payload = JSON.parse(options.body);
         saves.push(payload);
         item = { ...payload, version: item.version + 1 };
+        result = item;
+      } else if (url === "/api/records/1/import-preview") {
+        const payload = JSON.parse(options.body).payload;
+        result = {
+          record: { ...item.record, ...payload },
+          candidates: [],
+        };
+      } else if (url === "/api/records/1/complete-import") {
+        const payload = JSON.parse(options.body).payload;
+        saves.push({ ...JSON.parse(options.body), status: "completed" });
+        item = {
+          ...item,
+          record: { ...item.record, ...payload },
+          status: "completed",
+          version: item.version + 1,
+        };
         result = item;
       }
       return { ok: true, json: async () => structuredClone(result) };
@@ -96,13 +116,19 @@ test("annotator selects Unicode evidence, saves a draft and finalizes a control"
   await waitFor(() => expect(item.status).toBe("completed"));
   expect(item.record.selection.reason).toBe("Контрольний приклад");
   expect(item.record.annotations.entities).toEqual([]);
-  const imported = structuredClone(item.record);
+  const imported = {
+    selection: structuredClone(item.record.selection),
+    annotations: structuredClone(item.record.annotations),
+  };
   fireEvent.click(screen.getByText("JSON"));
   fireEvent.change(screen.getByLabelText("JSON від ChatGPT"), {
     target: { value: "```json\n" + JSON.stringify(imported) + "\n```" },
   });
-  fireEvent.click(screen.getByText("Імпортувати та завершити"));
-  await waitFor(() => expect(saves.at(-1)?.record).toEqual(imported));
+  fireEvent.click(screen.getByText("Перевірити та відкрити preview"));
+  await waitFor(() => expect(screen.getByText("Підтвердити та зберегти")).toBeTruthy());
+  expect(item.record.source).toEqual(source);
+  fireEvent.click(screen.getByText("Підтвердити та зберегти"));
+  await waitFor(() => expect(saves.at(-1)?.payload).toEqual(imported));
   expect(saves.at(-1).status).toBe("completed");
   expect(item.status).toBe("completed");
 });
