@@ -308,6 +308,7 @@ footer small {
   justify-content: space-between;
   gap: 16px;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 @media (max-width: 1050px) {
   main {

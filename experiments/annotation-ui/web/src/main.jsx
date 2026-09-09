@@ -88,12 +88,14 @@ async function api(path, method = "GET", body) {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const result = await response.json();
-  if (!response.ok)
-    throw new Error(
-      typeof result.detail === "string"
+  if (!response.ok) {
+    const detail = Array.isArray(result.detail)
+      ? result.detail.join("\n")
+      : typeof result.detail === "string"
         ? result.detail
-        : JSON.stringify(result.detail),
-    );
+        : JSON.stringify(result.detail);
+    throw new Error(detail);
+  }
   return result;
 }
 

@@ -134,5 +134,8 @@ def test_validator_reports_invalid_surface_span_and_reference(tmp_path: Path) ->
 
     errors = validate_dataset(path)
 
-    assert any("surface_form does not match" in error for error in errors)
+    assert any(
+        "entity e1 mention_span [0, 2) selects 'Те', but surface_form is 'Інше'" in error
+        for error in errors
+    )
     assert any("feature target entity does not reference" in error for error in errors)

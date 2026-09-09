@@ -100,8 +100,10 @@ def _semantic_errors(record: dict[str, Any], line_number: int) -> list[str]:
                 and isinstance(end, int)
                 and text[start:end] != entity["surface_form"]
             ):
+                entity_id = entity.get("id", "<unknown>")
                 errors.append(
-                    f"line {line_number}: entity surface_form does not match mention_span"
+                    f"line {line_number}: entity {entity_id} mention_span [{start}, {end}) selects "
+                    f"{text[start:end]!r}, but surface_form is {entity['surface_form']!r}"
                 )
         _check_resolution(entity, line_number, errors)
 
