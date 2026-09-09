@@ -28,11 +28,10 @@
     "selection": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["facets", "reason", "is_keyword_false_positive"],
+      "required": ["facets", "reason"],
       "properties": {
         "facets": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-        "reason": {"type": "string", "minLength": 1},
-        "is_keyword_false_positive": {"type": "boolean"}
+        "reason": {"type": "string", "minLength": 1}
       }
     },
     "annotations": {

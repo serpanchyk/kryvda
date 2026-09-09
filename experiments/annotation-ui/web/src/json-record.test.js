@@ -24,12 +24,14 @@ test("builds a prompt with source separate from the mutable payload", () => {
   expect(prompt).toContain("Golden v0 annotation");
   expect(prompt).toContain('"text": "Пост"');
   expect(prompt).toContain("лише selection та annotations");
+  expect(prompt).toContain("неповнолітніх, жертв, свідків");
+  expect(prompt).toContain("external_unnamed");
 });
 
 test("removes registry fields before confirming an imported preview", () => {
   expect(
     mutablePayload({
-      selection: { facets: [], reason: "", is_keyword_false_positive: false },
+      selection: { facets: [], reason: "" },
       annotations: {
         entities: [
           {
@@ -50,7 +52,7 @@ test("removes registry fields before confirming an imported preview", () => {
       },
     }),
   ).toEqual({
-    selection: { facets: [], reason: "", is_keyword_false_positive: false },
+    selection: { facets: [], reason: "" },
     annotations: {
       entities: [
         {

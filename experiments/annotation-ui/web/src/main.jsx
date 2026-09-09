@@ -12,7 +12,6 @@ const labels = {
   selection: "Відбір прикладу",
   facets: "Особливості прикладу",
   reason: "Чому обрано цей пост",
-  is_keyword_false_positive: "Хибний збіг ключового слова",
   entities: "Сутності",
   stances: "Ставлення",
   claims: "Твердження",

@@ -25,7 +25,7 @@ test("annotator selects Unicode evidence, saves a draft and finalizes a control"
       example_id: "golden_v0-001",
       schema_version: "annotation_schema_v1",
       source,
-      selection: { facets: [], reason: "", is_keyword_false_positive: false },
+      selection: { facets: [], reason: "" },
       annotations: {
         entities: [],
         stances: [],
@@ -101,7 +101,6 @@ test("annotator selects Unicode evidence, saves a draft and finalizes a control"
   fireEvent.change(screen.getByLabelText("Чому обрано цей пост"), {
     target: { value: "Контрольний приклад" },
   });
-  fireEvent.click(screen.getByLabelText("Хибний збіг ключового слова"));
   fireEvent.click(screen.getByText("+ Додати"));
   const areas = screen.getAllByRole("textbox");
   fireEvent.change(

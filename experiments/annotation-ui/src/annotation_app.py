@@ -45,10 +45,6 @@ def create_app(data: Path = DATA) -> FastAPI:
         annotations = record.get("annotations")
         if not isinstance(annotations, dict):
             return errors
-        selection = record.get("selection")
-        if isinstance(selection, dict) and selection.get("is_keyword_false_positive"):
-            if any(annotations.values()):
-                errors.append("False-positive examples must have empty annotations")
         for group in ("stances", "claims", "rhetorical_features"):
             entries = annotations.get(group, [])
             if not isinstance(entries, list):
@@ -130,7 +126,12 @@ def create_app(data: Path = DATA) -> FastAPI:
     def read_state() -> dict[str, Any]:
         path = data / "editor.json"
         if path.exists():
-            return dict(json.loads(path.read_text(encoding="utf-8")))
+            state = dict(json.loads(path.read_text(encoding="utf-8")))
+            for item in state.get("records", {}).values():
+                selection = item.get("record", {}).get("selection")
+                if isinstance(selection, dict):
+                    selection.pop("is_keyword_false_positive", None)
+            return state
         records = {}
         annotations = data / "annotations.jsonl"
         if annotations.exists():
@@ -142,6 +143,8 @@ def create_app(data: Path = DATA) -> FastAPI:
                         "status": "completed",
                         "version": 1,
                     }
+            for item in records.values():
+                item["record"]["selection"].pop("is_keyword_false_positive", None)
         return {"records": records, "registry": []}
 
     def save_state(state: dict[str, Any]) -> None:
@@ -267,7 +270,7 @@ def create_app(data: Path = DATA) -> FastAPI:
                     "example_id": f"golden_v0-{number:03}",
                     "schema_version": "annotation_schema_v1",
                     "source": rows[0],
-                    "selection": {"facets": [], "reason": "", "is_keyword_false_positive": False},
+                    "selection": {"facets": [], "reason": ""},
                     "annotations": {
                         "entities": [],
                         "stances": [],

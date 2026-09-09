@@ -25,7 +25,6 @@ def test_validator_accepts_quote_with_attributed_stance(tmp_path: Path) -> None:
         "selection": {
             "facets": ["quotation", "corruption_accusation"],
             "reason": "Covers attributed negative stance.",
-            "is_keyword_false_positive": False,
         },
         "annotations": {
             "entities": [
@@ -103,7 +102,6 @@ def test_validator_reports_invalid_surface_span_and_reference(tmp_path: Path) ->
         "selection": {
             "facets": ["edge_case"],
             "reason": "Validator test.",
-            "is_keyword_false_positive": False,
         },
         "annotations": {
             "entities": [

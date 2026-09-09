@@ -13,10 +13,16 @@ Annotate actors relevant to monitoring: people, organisations, state institution
 and political actors. Capture every textual mention with its exact half-open Unicode span. Assign
 one entity type and a registry status: `candidate`, `monitored`, or `ignored`.
 
-The extraction module emits the mention's surface form only. A separate registry-resolution module
-matches it against canonical names and aliases. When it finds a reliable match, it supplies the
-registry entity ID and canonical name. When no match exists, retain the surface form and leave the
-canonical fields empty; this is a candidate for human registry review, not a model-invented name.
+Do not create an entity for incidental non-monitoring people: minors, victims, witnesses,
+unnamed commentators, anonymous sources, or generic roles without an identifiable monitoring
+actor. They must not receive a canonical name or a registry candidate. An unnamed external voice
+may still be recorded as `external_unnamed` attribution for a claim about an in-scope actor; do
+not invent a source entity for it. Still annotate a claim, stance, or rhetorical feature that
+targets a relevant actor even when its text also mentions one of these excluded people.
+
+The import draft may propose a canonical name, but it cannot set a registry ID. During the reviewed
+confirmation step, an exact canonical-name/entity-type match reuses its registry entry; otherwise
+the verified proposal becomes a `candidate`. Leave canonical name empty when it is not reliable.
 
 `primary` means that the post centrally concerns or materially evaluates the entity. Several
 entities may be primary. Speakers cited only to frame another entity are normally `secondary`.
