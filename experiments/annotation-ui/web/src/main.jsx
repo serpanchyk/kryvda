@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { chatgptPrompt, parseAnnotationRecord } from "./json-record.js";
 import { codePointSpan, spanText } from "./spans.js";
 import "./style.css";
 
@@ -111,6 +112,8 @@ function App() {
   const [dirty, setDirty] = useState(false),
     [busy, setBusy] = useState(false),
     [tab, setTab] = useState("entities"),
+    [editorMode, setEditorMode] = useState("form"),
+    [jsonText, setJsonText] = useState(""),
     [savedOnly, setSavedOnly] = useState(false);
   const textRef = useRef(null),
     current = useRef(null),
@@ -188,6 +191,8 @@ function App() {
     try {
       setItem(await api("start/" + source.post_revision_id, "POST"));
       setSelected(null);
+      setEditorMode("form");
+      setJsonText("");
       setNotice("");
       setError("");
       setDirty(false);
@@ -199,6 +204,44 @@ function App() {
     setItem({ ...item, record });
     setDirty(true);
     setNotice("Зберігаємо…");
+  }
+  async function copyChatgptPrompt() {
+    try {
+      await navigator.clipboard.writeText(chatgptPrompt(schema, record));
+      setNotice("Пакет для ChatGPT скопійовано");
+      setError("");
+    } catch {
+      setError("Не вдалося скопіювати пакет. Дозвольте доступ до буфера обміну.");
+    }
+  }
+  async function importAndComplete() {
+    let imported;
+    try {
+      imported = parseAnnotationRecord(jsonText);
+    } catch (e) {
+      setError(`Не вдалося прочитати JSON: ${e.message}`);
+      return;
+    }
+    if (saving.current) return;
+    saving.current = true;
+    setBusy(true);
+    try {
+      const updated = await api(
+        "records/" + record.source.post_revision_id,
+        "PUT",
+        { ...item, record: imported, status: "completed" },
+      );
+      setItem(updated);
+      setDirty(false);
+      setNotice("JSON перевірено та додано до golden_v0");
+      setError("");
+      await refresh();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      saving.current = false;
+      setBusy(false);
+    }
   }
   function capture() {
     const selection = window.getSelection();
@@ -634,6 +677,58 @@ function App() {
                 </button>
               </div>
               <fieldset disabled={busy}>
+                <div className="editor-mode" aria-label="Режим розмітки">
+                  <button
+                    className={editorMode === "form" ? "active" : ""}
+                    onClick={() => setEditorMode("form")}
+                    type="button"
+                  >
+                    Форма
+                  </button>
+                  <button
+                    className={editorMode === "json" ? "active" : ""}
+                    onClick={() => setEditorMode("json")}
+                    type="button"
+                  >
+                    JSON
+                  </button>
+                </div>
+                {editorMode === "json" ? (
+                  <section className="json-import">
+                    <h2>Повний JSON-запис</h2>
+                    <p className="muted">
+                      Скопіюйте пакет, надішліть його ChatGPT і вставте повну відповідь.
+                      Поля source, example_id та schema_version мають лишитися точними.
+                    </p>
+                    <button onClick={copyChatgptPrompt} type="button">
+                      Скопіювати пакет для ChatGPT
+                    </button>
+                    <label>
+                      JSON від ChatGPT
+                      <textarea
+                        aria-label="JSON від ChatGPT"
+                        className="json-text"
+                        placeholder={'{\n  "example_id": "golden_v0-001"\n}'}
+                        rows="18"
+                        value={jsonText}
+                        onChange={(e) => setJsonText(e.target.value)}
+                      />
+                    </label>
+                    <button
+                      className="primary"
+                      disabled={!jsonText.trim()}
+                      onClick={importAndComplete}
+                      type="button"
+                    >
+                      Імпортувати та завершити
+                    </button>
+                    <small>
+                      Перевірка схеми, доказів і незмінності джерела відбувається перед
+                      збереженням.
+                    </small>
+                  </section>
+                ) : (
+                  <>
                 <details open>
                   <summary>Відбір прикладу</summary>
                   {field(
@@ -713,8 +808,10 @@ function App() {
                 <button className="add" onClick={add}>
                   + Додати: {title(tab).toLowerCase()}
                 </button>
+                  </>
+                )}
               </fieldset>
-              <footer>
+              {editorMode === "form" && <footer>
                 <button
                   className="primary"
                   disabled={busy}
@@ -733,7 +830,7 @@ function App() {
                   Завершити й перейти далі →
                 </button>
                 <small>Перевіряємо форму та зберігаємо в golden_v0</small>
-              </footer>
+              </footer>}
             </section>
           </>
         )}

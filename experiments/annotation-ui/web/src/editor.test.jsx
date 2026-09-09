@@ -32,6 +32,7 @@ test("annotator selects Unicode evidence, saves a draft and finalizes a control"
     },
   };
   let started = false;
+  const saves = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url, options) => {
@@ -45,7 +46,9 @@ test("annotator selects Unicode evidence, saves a draft and finalizes a control"
         started = true;
         result = item;
       } else if (url === "/api/records/1") {
-        item = { ...JSON.parse(options.body), version: item.version + 1 };
+        const payload = JSON.parse(options.body);
+        saves.push(payload);
+        item = { ...payload, version: item.version + 1 };
         result = item;
       }
       return { ok: true, json: async () => structuredClone(result) };
@@ -93,4 +96,13 @@ test("annotator selects Unicode evidence, saves a draft and finalizes a control"
   await waitFor(() => expect(item.status).toBe("completed"));
   expect(item.record.selection.reason).toBe("Контрольний приклад");
   expect(item.record.annotations.entities).toEqual([]);
+  const imported = structuredClone(item.record);
+  fireEvent.click(screen.getByText("JSON"));
+  fireEvent.change(screen.getByLabelText("JSON від ChatGPT"), {
+    target: { value: "```json\n" + JSON.stringify(imported) + "\n```" },
+  });
+  fireEvent.click(screen.getByText("Імпортувати та завершити"));
+  await waitFor(() => expect(saves.at(-1)?.record).toEqual(imported));
+  expect(saves.at(-1).status).toBe("completed");
+  expect(item.status).toBe("completed");
 });

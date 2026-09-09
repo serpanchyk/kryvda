@@ -198,6 +198,28 @@ nav {
   gap: 4px;
   margin: 16px 0;
 }
+.editor-mode {
+  display: flex;
+  gap: 4px;
+  margin: 16px 0;
+}
+.json-import {
+  background: white;
+  border: 1px solid #dde5dc;
+  border-radius: 10px;
+  padding: 18px;
+}
+.json-import h2 {
+  margin-bottom: 4px;
+}
+.json-import .primary {
+  margin-top: 12px;
+}
+.json-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
 nav button {
   font-size: 12px;
   padding: 8px;

@@ -23,5 +23,8 @@ Compose service serves a React editor through an experimental FastAPI backend. I
 Post Revisions with read-only transactions through the existing Compose PostgreSQL network,
 freezes their source text on selection, and maintains
 drafts and registry candidates in DVC-tracked files. Finalization checks schema and evidence links.
+The UI can also copy a schema-and-source package for external ChatGPT annotation and import its
+complete JSON response. Imported records use the same finalization path, which preserves the
+frozen source snapshot and rejects malformed or semantically invalid data.
 The recovery state is `data/editor.json`; the JSONL files are derived exports. PostgreSQL has no
 annotation tables. The editor must be stopped before manually capturing a DVC snapshot.
