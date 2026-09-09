@@ -1,0 +1,20 @@
+services:
+  annotation-ui:
+    build:
+      context: ../..
+      dockerfile: experiments/annotation-ui/Dockerfile
+    environment:
+      ANNOTATION_POSTGRES_DSN: ${ANNOTATION_POSTGRES_DSN:?Use the experimental launch command}
+    user: "${ANNOTATION_UID:-1000}:${ANNOTATION_GID:-1000}"
+    ports:
+      - "127.0.0.1:8090:8090"
+    volumes:
+      - ../datasets/golden_v0/data:/workspace/experiments/datasets/golden_v0/data
+    networks:
+      - project-postgres
+    restart: unless-stopped
+
+networks:
+  project-postgres:
+    external: true
+    name: telegram_monitor_default

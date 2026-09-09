@@ -36,5 +36,10 @@ execution and the product UI remain shells.
 
 ## Documentation
 
+The experimental annotation editor reads PostgreSQL Post Revisions in read-only transactions
+and provides a Ukrainian form with evidence selection, local drafts, registry candidates, and
+validated golden_v0 exports. It runs independently on localhost through experimental Compose;
+see `../experiments/annotation-ui/README.md`. Production services remain unchanged.
+
 `VISION.md` describes target capability. `system/` describes the implemented foundation. Future
 work belongs in `tasks/backlog/`; operational records belong in `problems/backlog/`.

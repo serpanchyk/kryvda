@@ -2702,6 +2702,13 @@ version = "0.1.0"
 source = { virtual = "." }
 
 [package.dev-dependencies]
+annotation = [
+    { name = "asyncpg" },
+    { name = "fastapi" },
+    { name = "jsonschema" },
+    { name = "python-dotenv" },
+    { name = "uvicorn" },
+]
 dev = [
     { name = "dvc" },
     { name = "httpx" },
@@ -2717,6 +2724,13 @@ dev = [
 [package.metadata]
 
 [package.metadata.requires-dev]
+annotation = [
+    { name = "asyncpg", specifier = ">=0.31" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "jsonschema", specifier = ">=4.23" },
+    { name = "python-dotenv", specifier = ">=1" },
+    { name = "uvicorn", specifier = ">=0.34" },
+]
 dev = [
     { name = "dvc", specifier = ">=3.66" },
     { name = "httpx", specifier = ">=0.28" },

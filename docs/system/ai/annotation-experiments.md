@@ -17,3 +17,11 @@ Git-tracked. No DVC remote is configured until project storage and access contro
 DSPy work begins only after the annotation schema is stable. Its evaluation uses component metrics
 for entity extraction/resolution, stance, claims, attribution/modality, and rhetorical features,
 with a documented weighted aggregate.
+
+The local annotation UI is documented in `experiments/annotation-ui/README.md`. Its standalone
+Compose service serves a React editor through an experimental FastAPI backend. It reads existing
+Post Revisions with read-only transactions through the existing Compose PostgreSQL network,
+freezes their source text on selection, and maintains
+drafts and registry candidates in DVC-tracked files. Finalization checks schema and evidence links.
+The recovery state is `data/editor.json`; the JSONL files are derived exports. PostgreSQL has no
+annotation tables. The editor must be stopped before manually capturing a DVC snapshot.

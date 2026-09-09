@@ -1,0 +1,8 @@
+**/node_modules
+**/dist
+**/.env
+.git
+.venv
+.dvc/cache
+**/__pycache__
+experiments/datasets/golden_v0/data

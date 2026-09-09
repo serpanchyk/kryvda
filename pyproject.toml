@@ -19,6 +19,7 @@ members = [
 ]
 
 [dependency-groups]
+annotation = ["asyncpg>=0.31", "fastapi>=0.115", "uvicorn>=0.34", "jsonschema>=4.23", "python-dotenv>=1"]
 dev = [
     "dvc>=3.66",
     "mypy>=1.13",
@@ -50,7 +51,7 @@ mypy_path = [
     "apps/ai-worker/src",
     "packages/monitoring-common/src",
 ]
-files = ["apps", "packages"]
+files = ["apps", "packages", "experiments/annotation-ui/src"]
 exclude = ["(^|/)tests/"]
 
 [[tool.mypy.overrides]]
@@ -61,8 +62,8 @@ check_untyped_defs = true
 warn_return_any = false
 
 [tool.pytest.ini_options]
-testpaths = ["apps", "packages", "experiments/datasets/golden_v0/tests"]
-addopts = "-v --import-mode=importlib --cov=apps --cov=packages --cov-report=term-missing --cov-fail-under=80"
+testpaths = ["apps", "packages", "experiments/datasets/golden_v0/tests", "experiments/annotation-ui/tests"]
+addopts = "-v --import-mode=importlib --cov=apps --cov=packages --cov=experiments/annotation-ui/src --cov-report=term-missing --cov-fail-under=80"
 asyncio_mode = "auto"
 pythonpath = [
     "apps/api/src",
@@ -70,6 +71,7 @@ pythonpath = [
     "apps/ai-worker/src",
     "packages/monitoring-common/src",
     "experiments/datasets/golden_v0/src",
+    "experiments/annotation-ui/src",
 ]
 
 [tool.coverage.run]
