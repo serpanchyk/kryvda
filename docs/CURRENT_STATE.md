@@ -4,9 +4,9 @@
 
 The Telegram collection foundation persists an agreed fixed channel pool, raw posts and
 revisions, current channel avatars, and PostgreSQL analysis jobs. A DVC-versioned `golden_v0`
-annotation pilot and offline DSPy experiment area define the future semantic-extraction contract.
-The API exposes service health, read-only channel collection health, and current-avatar URLs; AI
-execution and the product UI remain shells.
+annotation pilot and the shared `extraction_schema_v1` candidate-extraction contract define the
+future semantic-extraction boundary. The API exposes service health, read-only channel collection
+health, and current-avatar URLs; AI execution and the product UI remain shells.
 
 ## Service Map
 

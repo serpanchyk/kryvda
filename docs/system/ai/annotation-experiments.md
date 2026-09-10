@@ -10,6 +10,10 @@ surface mention. Resolution uses the entity registry and aliases to return a can
 entity when possible. An unresolved mention remains a candidate for review; the model must not
 invent a canonical identity.
 
+The shared `extraction_schema_v1` contract is the runtime candidate-extraction shape for the
+lesser model. It excludes canonical names and all registry decisions; see
+`post-analysis-extraction.md`. It is not a replacement for `golden_v0` review data.
+
 The `experiments/datasets/` and `experiments/dspy/` directories are offline-only. Their data,
 run outputs, and model artifacts are DVC-tracked; code, schemas, guidelines, and DVC metadata are
 Git-tracked. No DVC remote is configured until project storage and access control are decided.
