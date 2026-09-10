@@ -36,8 +36,10 @@ health, read-only channel collection health, and current-avatar URLs; product UI
   `MamayLM-Gemma-3-27B-IT`, forwarding to the Lapathoniia AI API. The AI worker requests strict
   JSON-Schema output, validates text-grounded extraction locally, and persists one immutable
   candidate result per Post Revision.
-- `golden_v0` is an offline, DVC-tracked pilot for annotation-schema validation. It does not make
-  the AI worker a runtime dependency on DVC or implement DSPy inference yet.
+- `golden_v0` is an offline, DVC-tracked pilot for annotation-schema validation. The offline Mamay
+  comparison generator reuses the worker's inference request boundary to pair each golden input,
+  full reviewed annotation, and schema-validated Mamay output for external review. It does not
+  score or judge the outputs and does not make the AI worker a runtime dependency on DVC.
 
 ## Documentation
 

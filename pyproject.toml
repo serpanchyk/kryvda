@@ -62,7 +62,13 @@ check_untyped_defs = true
 warn_return_any = false
 
 [tool.pytest.ini_options]
-testpaths = ["apps", "packages", "experiments/datasets/golden_v0/tests", "experiments/annotation-ui/tests"]
+testpaths = [
+    "apps",
+    "packages",
+    "experiments/datasets/golden_v0/tests",
+    "experiments/annotation-ui/tests",
+    "experiments/dspy/tests",
+]
 addopts = "-v --import-mode=importlib --cov=apps --cov=packages --cov=experiments/annotation-ui/src --cov-report=term-missing --cov-fail-under=80"
 asyncio_mode = "auto"
 pythonpath = [
@@ -72,6 +78,7 @@ pythonpath = [
     "packages/monitoring-common/src",
     "experiments/datasets/golden_v0/src",
     "experiments/annotation-ui/src",
+    "experiments/dspy/src",
 ]
 
 [tool.coverage.run]

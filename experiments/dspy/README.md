@@ -1,9 +1,36 @@
-# DSPy experiments
+# Offline experiments
 
-This directory is reserved for offline DSPy work after `golden_v0` has a stable annotation schema.
-The first pipeline should compose entity extraction and resolution, per-entity stance, atomic claim
-extraction, attribution/modality, and rhetorical-feature detection. It must be evaluated against
-the versioned golden dataset with a weighted component metric, not subjective prompt quality.
+`mamay_golden_v0.py` creates evidence for a human or external ChatGPT review; it does not score,
+rank, or judge Mamay. Each row pairs the exact post text with the complete reviewed `golden_v0`
+annotations and Mamay's locally validated runtime extraction (or a sanitized failure record).
 
-Store source code and metric definitions in Git. Track run outputs, cached predictions, and any
-model artifacts through DVC.
+Validate the source data first:
+
+```bash
+uv run python experiments/datasets/golden_v0/src/golden_v0_validation.py
+```
+
+With the normal Compose stack running, execute the generator in an ephemeral AI-worker container.
+The bind mount makes the input and DVC-managed output available while the container reaches the
+internal-only LiteLLM service. It receives the existing `LITELLM_API_KEY` from Compose; do not put
+the key in a command or output file.
+
+```bash
+docker compose run --rm --no-deps -v "$PWD:/workspace" ai-worker \
+  python /workspace/experiments/dspy/src/mamay_golden_v0.py
+```
+
+The default output is `experiments/dspy/data/mamay_vs_golden_v0/comparisons.jsonl`. The command is
+resumable: it preserves rows already written by `example_id`, including failure rows, and requests
+only missing examples. To start a distinct run, pass a different `--output` path rather than
+overwriting an existing DVC-managed dataset.
+
+After the run, inspect the JSONL with the tool that will perform the review, then version it:
+
+```bash
+uv run dvc add experiments/dspy/data/mamay_vs_golden_v0
+uv run dvc status
+```
+
+Commit the generated `.dvc` metadata, any DVC ignore-file update, source code, tests, and docs;
+never commit the JSONL contents. No DVC remote is currently configured.
