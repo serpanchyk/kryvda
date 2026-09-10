@@ -14,7 +14,8 @@ execution and the product UI remain shells.
 | --- | --- | --- |
 | API | Health, collection status, and current-avatar HTTP surface | PostgreSQL, avatar volume |
 | Telegram scraper | Fixed channel/post/avatar collection | PostgreSQL job handoff, avatar volume |
-| AI worker | Future post analysis | PostgreSQL job handoff (future), AI provider (future) |
+| AI worker | Future post analysis | PostgreSQL job handoff (future), LiteLLM proxy (future) |
+| LiteLLM proxy | Internal OpenAI-compatible model gateway | Lapathoniia AI API |
 | Frontend | Future investigation and registry UI | API |
 | monitoring-common | Settings, JSON logging, contracts | None |
 
@@ -31,6 +32,9 @@ execution and the product UI remain shells.
   and Times of Ukraine. Production collection authenticates with a dedicated Telegram account.
 - Current Telegram channel avatars are stored in a shared Docker volume, not PostgreSQL; their
   stable relative URLs use `/channel-images/{channel_id}` and are refreshed every collection poll.
+- LiteLLM provides the internal-only OpenAI-compatible endpoint `http://litellm:4000` for
+  `MamayLM-Gemma-3-27B-IT`, forwarding to the Lapathoniia AI API. No production service calls it
+  yet; analysis-job execution remains unimplemented.
 - `golden_v0` is an offline, DVC-tracked pilot for annotation-schema validation. It does not make
   the AI worker a runtime dependency on DVC or implement DSPy inference yet.
 

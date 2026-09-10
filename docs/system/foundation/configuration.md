@@ -12,6 +12,32 @@ The Telegram scraper requires `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`,
 root `.env`; deployments inject the same values from GitHub Secrets. The session string is
 an authorized MTProto login secret and must be rotated if revoked.
 
+## LiteLLM proxy
+
+The internal LiteLLM proxy requires `LAPATHONIIA_API_KEY`, an upstream API key authorized for
+`MamayLM-Gemma-3-27B-IT`, and `LITELLM_MASTER_KEY`, a separate random secret used by callers of
+the proxy. `LAPATHONIIA_API_BASE` defaults to `https://api.lapathoniia.top` and is retained as an
+environment setting only for an upstream endpoint migration. Keep all three values in the ignored
+root `.env` locally and in the deployment secret store outside development.
+
+Compose does not publish the proxy port. Compose services call it at `http://litellm:4000` and
+authenticate using `LITELLM_MASTER_KEY`; that key is never forwarded upstream. The proxy sends
+`LAPATHONIIA_API_KEY` only to the upstream API.
+
+An internal client uses the standard OpenAI SDK interface:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(api_key="<LITELLM_MASTER_KEY>", base_url="http://litellm:4000")
+response = client.chat.completions.create(
+    model="MamayLM-Gemma-3-27B-IT",
+    messages=[{"role": "user", "content": "Привіт! Розкажи про Україну"}],
+    temperature=0.7,
+    max_tokens=1000,
+)
+```
+
 ## Creating the Telegram session
 
 Set `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, and `TELEGRAM_PHONE_NUMBER` in the ignored root

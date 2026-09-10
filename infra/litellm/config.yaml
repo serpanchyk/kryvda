@@ -1,0 +1,9 @@
+model_list:
+  - model_name: MamayLM-Gemma-3-27B-IT
+    litellm_params:
+      model: openai/MamayLM-Gemma-3-27B-IT
+      api_base: os.environ/LAPATHONIIA_API_BASE
+      api_key: os.environ/LAPATHONIIA_API_KEY
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

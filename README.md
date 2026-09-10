@@ -17,8 +17,9 @@ channels, retain raw posts, and later analyse entities, stance, and claims.
    `http://localhost:8000/channels/collection-health`, and `http://localhost:5173`.
 
 The first PostgreSQL initialization seeds the approved five public Telegram channels. The
-scraper retains raw post revisions and creates PostgreSQL analysis jobs; AI execution and the
-product UI remain future work.
+scraper retains raw post revisions and creates PostgreSQL analysis jobs. Docker Compose also
+starts an internal-only LiteLLM proxy for `MamayLM-Gemma-3-27B-IT`; configure its credentials in
+the root `.env` before starting Compose. AI execution and the product UI remain future work.
 
 See [docs/run-project.md](docs/run-project.md) for commands and
 [docs/system/README.md](docs/system/README.md) for architecture.
