@@ -38,8 +38,9 @@ health, read-only channel collection health, and current-avatar URLs; product UI
   candidate result per Post Revision.
 - `golden_v0` is an offline, DVC-tracked pilot for annotation-schema validation. The offline Mamay
   comparison generator reuses the worker's inference request boundary to pair each golden input,
-  full reviewed annotation, and schema-validated Mamay output for external review. It does not
-  score or judge the outputs and does not make the AI worker a runtime dependency on DVC.
+  full reviewed annotation, and Mamay output for external review. Parsed outputs that fail local
+  validation are retained with their validation category; it does not score or judge the outputs
+  and does not make the AI worker a runtime dependency on DVC.
 
 ## Documentation
 

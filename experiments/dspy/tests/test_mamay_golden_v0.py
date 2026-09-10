@@ -132,3 +132,25 @@ async def test_generator_records_failure_and_resumes(tmp_path: Path) -> None:
     )
 
     assert (written, failures) == (0, 0)
+
+
+async def test_generator_preserves_parsed_but_invalid_mamay_output(tmp_path: Path) -> None:
+    output = tmp_path / "comparisons.jsonl"
+    invalid_payload = valid_payload()
+    invalid_payload["annotations"]["entities"][0]["mention_span"] = {"start": 0, "end": 1}
+
+    written, failures = await generate_comparisons(
+        [golden_annotation()],
+        output,
+        FakeClient([invalid_payload]),
+        "test-model",
+        logging.getLogger("test"),
+    )
+
+    assert (written, failures) == (1, 1)
+    row = json.loads(output.read_text(encoding="utf-8"))
+    assert row["mamay_output"] == {
+        "status": "invalid",
+        "output": invalid_payload,
+        "validation_error": "invalid_extraction_contract",
+    }

@@ -1,7 +1,27 @@
 """Tests for the text-grounded post-analysis extraction contract."""
 
+from typing import Any
+
 import pytest
-from monitoring_common.contracts import ExtractionValidationError, validate_extraction
+from monitoring_common.contracts import (
+    ExtractionValidationError,
+    load_extraction_schema,
+    validate_extraction,
+)
+
+
+def test_runtime_schema_avoids_mamay_unsupported_keywords() -> None:
+    """Keep the strict request schema compatible with Mamay's grammar compiler."""
+    assert "uniqueItems" not in _schema_keys(load_extraction_schema())
+
+
+def _schema_keys(value: Any) -> set[str]:
+    """Return every JSON Schema keyword used by a nested schema object."""
+    if isinstance(value, dict):
+        return set(value) | set().union(*(_schema_keys(item) for item in value.values()))
+    if isinstance(value, list):
+        return set().union(*(_schema_keys(item) for item in value)) if value else set()
+    return set()
 
 
 def test_validator_accepts_grounded_extraction() -> None:

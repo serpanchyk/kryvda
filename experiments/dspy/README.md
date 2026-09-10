@@ -2,7 +2,9 @@
 
 `mamay_golden_v0.py` creates evidence for a human or external ChatGPT review; it does not score,
 rank, or judge Mamay. Each row pairs the exact post text with the complete reviewed `golden_v0`
-annotations and Mamay's locally validated runtime extraction (or a sanitized failure record).
+annotations and Mamay's runtime extraction. Parsed outputs that fail local grounding validation are
+preserved as `status: "invalid"` with a validation category for external review; request or JSON
+failures use a sanitized failure record.
 
 Validate the source data first:
 
@@ -16,7 +18,8 @@ internal-only LiteLLM service. It receives the existing `LITELLM_API_KEY` from C
 the key in a command or output file.
 
 ```bash
-docker compose run --rm --no-deps -v "$PWD:/workspace" ai-worker \
+docker compose run --rm --no-deps -w /workspace -v "$PWD:/workspace" \
+  -e PYTHONPATH=/workspace/apps/ai-worker/src:/workspace/packages/monitoring-common/src ai-worker \
   python /workspace/experiments/dspy/src/mamay_golden_v0.py
 ```
 

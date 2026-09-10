@@ -10,7 +10,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, cast
 
-from monitoring_common.contracts import ExtractionValidationError, validate_extraction
+from monitoring_common.contracts.post_analysis_extraction import (
+    ExtractionValidationError,
+    validate_extraction,
+)
 from monitoring_common.logging import setup_logging
 from telegram_monitor_ai_worker.client import LiteLlmExtractionClient
 from telegram_monitor_ai_worker.models import ModelOutputError
@@ -88,7 +91,15 @@ def build_row(
     source = cast(Mapping[str, Any], annotation["source"])
     result: dict[str, Any]
     if mamay_output is not None:
-        result = {"status": "valid", "output": dict(mamay_output)}
+        result = (
+            {"status": "valid", "output": dict(mamay_output)}
+            if failure_kind is None
+            else {
+                "status": "invalid",
+                "output": dict(mamay_output),
+                "validation_error": failure_kind,
+            }
+        )
     else:
         result = {
             "status": "failed",
@@ -138,8 +149,6 @@ async def generate_comparisons(
             run_timestamp = datetime.now(UTC).isoformat()
             try:
                 payload = await client.extract(post_text)
-                validate_extraction(payload, post_text)
-                row = build_row(annotation, payload, None, model, run_timestamp)
             except Exception as error:
                 failure_kind = classify_failure(error)
                 row = build_row(annotation, None, failure_kind, model, run_timestamp)
@@ -148,6 +157,19 @@ async def generate_comparisons(
                     "comparison model output failed",
                     extra={"example_id": example_id, "failure_kind": failure_kind},
                 )
+            else:
+                try:
+                    validate_extraction(payload, post_text)
+                except ExtractionValidationError as error:
+                    failure_kind = classify_failure(error)
+                    row = build_row(annotation, payload, failure_kind, model, run_timestamp)
+                    failures += 1
+                    logger.warning(
+                        "comparison model output is invalid",
+                        extra={"example_id": example_id, "failure_kind": failure_kind},
+                    )
+                else:
+                    row = build_row(annotation, payload, None, model, run_timestamp)
             output_file.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
             output_file.flush()
             written += 1
