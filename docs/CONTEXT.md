@@ -52,3 +52,12 @@ _Avoid_: Attack flag
 An aggregate analytic finding about a similar negative narrative across multiple Channels in a
 close time period; never a property of one Post Revision.
 _Avoid_: Post-level label
+
+**Analysis Job**:
+A leased request to produce one candidate semantic extraction for a specific Post Revision.
+_Avoid_: Analysis result, annotation
+
+**Candidate Extraction Result**:
+An immutable, validated model response under the extraction contract for one Post Revision; it is
+not canonical resolution or a Golden Dataset annotation.
+_Avoid_: Final annotation, registry decision

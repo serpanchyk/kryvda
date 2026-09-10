@@ -24,6 +24,12 @@ Compose does not publish the proxy port. Compose services call it at `http://lit
 authenticate using `LITELLM_MASTER_KEY`; that key is never forwarded upstream. The proxy sends
 `LAPATHONIIA_API_KEY` only to the upstream API.
 
+The AI worker receives that same secret as `LITELLM_API_KEY`. Its configurable runtime values are
+`LITELLM_BASE_URL`, `ANALYSIS_MODEL`, `ANALYSIS_POLL_INTERVAL_SECONDS`,
+`ANALYSIS_LEASE_SECONDS`, `ANALYSIS_REQUEST_TIMEOUT_SECONDS`, and `ANALYSIS_MAX_ATTEMPTS`.
+Defaults are the internal proxy, MamayLM-Gemma-3-27B-IT, 5 seconds, 300 seconds, 120 seconds,
+and 3 respectively.
+
 An internal client uses the standard OpenAI SDK interface:
 
 ```python

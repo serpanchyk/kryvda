@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "telegram-monitor-ai-worker"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["monitoring-common"]
+dependencies = ["asyncpg>=0.31", "monitoring-common", "openai>=1.0"]
 
 [tool.uv.sources]
 monitoring-common = { workspace = true }

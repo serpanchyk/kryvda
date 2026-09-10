@@ -55,6 +55,19 @@ CREATE TABLE analysis_jobs (
     available_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     leased_until TIMESTAMPTZ,
     attempts INTEGER NOT NULL DEFAULT 0,
+    last_error_kind TEXT,
+    last_error TEXT,
+    completed_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE post_analysis_extractions (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    post_revision_id BIGINT NOT NULL UNIQUE REFERENCES post_revisions(id),
+    payload JSONB NOT NULL,
+    prompt_version TEXT NOT NULL,
+    model_name TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

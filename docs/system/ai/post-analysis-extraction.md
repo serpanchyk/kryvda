@@ -19,3 +19,9 @@ they are not durable database identifiers.
 The prompt must require JSON only, source-text-only reasoning, empty arrays for absent evidence,
 and `null` for `source_entity_id` unless `source_kind` is `named_entity`. The runtime validator
 rejects unsupported fields and evidence that does not match the post text.
+
+The AI worker sends versioned extraction instructions as a system message and the unmodified Post
+Revision content as a separate user message. It requests strict JSON-Schema output through the
+internal LiteLLM endpoint, then runs `validate_extraction` before persisting a candidate result.
+Invalid model output and schema-mode rejection are terminal job failures; transient provider
+failures retry at most twice after the initial attempt.

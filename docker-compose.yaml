@@ -57,9 +57,13 @@ services:
       dockerfile: apps/ai-worker/Dockerfile
     environment:
       POSTGRES_DSN: postgresql://${POSTGRES_USER:-telegram_monitor}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-telegram_monitor}
+      LITELLM_API_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY must be set}
     depends_on:
       postgres:
         condition: service_healthy
+      litellm:
+        condition: service_healthy
+    restart: unless-stopped
 
   litellm:
     image: docker.litellm.ai/berriai/litellm@sha256:7c311546c25e7bb6e8cafede9fcd3d0d622ac636b5c9418befaa32e85dfb0186
