@@ -37,3 +37,27 @@ uv run dvc status
 
 Commit the generated `.dvc` metadata, any DVC ignore-file update, source code, tests, and docs;
 never commit the JSONL contents. No DVC remote is currently configured.
+
+## Reduced Mamay v2 comparison
+
+`mamay_golden_v1.py` is an experiment-only redesign of the Mamay-facing contract. It does not
+change the production worker or `extraction_schema_v1`. The v2 schema replaces numeric spans with
+exact text anchors, treats an entity as one distinct actor, retains literal source phrases where
+available, and nests rhetoric within claims. It deliberately remains a one-pass full-post run.
+
+Each row preserves the raw `golden_v0` annotation and adds `golden_v2_projection`, a deterministic
+comparison projection without registry fields, spans, or rhetorical graph links. The projection
+uses the first reviewed evidence span as its single evidence text. Since `golden_v0` does not
+store literal phrases for unnamed sources, those projected source surfaces are `null`.
+
+Run it through the same ephemeral worker container:
+
+```bash
+docker compose run --rm --no-deps -w /workspace -v "$PWD:/workspace" \
+  -e PYTHONPATH=/workspace/apps/ai-worker/src:/workspace/packages/monitoring-common/src \
+  ai-worker python /workspace/experiments/dspy/src/mamay_golden_v1.py
+```
+
+The output is `experiments/dspy/data/mamay_vs_golden_v1/comparisons.jsonl`. Validate its 55-row
+coverage, then version the directory with `uv run dvc add experiments/dspy/data/mamay_vs_golden_v1`
+and run `dvc status`.

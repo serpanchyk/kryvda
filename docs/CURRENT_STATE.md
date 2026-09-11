@@ -41,6 +41,10 @@ health, read-only channel collection health, and current-avatar URLs; product UI
   full reviewed annotation, and Mamay output for external review. Parsed outputs that fail local
   validation are retained with their validation category; it does not score or judge the outputs
   and does not make the AI worker a runtime dependency on DVC.
+- `mamay_vs_golden_v1` is a separate DVC-tracked offline comparison run for an experimental,
+  reduced Mamay v2 contract. It removes model-generated character offsets and rhetorical graph
+  links, projects reviewed `golden_v0` annotations into the comparable shape, and leaves the
+  production extraction contract unchanged.
 
 ## Documentation
 

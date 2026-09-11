@@ -18,6 +18,10 @@ The `experiments/datasets/` and `experiments/dspy/` directories are offline-only
 run outputs, and model artifacts are DVC-tracked; code, schemas, guidelines, and DVC metadata are
 Git-tracked. No DVC remote is configured until project storage and access control are decided.
 
+`mamay_vs_golden_v1` evaluates an experiment-only Mamay v2 contract against a deterministic
+projection of `golden_v0`. It is not a migration of `extraction_schema_v1`: production candidate
+extraction continues to use its existing schema, prompt, validation, and worker path.
+
 DSPy work begins only after the annotation schema is stable. Its evaluation uses component metrics
 for entity extraction/resolution, stance, claims, attribution/modality, and rhetorical features,
 with a documented weighted aggregate.
