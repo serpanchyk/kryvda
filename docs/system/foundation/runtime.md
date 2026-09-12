@@ -12,11 +12,11 @@ LiteLLM is an internal-only, stateless model gateway. It is available only as
 `http://litellm:4000` on the Compose network and exposes the OpenAI-compatible
 `MamayLM-Gemma-3-27B-IT` model. It has no PostgreSQL dependency. The AI worker leases one job at
 a time with `FOR UPDATE SKIP LOCKED`, prioritizes live collection over backfill, and requests a
-strict JSON-Schema candidate extraction. A five-minute lease is longer than the default
-two-minute model timeout. Transient gateway failures retry up to three total attempts; contract
-failures are terminal. A candidate result and completed job status commit atomically.
+three strict JSON-Schema passes. The worker renews its five-minute lease before each two-minute
+request. Transient gateway failures retry up to three job attempts and reuse validated passes;
+contract failures receive one repair inference and then become terminal. Raw attempts are durable.
 
-To retry a corrected terminal job, apply the existing migration and reset only the selected rows:
+To retry a corrected terminal v3 job, reset only the selected rows:
 
 ```sql
 UPDATE analysis_jobs

@@ -23,6 +23,9 @@ class FakeConnection:
     async def fetchrow(self, query: str, *args: object) -> None:
         return None
 
+    async def fetch(self, query: str, *args: object) -> list[dict[str, str]]:
+        return [{"alias": "text"}]
+
     async def execute(self, query: str, *args: object) -> None:
         self.executed.append((query, args))
 
@@ -70,6 +73,7 @@ async def test_repository_persists_evidence_and_text_analysis_job() -> None:
     assert await repository.backfill_complete(1) is True
     assert await repository.persist_post(channel, post, "live") is True
     assert len(pool.connection.executed) == 1
+    assert "INSERT INTO analysis_jobs" in pool.connection.executed[0][0]
 
 
 async def test_repository_records_collection_health_and_deletion() -> None:

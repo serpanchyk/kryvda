@@ -1,39 +1,113 @@
-"""LiteLLM client for schema-constrained extraction requests."""
+"""LiteLLM client for the three schema-constrained inference-v3 requests."""
 
 import json
+import time
 from typing import Any, cast
 
-from monitoring_common.contracts import load_extraction_schema
+from monitoring_common.contracts import PassName, load_extraction_schema, load_inference_schema
 from openai import AsyncOpenAI
 
-from telegram_monitor_ai_worker.models import ModelOutputError
-from telegram_monitor_ai_worker.prompt import SYSTEM_PROMPT, post_message
+from telegram_monitor_ai_worker.models import ModelOutputError, ModelResponse
+from telegram_monitor_ai_worker.prompt import (
+    LEGACY_SYSTEM_PROMPT,
+    SYSTEM_PROMPTS,
+    pass_message,
+    repair_message,
+)
 
 
-class LiteLlmExtractionClient:
+class LiteLlmInferenceClient:
     """Call the internal OpenAI-compatible LiteLLM endpoint."""
 
     def __init__(self, base_url: str, api_key: str, model: str, timeout_seconds: int) -> None:
         self._client = AsyncOpenAI(base_url=base_url, api_key=api_key, timeout=timeout_seconds)
         self._model = model
 
+    async def infer(self, pass_name: PassName, request: dict[str, Any]) -> ModelResponse:
+        """Generate one primary pass response as raw JSON text."""
+        return await self._request(
+            pass_name,
+            [
+                {"role": "system", "content": SYSTEM_PROMPTS[pass_name]},
+                {"role": "user", "content": pass_message(pass_name, request)},
+            ],
+        )
+
+    async def repair(
+        self,
+        pass_name: PassName,
+        original_raw: str,
+        errors: list[dict[str, str]],
+    ) -> ModelResponse:
+        """Generate the one allowed structural repair response."""
+        return await self._request(
+            pass_name,
+            [
+                {"role": "system", "content": SYSTEM_PROMPTS[pass_name]},
+                {
+                    "role": "user",
+                    "content": repair_message(
+                        pass_name, original_raw, errors, load_inference_schema(pass_name)
+                    ),
+                },
+            ],
+        )
+
+    async def _request(self, pass_name: PassName, messages: list[dict[str, str]]) -> ModelResponse:
+        started = time.monotonic()
+        response = await self._client.chat.completions.create(
+            model=self._model,
+            messages=cast(Any, messages),
+            response_format=cast(
+                Any,
+                {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": f"telegram_monitor_{pass_name}",
+                        "strict": True,
+                        "schema": load_inference_schema(pass_name),
+                    },
+                },
+            ),
+            temperature=0,
+        )
+        duration_ms = round((time.monotonic() - started) * 1000)
+        content = response.choices[0].message.content if response.choices else None
+        if not content:
+            raise ModelOutputError("model generation did not contain JSON content")
+        return ModelResponse(content, duration_ms)
+
+    async def close(self) -> None:
+        """Close the underlying asynchronous HTTP client."""
+        await self._client.close()
+
+
+class LiteLlmExtractionClient:
+    """Frozen v1 client retained only for the historical comparison runner."""
+
+    def __init__(self, base_url: str, api_key: str, model: str, timeout_seconds: int) -> None:
+        self._client = AsyncOpenAI(base_url=base_url, api_key=api_key, timeout=timeout_seconds)
+        self._model = model
+
     async def extract(self, post_text: str) -> dict[str, Any]:
-        """Request exactly one JSON-Schema-constrained extraction object."""
-        response_format: dict[str, Any] = {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "post_analysis_extraction",
-                "strict": True,
-                "schema": load_extraction_schema(),
-            },
-        }
+        """Request the legacy v1 response used by mamay_golden_v0."""
         response = await self._client.chat.completions.create(
             model=self._model,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": post_message(post_text)},
+                {"role": "system", "content": LEGACY_SYSTEM_PROMPT},
+                {"role": "user", "content": f"POST TEXT:\n\n{post_text}"},
             ],
-            response_format=cast(Any, response_format),
+            response_format=cast(
+                Any,
+                {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "post_analysis_extraction",
+                        "strict": True,
+                        "schema": load_extraction_schema(),
+                    },
+                },
+            ),
             temperature=0,
         )
         content = response.choices[0].message.content if response.choices else None
@@ -48,5 +122,5 @@ class LiteLlmExtractionClient:
         return cast(dict[str, Any], decoded)
 
     async def close(self) -> None:
-        """Close the underlying asynchronous HTTP client."""
+        """Close the legacy HTTP client."""
         await self._client.close()

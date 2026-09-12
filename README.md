@@ -1,7 +1,8 @@
 # Telegram Monitor
 
-Runnable foundation for a service that will monitor a fixed ЦПК-agreed pool of Telegram
-channels, retain raw posts, and later analyse entities, stance, and claims.
+Telegram target-monitoring service for a fixed ЦПК-agreed channel pool. It retains raw posts,
+filters them against a human registry, and runs three focused Mamay passes for actors, atomic
+claims, stance and attack rhetoric.
 
 ## Start
 
@@ -19,7 +20,8 @@ channels, retain raw posts, and later analyse entities, stance, and claims.
 The first PostgreSQL initialization seeds the approved five public Telegram channels. The
 scraper retains raw post revisions and creates PostgreSQL analysis jobs. Docker Compose also
 starts an internal-only LiteLLM proxy for `MamayLM-Gemma-3-27B-IT`; configure its credentials in
-the root `.env` before starting Compose. AI execution and the product UI remain future work.
+the root `.env` before starting Compose. The product UI remains a shell; registry and candidate
+review are available through unauthenticated APIs that require deployment network controls.
 
 See [docs/run-project.md](docs/run-project.md) for commands and
 [docs/system/README.md](docs/system/README.md) for architecture.

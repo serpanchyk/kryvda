@@ -1,6 +1,7 @@
 """Expose health, collection status, and current channel-avatar HTTP resources."""
 
 from pathlib import Path
+from typing import Literal
 
 import asyncpg
 import uvicorn
@@ -8,6 +9,40 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from monitoring_common.config import BaseServiceSettings
 from monitoring_common.logging import setup_logging
+from pydantic import BaseModel, Field
+
+from telegram_monitor_api.registry import RegistryRepository
+
+CoarseType = Literal["person", "organization", "state_institution", "media"]
+
+
+class EntityCreate(BaseModel):
+    """Human-approved registry entity input."""
+
+    canonical_name: str = Field(min_length=1)
+    coarse_type: CoarseType
+    aliases: list[str] = Field(default_factory=list)
+    monitored: bool = False
+
+
+class EntityUpdate(BaseModel):
+    """Mutable registry metadata."""
+
+    canonical_name: str | None = Field(default=None, min_length=1)
+    coarse_type: CoarseType | None = None
+    monitored: bool | None = None
+
+
+class AliasCreate(BaseModel):
+    """One permanent alias approval."""
+
+    alias: str = Field(min_length=1)
+
+
+class CandidateLink(BaseModel):
+    """Existing registry target for a candidate."""
+
+    entity_id: int
 
 
 class ApiSettings(BaseServiceSettings):
@@ -80,7 +115,138 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
             headers={"Cache-Control": "no-cache"},
         )
 
+    @app.get("/entities")
+    async def list_entities(monitored: bool | None = None) -> list[dict[str, object]]:
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            return await RegistryRepository(pool).list_entities(monitored)
+        finally:
+            await pool.close()
+
+    @app.post("/entities", status_code=201)
+    async def create_entity(value: EntityCreate) -> dict[str, int]:
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            try:
+                entity_id, jobs = await RegistryRepository(pool).create_entity(
+                    value.canonical_name,
+                    value.coarse_type,
+                    value.aliases,
+                    value.monitored,
+                )
+            except asyncpg.UniqueViolationError as error:
+                raise HTTPException(
+                    status_code=409, detail="Entity or alias already exists"
+                ) from error
+            return {"id": entity_id, "backfill_jobs_enqueued": jobs}
+        finally:
+            await pool.close()
+
+    @app.patch("/entities/{entity_id}")
+    async def update_entity(entity_id: int, value: EntityUpdate) -> dict[str, int]:
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            jobs = await RegistryRepository(pool).update_entity(
+                entity_id, value.canonical_name, value.coarse_type, value.monitored
+            )
+            if jobs is None:
+                raise HTTPException(status_code=404, detail="Entity not found")
+            return {"id": entity_id, "backfill_jobs_enqueued": jobs}
+        finally:
+            await pool.close()
+
+    @app.post("/entities/{entity_id}/aliases", status_code=201)
+    async def add_alias(entity_id: int, value: AliasCreate) -> dict[str, int]:
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            try:
+                jobs = await RegistryRepository(pool).add_alias(entity_id, value.alias)
+            except asyncpg.UniqueViolationError as error:
+                raise HTTPException(status_code=409, detail="Alias already exists") from error
+            if jobs is None:
+                raise HTTPException(status_code=404, detail="Entity not found")
+            return {"id": entity_id, "backfill_jobs_enqueued": jobs}
+        finally:
+            await pool.close()
+
+    @app.get("/entity-candidates")
+    async def list_entity_candidates(
+        status: Literal["pending", "linked", "ignored"] = "pending",
+    ) -> list[dict[str, object]]:
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            return await RegistryRepository(pool).list_candidates(status)
+        finally:
+            await pool.close()
+
+    @app.post("/entity-candidates/{candidate_id}/link")
+    async def link_candidate(candidate_id: int, value: CandidateLink) -> dict[str, bool | int]:
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            jobs = await RegistryRepository(pool).link_candidate(candidate_id, value.entity_id)
+            if jobs is None:
+                raise HTTPException(status_code=404, detail="Candidate or entity not found")
+            return {"linked": True, "backfill_jobs_enqueued": jobs}
+        finally:
+            await pool.close()
+
+    @app.post("/entity-candidates/{candidate_id}/create-entity", status_code=201)
+    async def create_candidate_entity(candidate_id: int, value: EntityCreate) -> dict[str, int]:
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        repository = RegistryRepository(pool)
+        try:
+            entity_id, jobs = await repository.create_entity(
+                value.canonical_name,
+                value.coarse_type,
+                value.aliases,
+                value.monitored,
+            )
+            if await repository.link_candidate(candidate_id, entity_id) is None:
+                raise HTTPException(status_code=404, detail="Candidate not found")
+            return {"id": entity_id, "backfill_jobs_enqueued": jobs}
+        finally:
+            await pool.close()
+
+    @app.post("/entity-candidates/{candidate_id}/ignore")
+    async def ignore_candidate(candidate_id: int) -> dict[str, bool]:
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            if not await RegistryRepository(pool).ignore_candidate(candidate_id):
+                raise HTTPException(status_code=404, detail="Pending candidate not found")
+            return {"ignored": True}
+        finally:
+            await pool.close()
+
+    @app.get("/entities/{entity_id}/alias-candidates")
+    async def list_alias_candidates(entity_id: int) -> list[dict[str, object]]:
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            return await RegistryRepository(pool).list_alias_candidates(entity_id)
+        finally:
+            await pool.close()
+
+    @app.post("/alias-candidates/{candidate_id}/approve")
+    async def approve_alias_candidate(candidate_id: int) -> dict[str, int]:
+        return await _review_alias_candidate(settings, candidate_id, True)
+
+    @app.post("/alias-candidates/{candidate_id}/ignore")
+    async def ignore_alias_candidate(candidate_id: int) -> dict[str, int]:
+        return await _review_alias_candidate(settings, candidate_id, False)
+
     return app
+
+
+async def _review_alias_candidate(
+    settings: ApiSettings, candidate_id: int, approve: bool
+) -> dict[str, int]:
+    pool = await asyncpg.create_pool(settings.postgres_dsn)
+    try:
+        jobs = await RegistryRepository(pool).review_alias_candidate(candidate_id, approve)
+        if jobs is None:
+            raise HTTPException(status_code=404, detail="Pending alias candidate not found")
+        return {"id": candidate_id, "backfill_jobs_enqueued": jobs}
+    finally:
+        await pool.close()
 
 
 app = create_app()

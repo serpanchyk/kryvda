@@ -61,3 +61,26 @@ docker compose run --rm --no-deps -w /workspace -v "$PWD:/workspace" \
 The output is `experiments/dspy/data/mamay_vs_golden_v1/comparisons.jsonl`. Validate its 55-row
 coverage, then version the directory with `uv run dvc add experiments/dspy/data/mamay_vs_golden_v1`
 and run `dvc status`.
+
+## Inference v3 comparison
+
+`mamay_golden_v2.py` runs the production target pre-filter and all three inference-v3 passes. Each
+row retains the original reviewed annotation, character length, matched monitored entities, every
+raw primary/repair response with validation details, backend resolution, and the final v3 output.
+Posts without a supplied registry alias are recorded as `filtered_out` without model calls.
+
+Run it through the AI-worker container while LiteLLM is healthy:
+
+```bash
+docker compose run --rm --no-deps -w /workspace -v "$PWD:/workspace" \
+  -e PYTHONPATH=/workspace/apps/ai-worker/src:/workspace/packages/monitoring-common/src \
+  ai-worker python /workspace/experiments/dspy/src/mamay_golden_v2.py
+```
+
+Validate and version the result without committing its JSONL contents:
+
+```bash
+uv run python experiments/dspy/src/mamay_golden_v2.py --validate-only
+uv run dvc add experiments/dspy/data/mamay_vs_golden_v2
+uv run dvc status
+```

@@ -61,3 +61,16 @@ _Avoid_: Analysis result, annotation
 An immutable, validated model response under the extraction contract for one Post Revision; it is
 not canonical resolution or a Golden Dataset annotation.
 _Avoid_: Final annotation, registry decision
+
+**Monitored Entity**:
+A human-approved Canonical Entity whose approved aliases admit Post Revisions to inference.
+_Avoid_: Any actor discovered by the model
+
+**Candidate Entity**:
+An unresolved post-local actor retained for human linking, creation or ignore decisions.
+_Avoid_: Automatically expanded registry entity
+
+**Claim-Target Classification**:
+Inference-v3 stance and attack rhetoric for one atomic Claim and one Monitored Entity involved in
+that Claim.
+_Avoid_: Post-level attack label

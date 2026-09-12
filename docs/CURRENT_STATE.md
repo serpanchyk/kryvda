@@ -3,18 +3,19 @@
 ## Current State
 
 The Telegram collection foundation persists an agreed fixed channel pool, raw posts and
-revisions, current channel avatars, PostgreSQL analysis jobs, and validated candidate extraction
-results. A DVC-versioned `golden_v0` annotation pilot and the shared `extraction_schema_v1`
-candidate-extraction contract define the semantic-extraction boundary. The API exposes service
-health, read-only channel collection health, and current-avatar URLs; product UI remains a shell.
+revisions, current channel avatars, a human-maintained monitored-entity registry, inference-v3
+jobs, pass diagnostics, candidates, claims and claim-target classifications. Production analysis
+uses deterministic target filtering followed by three focused Mamay passes. The API exposes
+service health, collection health, current-avatar URLs and unauthenticated registry/candidate
+administration; product UI remains a shell.
 
 ## Service Map
 
 | Boundary | Responsibility | Dependencies |
 | --- | --- | --- |
-| API | Health, collection status, and current-avatar HTTP surface | PostgreSQL, avatar volume |
-| Telegram scraper | Fixed channel/post/avatar collection | PostgreSQL job handoff, avatar volume |
-| AI worker | Candidate extraction from Post Revisions | PostgreSQL job handoff, LiteLLM proxy |
+| API | Health, collection status, avatars, registry and candidate review | PostgreSQL, avatar volume |
+| Telegram scraper | Fixed channel/post/avatar collection and target-filtered job handoff | PostgreSQL, avatar volume |
+| AI worker | Three-pass target inference and deterministic persistence | PostgreSQL, LiteLLM proxy |
 | LiteLLM proxy | Internal OpenAI-compatible model gateway | Lapathoniia AI API |
 | Frontend | Future investigation and registry UI | API |
 | monitoring-common | Settings, JSON logging, contracts | None |
@@ -33,9 +34,12 @@ health, read-only channel collection health, and current-avatar URLs; product UI
 - Current Telegram channel avatars are stored in a shared Docker volume, not PostgreSQL; their
   stable relative URLs use `/channel-images/{channel_id}` and are refreshed every collection poll.
 - LiteLLM provides the internal-only OpenAI-compatible endpoint `http://litellm:4000` for
-  `MamayLM-Gemma-3-27B-IT`, forwarding to the Lapathoniia AI API. The AI worker requests strict
-  JSON-Schema output, validates text-grounded extraction locally, and persists one immutable
-  candidate result per Post Revision.
+  `MamayLM-Gemma-3-27B-IT`. Inference v3 independently validates entities, claims and
+  claim-target classifications, permits one contract repair per pass, and retains every raw model
+  response with categorized diagnostics.
+- The supplied 128-entry registry seed is active and monitored. Approved aliases alone drive
+  filtering and resolution. Registry expansion backfills only the latest accessible revision of
+  each stored post.
 - `golden_v0` is an offline, DVC-tracked pilot for annotation-schema validation. The offline Mamay
   comparison generator reuses the worker's inference request boundary to pair each golden input,
   full reviewed annotation, and Mamay output for external review. Parsed outputs that fail local
@@ -45,6 +49,8 @@ health, read-only channel collection health, and current-avatar URLs; product UI
   reduced Mamay v2 contract. It removes model-generated character offsets and rhetorical graph
   links, projects reviewed `golden_v0` annotations into the comparable shape, and leaves the
   production extraction contract unchanged.
+- `mamay_vs_golden_v2` records the full auditable inference-v3 pipeline against `golden_v0`,
+  including target-filter decisions, all primary/repair outputs, final resolution and post length.
 
 ## Documentation
 

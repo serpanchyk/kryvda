@@ -47,31 +47,6 @@ CREATE TABLE post_revisions (
     UNIQUE (raw_post_id, revision_number)
 );
 
-CREATE TABLE analysis_jobs (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    post_revision_id BIGINT NOT NULL UNIQUE REFERENCES post_revisions(id),
-    priority TEXT NOT NULL CHECK (priority IN ('live', 'backfill')),
-    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'leased', 'completed', 'failed')),
-    available_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    leased_until TIMESTAMPTZ,
-    attempts INTEGER NOT NULL DEFAULT 0,
-    last_error_kind TEXT,
-    last_error TEXT,
-    completed_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE post_analysis_extractions (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    post_revision_id BIGINT NOT NULL UNIQUE REFERENCES post_revisions(id),
-    payload JSONB NOT NULL,
-    prompt_version TEXT NOT NULL,
-    model_name TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX analysis_jobs_available_idx ON analysis_jobs (status, priority, available_at);
 CREATE INDEX raw_posts_channel_published_idx ON raw_posts (channel_id, published_at DESC);
 
 INSERT INTO monitored_channels (configured_reference, username, title, access_kind)

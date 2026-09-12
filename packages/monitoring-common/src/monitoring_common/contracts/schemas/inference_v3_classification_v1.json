@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["classifications"],
+  "properties": {
+    "classifications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim_id", "entity_id", "stance", "rhetoric"],
+        "properties": {
+          "claim_id": {"type": "string", "pattern": "^c[1-9][0-9]*$"},
+          "entity_id": {"type": "string", "pattern": "^e[1-9][0-9]*$"},
+          "stance": {"enum": ["позитивне", "негативне", "відсутнє"]},
+          "rhetoric": {
+            "type": "array",
+            "maxItems": 2,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "корупція_або_особиста_вигода",
+                "злочинна_або_незаконна_поведінка",
+                "делегітимізація",
+                "лицемірство_або_подвійні_стандарти",
+                "висміювання_або_особиста_образа",
+                "зовнішній_контроль_або_нелояльність"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
