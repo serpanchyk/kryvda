@@ -17,7 +17,6 @@
           "rhetoric": {
             "type": "array",
             "maxItems": 2,
-            "uniqueItems": true,
             "items": {
               "enum": [
                 "корупція_або_особиста_вигода",

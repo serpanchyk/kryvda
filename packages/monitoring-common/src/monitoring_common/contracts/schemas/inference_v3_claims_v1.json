@@ -12,7 +12,7 @@
         "required": ["normalized_text", "entity_ids", "evidence_text", "attribution", "epistemic_status", "presentation"],
         "properties": {
           "normalized_text": {"type": "string", "minLength": 1},
-          "entity_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^e[1-9][0-9]*$"}},
+          "entity_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^e[1-9][0-9]*$"}},
           "evidence_text": {"type": "string", "minLength": 1},
           "attribution": {
             "type": "object",

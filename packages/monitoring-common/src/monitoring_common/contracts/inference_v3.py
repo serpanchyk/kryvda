@@ -147,6 +147,10 @@ def _validate_claims(
                 )
             )
         ids = cast(list[str], claim["entity_ids"])
+        if len(ids) != len(set(ids)):
+            issues.append(
+                ValidationIssue("reference_failure", "claim entity references must be unique")
+            )
         unknown = sorted(set(ids) - entity_by_id.keys())
         if unknown:
             issues.append(
@@ -201,6 +205,9 @@ def _validate_classifications(
             )
         )
     for row in actual_rows:
+        rhetoric = cast(list[str], row["rhetoric"])
+        if len(rhetoric) != len(set(rhetoric)):
+            issues.append(ValidationIssue("schema_failure", "rhetoric labels must be unique"))
         if row["stance"] != "негативне" and row["rhetoric"]:
             issues.append(
                 ValidationIssue(

@@ -55,6 +55,13 @@ def test_entity_validation_rejects_duplicate_mentions_across_groups() -> None:
         )
 
 
+def test_runtime_schemas_avoid_unsupported_unique_items() -> None:
+    from monitoring_common.contracts import load_inference_schema
+
+    for pass_name in ("entities", "claims", "classification"):
+        assert "uniqueItems" not in str(load_inference_schema(pass_name))
+
+
 def test_claim_validation_enforces_grounding_scope_and_attribution() -> None:
     payload = {
         "claims": [
@@ -69,6 +76,10 @@ def test_claim_validation_enforces_grounding_scope_and_attribution() -> None:
         ]
     }
     validate_pass("claims", payload, TEXT, ENTITIES)
+
+    payload["claims"][0]["entity_ids"] = ["e1", "e1"]
+    with pytest.raises(InferenceValidationError, match="must be unique"):
+        validate_pass("claims", payload, TEXT, ENTITIES)
 
     payload["claims"][0]["entity_ids"] = ["e2"]
     with pytest.raises(InferenceValidationError, match="monitored"):
@@ -86,6 +97,11 @@ def test_classification_validation_requires_every_monitored_pair_once() -> None:
     payload["classifications"][0]["stance"] = "відсутнє"
     payload["classifications"][0]["rhetoric"] = ["делегітимізація"]
     with pytest.raises(InferenceValidationError, match="rhetoric must be empty"):
+        validate_pass("classification", payload, TEXT, ENTITIES, claims)
+
+    payload["classifications"][0]["stance"] = "негативне"
+    payload["classifications"][0]["rhetoric"] = ["делегітимізація", "делегітимізація"]
+    with pytest.raises(InferenceValidationError, match="labels must be unique"):
         validate_pass("classification", payload, TEXT, ENTITIES, claims)
 
 
