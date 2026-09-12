@@ -13,6 +13,7 @@ from monitoring_common.contracts import (
     PassName,
     ValidationIssue,
     parse_json_object,
+    sanitize_pass_payload,
     validate_pass,
     validation_errors,
 )
@@ -57,6 +58,7 @@ class AiWorkerSettings(BaseServiceSettings):
     analysis_poll_interval_seconds: int = 5
     analysis_lease_seconds: int = 300
     analysis_request_timeout_seconds: int = 120
+    analysis_max_output_tokens: int = 4096
     analysis_max_attempts: int = 3
 
 
@@ -179,45 +181,135 @@ class AnalysisWorker:
             response = await self._client.infer(pass_name, request)
         except ModelOutputError as error:
             await self._record_generation_failure(job, pass_name, "primary", error)
+            generation_errors = [{"kind": "generation_failure", "message": str(error)}]
+            await self._repository.record_pass_diagnostic(
+                run_id=job.run_id,
+                pass_name=pass_name,
+                raw_primary_output=None,
+                sanitized_primary_payload=None,
+                primary_validation_errors=generation_errors,
+                raw_repair_output=None,
+                sanitized_repair_payload=None,
+                repair_validation_errors=[],
+                final_validation_status="generation_failure",
+                final_parsed_payload=None,
+            )
             raise
+        payload: dict[str, Any] | None = None
+        sanitized_payload: dict[str, Any] | None = None
         try:
             payload = parse_json_object(response.raw_output)
-            validate_pass(pass_name, payload, source_text, entities, claims)
+            sanitized_payload = sanitize_pass_payload(pass_name, payload, source_text)
+            validate_pass(pass_name, sanitized_payload, source_text, entities, claims)
             if post_validate is not None:
-                post_validate(payload)
+                post_validate(sanitized_payload)
         except InferenceValidationError as error:
             errors = validation_errors(error)
             await self._record_attempt(
-                job, pass_name, "primary", response, locals().get("payload"), "invalid", errors
+                job,
+                pass_name,
+                "primary",
+                response,
+                payload,
+                sanitized_payload,
+                "invalid",
+                errors,
             )
             await self._repository.renew_lease(job.id, self._settings.analysis_lease_seconds)
             try:
                 repaired = await self._client.repair(pass_name, response.raw_output, errors)
             except ModelOutputError as repair_error:
                 await self._record_generation_failure(job, pass_name, "repair", repair_error)
+                repair_errors = [{"kind": "generation_failure", "message": str(repair_error)}]
+                await self._repository.record_pass_diagnostic(
+                    run_id=job.run_id,
+                    pass_name=pass_name,
+                    raw_primary_output=response.raw_output,
+                    sanitized_primary_payload=sanitized_payload,
+                    primary_validation_errors=errors,
+                    raw_repair_output=None,
+                    sanitized_repair_payload=None,
+                    repair_validation_errors=repair_errors,
+                    final_validation_status="generation_failure",
+                    final_parsed_payload=None,
+                )
                 raise
+            repaired_payload: dict[str, Any] | None = None
+            sanitized_repaired_payload: dict[str, Any] | None = None
             try:
                 repaired_payload = parse_json_object(repaired.raw_output)
-                validate_pass(pass_name, repaired_payload, source_text, entities, claims)
+                sanitized_repaired_payload = sanitize_pass_payload(
+                    pass_name, repaired_payload, source_text
+                )
+                validate_pass(pass_name, sanitized_repaired_payload, source_text, entities, claims)
                 if post_validate is not None:
-                    post_validate(repaired_payload)
+                    post_validate(sanitized_repaired_payload)
             except InferenceValidationError as repair_validation:
+                repair_errors = validation_errors(repair_validation)
                 await self._record_attempt(
                     job,
                     pass_name,
                     "repair",
                     repaired,
-                    locals().get("repaired_payload"),
+                    repaired_payload,
+                    sanitized_repaired_payload,
                     "invalid",
-                    validation_errors(repair_validation),
+                    repair_errors,
+                )
+                await self._repository.record_pass_diagnostic(
+                    run_id=job.run_id,
+                    pass_name=pass_name,
+                    raw_primary_output=response.raw_output,
+                    sanitized_primary_payload=sanitized_payload,
+                    primary_validation_errors=errors,
+                    raw_repair_output=repaired.raw_output,
+                    sanitized_repair_payload=sanitized_repaired_payload,
+                    repair_validation_errors=repair_errors,
+                    final_validation_status="invalid",
+                    final_parsed_payload=None,
                 )
                 raise
+            assert sanitized_repaired_payload is not None
             await self._record_attempt(
-                job, pass_name, "repair", repaired, repaired_payload, "valid", []
+                job,
+                pass_name,
+                "repair",
+                repaired,
+                repaired_payload,
+                sanitized_repaired_payload,
+                "valid",
+                [],
             )
-            return repaired_payload
-        await self._record_attempt(job, pass_name, "primary", response, payload, "valid", [])
-        return payload
+            await self._repository.record_pass_diagnostic(
+                run_id=job.run_id,
+                pass_name=pass_name,
+                raw_primary_output=response.raw_output,
+                sanitized_primary_payload=sanitized_payload,
+                primary_validation_errors=errors,
+                raw_repair_output=repaired.raw_output,
+                sanitized_repair_payload=sanitized_repaired_payload,
+                repair_validation_errors=[],
+                final_validation_status="valid",
+                final_parsed_payload=sanitized_repaired_payload,
+            )
+            return sanitized_repaired_payload
+        assert sanitized_payload is not None
+        await self._record_attempt(
+            job, pass_name, "primary", response, payload, sanitized_payload, "valid", []
+        )
+        await self._repository.record_pass_diagnostic(
+            run_id=job.run_id,
+            pass_name=pass_name,
+            raw_primary_output=response.raw_output,
+            sanitized_primary_payload=sanitized_payload,
+            primary_validation_errors=[],
+            raw_repair_output=None,
+            sanitized_repair_payload=None,
+            repair_validation_errors=[],
+            final_validation_status="valid",
+            final_parsed_payload=sanitized_payload,
+        )
+        return sanitized_payload
 
     async def _record_attempt(
         self,
@@ -226,6 +318,7 @@ class AnalysisWorker:
         attempt_kind: str,
         response: ModelResponse,
         payload: dict[str, Any] | None,
+        sanitized_payload: dict[str, Any] | None,
         status: str,
         errors: list[dict[str, str]],
     ) -> None:
@@ -238,10 +331,13 @@ class AnalysisWorker:
             self._settings.analysis_model,
             response.raw_output,
             payload,
+            sanitized_payload,
             status,
             errors[0]["kind"] if errors else None,
             errors,
             response.duration_ms,
+            response.finish_reason,
+            response.completion_tokens,
         )
 
     async def _record_generation_failure(
@@ -258,6 +354,7 @@ class AnalysisWorker:
             PROMPT_VERSIONS[pass_name],
             SCHEMA_VERSIONS[pass_name],
             self._settings.analysis_model,
+            None,
             None,
             None,
             "failed",
@@ -333,9 +430,10 @@ async def run(
         settings.litellm_api_key,
         settings.analysis_model,
         settings.analysis_request_timeout_seconds,
+        settings.analysis_max_output_tokens,
     )
     worker = AnalysisWorker(AnalysisJobRepository(pool), client, settings, logger)
-    logger.info("analysis worker started", extra={"pipeline_version": "inference_v3"})
+    logger.info("analysis worker started", extra={"pipeline_version": "inference_v3_1"})
     try:
         while not stop.is_set():
             if await worker.process_next():

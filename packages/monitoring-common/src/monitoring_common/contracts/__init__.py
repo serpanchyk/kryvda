@@ -9,6 +9,7 @@ from monitoring_common.contracts.inference_v3 import (
     load_inference_schema,
     normalize_match_text,
     parse_json_object,
+    sanitize_pass_payload,
     validate_pass,
     validation_errors,
 )
@@ -32,6 +33,7 @@ __all__ = [
     "load_inference_schema",
     "normalize_match_text",
     "parse_json_object",
+    "sanitize_pass_payload",
     "validate_pass",
     "validation_errors",
 ]

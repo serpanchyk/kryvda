@@ -3,8 +3,8 @@
 import json
 import re
 import unicodedata
-from collections import Counter
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib.resources import files
@@ -23,7 +23,7 @@ FailureKind = Literal[
 
 SCHEMA_VERSIONS: dict[PassName, str] = {
     "entities": "inference_v3_entities_v1",
-    "claims": "inference_v3_claims_v1",
+    "claims": "inference_v3_claims_v3",
     "classification": "inference_v3_classification_v1",
 }
 
@@ -50,14 +50,95 @@ def normalize_match_text(value: str) -> str:
 
 
 def alias_occurs(source_text: str, alias: str) -> bool:
-    """Match a literal alias case-insensitively at Unicode word boundaries."""
+    """Match an alias exactly or through Ukrainian/Russian word inflection."""
     normalized_source = unicodedata.normalize("NFKC", source_text).casefold()
     normalized_alias = unicodedata.normalize("NFKC", alias).casefold()
     if not normalized_alias:
         return False
     left = r"(?<!\w)" if normalized_alias[0].isalnum() else ""
     right = r"(?!\w)" if normalized_alias[-1].isalnum() else ""
-    return re.search(f"{left}{re.escape(normalized_alias)}{right}", normalized_source) is not None
+    if re.search(f"{left}{re.escape(normalized_alias)}{right}", normalized_source) is not None:
+        return True
+    alias_tokens = _word_tokens(alias)
+    source_tokens = _word_tokens(source_text)
+    if not alias_tokens or len(alias_tokens) > len(source_tokens):
+        return False
+    for start in range(len(source_tokens) - len(alias_tokens) + 1):
+        source_window = source_tokens[start : start + len(alias_tokens)]
+        if all(
+            _tokens_match(expected, actual) for expected, actual in zip(alias_tokens, source_window)
+        ):
+            return True
+    return False
+
+
+@lru_cache(maxsize=4096)
+def _inflection_forms(token: str) -> frozenset[str]:
+    """Generate conservative Ukrainian/Russian nominal case forms."""
+    normalized = unicodedata.normalize("NFKC", token).casefold()
+    if len(normalized) <= 3 or not re.search(r"[а-яіїєґёэъы]", normalized):
+        return frozenset({normalized})
+    forms = {normalized}
+    if normalized.endswith(("ій", "ий", "ый")):
+        stem = normalized[:-2]
+        forms.update(stem + suffix for suffix in ("ого", "ому", "им", "ым", "ім"))
+        if normalized.endswith("ій"):
+            forms.update(stem + suffix for suffix in ("ія", "ію", "ієм", "ієві"))
+    elif normalized.endswith("а"):
+        stem = normalized[:-1]
+        forms.update(stem + suffix for suffix in ("и", "і", "у", "ою", "е", "о"))
+    elif normalized.endswith("я"):
+        stem = normalized[:-1]
+        forms.update(stem + suffix for suffix in ("і", "ї", "и", "ю", "єю", "ею", "ей"))
+    elif normalized.endswith("о"):
+        stem = normalized[:-1]
+        forms.update(stem + suffix for suffix in ("а", "у", "ом", "і", "е"))
+    elif normalized.endswith("ь"):
+        stem = normalized[:-1]
+        forms.update(stem + suffix for suffix in ("я", "ю", "ем", "єм", "і", "е"))
+    elif re.search(r"[бвгґджзклмнпрстфхцчшщ]$", normalized):
+        forms.update(normalized + suffix for suffix in ("а", "у", "ом", "ем", "і", "ові", "еві"))
+    return frozenset(forms)
+
+
+@lru_cache(maxsize=2048)
+def _word_tokens(value: str) -> tuple[str, ...]:
+    """Tokenize words while retaining apostrophe and hyphen compounds."""
+    return tuple(
+        match.group(0)
+        for match in re.finditer(r"[^\W\d_]+(?:[’'ʼ-][^\W\d_]+)*|\d+", value.casefold())
+    )
+
+
+def _tokens_match(alias_token: str, source_token: str) -> bool:
+    return source_token in _inflection_forms(alias_token)
+
+
+def sanitize_pass_payload(
+    pass_name: PassName, payload: Mapping[str, Any], source_text: str
+) -> dict[str, Any]:
+    """Apply deterministic, semantics-preserving cleanup before pass validation."""
+    sanitized = deepcopy(dict(payload))
+    if pass_name != "entities" or not isinstance(sanitized.get("entities"), list):
+        return sanitized
+    groups: list[Any] = []
+    for candidate in sanitized["entities"]:
+        if not isinstance(candidate, dict) or not isinstance(candidate.get("mentions"), list):
+            groups.append(candidate)
+            continue
+        mentions: list[Any] = []
+        seen: set[str] = set()
+        for mention in candidate["mentions"]:
+            if not isinstance(mention, str):
+                mentions.append(mention)
+            elif mention in source_text and mention not in seen:
+                seen.add(mention)
+                mentions.append(mention)
+        if mentions:
+            candidate["mentions"] = mentions
+            groups.append(candidate)
+    sanitized["entities"] = groups
+    return sanitized
 
 
 @lru_cache
@@ -108,10 +189,10 @@ def validate_pass(
 
 def _validate_entities(payload: Mapping[str, Any], source_text: str) -> None:
     issues: list[ValidationIssue] = []
-    all_mentions: list[str] = []
-    for entity in cast(list[Mapping[str, Any]], payload["entities"]):
+    mention_owner: dict[str, int] = {}
+    duplicate_groups: list[str] = []
+    for group_index, entity in enumerate(cast(list[Mapping[str, Any]], payload["entities"])):
         mentions = cast(list[str], entity["mentions"])
-        all_mentions.extend(mentions)
         for mention in mentions:
             if mention not in source_text:
                 issues.append(
@@ -119,11 +200,14 @@ def _validate_entities(payload: Mapping[str, Any], source_text: str) -> None:
                         "grounding_failure", f"entity mention is not exact source text: {mention!r}"
                     )
                 )
-    duplicates = [mention for mention, count in Counter(all_mentions).items() if count > 1]
-    if duplicates:
+            owner = mention_owner.setdefault(mention, group_index)
+            if owner != group_index and mention not in duplicate_groups:
+                duplicate_groups.append(mention)
+    if duplicate_groups:
         issues.append(
             ValidationIssue(
-                "reference_failure", f"mentions occur in multiple entity groups: {duplicates!r}"
+                "reference_failure",
+                f"mentions occur in multiple entity groups: {duplicate_groups!r}",
             )
         )
     if issues:

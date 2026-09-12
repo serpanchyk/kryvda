@@ -6,8 +6,8 @@ from typing import Any
 from monitoring_common.contracts import PassName
 
 PROMPT_VERSIONS: dict[PassName, str] = {
-    "entities": "inference_v3_entities_prompt_v1",
-    "claims": "inference_v3_claims_prompt_v1",
+    "entities": "inference_v3_entities_prompt_v2",
+    "claims": "inference_v3_claims_prompt_v2",
     "classification": "inference_v3_classification_prompt_v1",
 }
 
@@ -23,8 +23,11 @@ ENTITY_PROMPT = f"""{COMMON}
 
 Завдання: знайди лише distinct identifiable real-world actors, які істотно беруть участь у
 meaningful claims або є названими джерелами таких claims. Один об'єкт означає одного актора.
-Згрупуй усі точні текстові згадки, які впевнено стосуються одного актора. Якщо не впевнений —
-розділи. Кожен рядок mentions дослівно копіюй із поста без нормалізації.
+mentions містить унікальні текстові форми, а не кожне повторення форми в пості. Ніколи не
+повторюй той самий рядок усередині одного entity. Кожен рядок mentions дослівно копіюй із одного
+неперервного фрагмента поста без нормалізації. Не конструюй mention, поєднуючи розділені фрагменти
+тексту. Згрупуй форми лише коли вони впевнено стосуються одного актора. Якщо не впевнений, чи дві
+згадки означають одного актора, залиш їх у різних entities.
 
 Не визначай типи, canonical names, registry IDs, claims, stance, rhetoric чи attribution. Не
 включай займенники, випадкові noun phrases або неназвані групи на кшталт "джерела", "військові",
@@ -43,7 +46,12 @@ normalized_text пиши українською. evidence_text має бути �
 named_entity або external_unnamed. Speaker не входить до entity_ids, якщо proposition не про нього.
 Epistemic status: "ствердження" для поданого як факт, "невпевнене" для підозри/можливості/
 гіпотези, "питання" для справжнього питання. Негативне звинувачення, подане як факт, залишається
-"ствердженням"."""
+"ствердженням".
+
+Кожен claim обов'язково поверни з усіма полями в такому порядку: normalized_text, entity_ids,
+evidence_text, attribution, presentation, epistemic_status. Не завершуй JSON до заповнення
+presentation та epistemic_status. Усередині attribution спочатку вкажи source_entity_id, потім
+source_kind."""
 
 CLASSIFICATION_PROMPT = f"""{COMMON}
 

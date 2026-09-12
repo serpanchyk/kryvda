@@ -20,6 +20,8 @@ The API health endpoint is `http://localhost:8000/health`; the frontend is
 Existing databases must apply `infra/postgres/migrations/003_inference_v3.sql` with `psql`. The
 migration intentionally removes v1 analysis jobs/results, preserves raw posts and revisions, seeds
 the supplied monitored registry, and enqueues matching latest historical revisions.
+Apply `infra/postgres/migrations/004_inference_v3_1.sql` after it to add the v3.1 sanitized and
+final per-pass diagnostic fields without replacing the three-pass schema.
 
 Registry and candidate-review endpoints are currently unauthenticated. Keep the API behind trusted
 deployment network controls until authentication is added.

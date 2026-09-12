@@ -6,6 +6,7 @@ from monitoring_common.contracts import (
     alias_occurs,
     normalize_match_text,
     parse_json_object,
+    sanitize_pass_payload,
     validate_pass,
     validation_errors,
 )
@@ -31,7 +32,10 @@ def test_alias_matching_is_casefolded_literal_and_boundary_aware() -> None:
     assert alias_occurs("Заява ЦПК.", "цпк")
     assert alias_occurs("Про Anti-Corruption Action Centre!", "Anti-Corruption Action Centre")
     assert not alias_occurs("слово накопичено", "ОП")
-    assert not alias_occurs("Шабуніна згадали", "Шабунін")
+    assert alias_occurs("Шабуніна згадали", "Шабунін")
+    assert alias_occurs("Рішення Андрія Єрмака", "Андрій Єрмак")
+    assert alias_occurs("Заява Михаила Федорова", "Михаил Федоров")
+    assert not alias_occurs("Єрмаков виступив", "Єрмак")
     assert normalize_match_text("  Дар’я   КАЛЕНЮК ") == "дар’я каленюк"
 
 
@@ -55,11 +59,48 @@ def test_entity_validation_rejects_duplicate_mentions_across_groups() -> None:
         )
 
 
+def test_entity_validation_allows_duplicate_occurrences_inside_one_group() -> None:
+    validate_pass("entities", {"entities": [{"mentions": ["ЦПК", "ЦПК"]}]}, TEXT)
+
+
+def test_entity_sanitizer_deduplicates_grounds_and_drops_only_empty_groups() -> None:
+    payload = {
+        "entities": [
+            {"mentions": ["ЦПК", "ЦПК", "not source"]},
+            {"mentions": ["missing", "also missing"]},
+            {"mentions": ["Віталій Шабунін", "invented"]},
+        ]
+    }
+
+    sanitized = sanitize_pass_payload("entities", payload, TEXT)
+
+    assert sanitized == {
+        "entities": [
+            {"mentions": ["ЦПК"]},
+            {"mentions": ["Віталій Шабунін"]},
+        ]
+    }
+    assert payload["entities"][0]["mentions"] == ["ЦПК", "ЦПК", "not source"]
+
+
+def test_non_entity_sanitizer_is_a_non_mutating_passthrough() -> None:
+    payload = {"claims": []}
+    sanitized = sanitize_pass_payload("claims", payload, TEXT)
+    assert sanitized == payload
+    assert sanitized is not payload
+
+
 def test_runtime_schemas_avoid_unsupported_unique_items() -> None:
     from monitoring_common.contracts import load_inference_schema
 
     for pass_name in ("entities", "claims", "classification"):
         assert "uniqueItems" not in str(load_inference_schema(pass_name))
+    claim_properties = load_inference_schema("claims")["properties"]["claims"]["items"][
+        "properties"
+    ]
+    assert list(claim_properties)[-2:] == ["presentation", "epistemic_status"]
+    attribution_properties = claim_properties["attribution"]["properties"]
+    assert list(attribution_properties) == ["source_entity_id", "source_kind"]
 
 
 def test_claim_validation_enforces_grounding_scope_and_attribution() -> None:

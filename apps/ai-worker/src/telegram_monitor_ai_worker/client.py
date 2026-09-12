@@ -19,9 +19,17 @@ from telegram_monitor_ai_worker.prompt import (
 class LiteLlmInferenceClient:
     """Call the internal OpenAI-compatible LiteLLM endpoint."""
 
-    def __init__(self, base_url: str, api_key: str, model: str, timeout_seconds: int) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        model: str,
+        timeout_seconds: int,
+        max_output_tokens: int = 4096,
+    ) -> None:
         self._client = AsyncOpenAI(base_url=base_url, api_key=api_key, timeout=timeout_seconds)
         self._model = model
+        self._max_output_tokens = max_output_tokens
 
     async def infer(self, pass_name: PassName, request: dict[str, Any]) -> ModelResponse:
         """Generate one primary pass response as raw JSON text."""
@@ -70,12 +78,18 @@ class LiteLlmInferenceClient:
                 },
             ),
             temperature=0,
+            max_tokens=self._max_output_tokens,
         )
         duration_ms = round((time.monotonic() - started) * 1000)
         content = response.choices[0].message.content if response.choices else None
         if not content:
             raise ModelOutputError("model generation did not contain JSON content")
-        return ModelResponse(content, duration_ms)
+        finish_reason = (
+            getattr(response.choices[0], "finish_reason", None) if response.choices else None
+        )
+        usage = getattr(response, "usage", None)
+        completion_tokens = getattr(usage, "completion_tokens", None)
+        return ModelResponse(content, duration_ms, finish_reason, completion_tokens)
 
     async def close(self) -> None:
         """Close the underlying asynchronous HTTP client."""

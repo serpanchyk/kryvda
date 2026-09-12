@@ -3,7 +3,7 @@
 ## Current State
 
 The Telegram collection foundation persists an agreed fixed channel pool, raw posts and
-revisions, current channel avatars, a human-maintained monitored-entity registry, inference-v3
+revisions, current channel avatars, a human-maintained monitored-entity registry, inference-v3.1
 jobs, pass diagnostics, candidates, claims and claim-target classifications. Production analysis
 uses deterministic target filtering followed by three focused Mamay passes. The API exposes
 service health, collection health, current-avatar URLs and unauthenticated registry/candidate
@@ -34,9 +34,9 @@ administration; product UI remains a shell.
 - Current Telegram channel avatars are stored in a shared Docker volume, not PostgreSQL; their
   stable relative URLs use `/channel-images/{channel_id}` and are refreshed every collection poll.
 - LiteLLM provides the internal-only OpenAI-compatible endpoint `http://litellm:4000` for
-  `MamayLM-Gemma-3-27B-IT`. Inference v3 independently validates entities, claims and
-  claim-target classifications, permits one contract repair per pass, and retains every raw model
-  response with categorized diagnostics.
+  `MamayLM-Gemma-3-27B-IT`. Inference v3.1 sanitizes Pass 1 before independently validating
+  entities, claims and claim-target classifications, permits one contract repair per pass, and
+  retains raw, sanitized and final payloads with categorized diagnostics.
 - The supplied 128-entry registry seed is active and monitored. Approved aliases alone drive
   filtering and resolution. Registry expansion backfills only the latest accessible revision of
   each stored post.
@@ -51,6 +51,12 @@ administration; product UI remains a shell.
   production extraction contract unchanged.
 - `mamay_vs_golden_v2` records the full auditable inference-v3 pipeline against `golden_v0`,
   including target-filter decisions, all primary/repair outputs, final resolution and post length.
+- `mamay_vs_golden_v3_1` repeats the same 55 examples with the v3.1 sanitizer, inflection-aware
+  filter, reordered Pass 2 guided schema and explicit 4,096-token completion budget. Its generated
+  summary compares contract-health counts with `mamay_vs_golden_v2`. The final run recorded one
+  filtered post, 47 failed analyses and seven completed analyses; Pass 2 primary-valid outputs
+  rose from zero to seven and JSON parse failures fell from 20 to four. The run remains an
+  operational contract measurement, not a semantic-quality score.
 
 ## Documentation
 

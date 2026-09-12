@@ -21,6 +21,8 @@ class ModelResponse:
 
     raw_output: str
     duration_ms: int
+    finish_reason: str | None = None
+    completion_tokens: int | None = None
 
 
 class ModelOutputError(ValueError):

@@ -51,7 +51,7 @@ class FakeConnection:
             return 30
         if "INSERT INTO claims" in query:
             return 40
-        if "SELECT parsed_payload" in query:
+        if "SELECT sanitized_payload" in query:
             return {"claims": []}
         return 3
 
@@ -81,7 +81,7 @@ class FakePool:
 
     async def fetchval(self, query: str, *args: object) -> object:
         self.executed.append((query, args))
-        if "SELECT parsed_payload" in query:
+        if "SELECT sanitized_payload" in query:
             return {"entities": []}
         return 3
 
@@ -160,7 +160,7 @@ async def test_repository_completes_relational_result_and_job() -> None:
     classifications = [{"claim_id": "c1", "entity_id": "e1", "stance": "відсутнє", "rhetoric": []}]
 
     await repository.complete(
-        job, [], claims, classifications, {"pipeline_version": "inference_v3"}
+        job, [], claims, classifications, {"pipeline_version": "inference_v3_1"}
     )
 
     queries = [query for query, _ in pool.connection.executed]
@@ -183,15 +183,29 @@ async def test_repository_records_attempt_skip_retry_and_failure() -> None:
         "model",
         "{}",
         {},
+        {},
         "valid",
         None,
         [],
         5,
+    )
+    await repository.record_pass_diagnostic(
+        run_id=9,
+        pass_name="entities",
+        raw_primary_output="{}",
+        sanitized_primary_payload={},
+        primary_validation_errors=[],
+        raw_repair_output=None,
+        sanitized_repair_payload=None,
+        repair_validation_errors=[],
+        final_validation_status="valid",
+        final_parsed_payload={},
     )
     await repository.skip(job)
     assert await repository.retry_or_fail(job, "provider_transient", "down", 3) is True
     await repository.fail(job, "schema_failure", "bad")
 
     assert any("inference_pass_attempts" in query for query, _ in pool.executed)
+    assert any("inference_pass_diagnostics" in query for query, _ in pool.executed)
     assert any("status = 'skipped'" in query for query, _ in pool.connection.executed)
     assert any("failure_detail" in query for query, _ in pool.executed)

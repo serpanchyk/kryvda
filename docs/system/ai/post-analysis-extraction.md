@@ -1,8 +1,9 @@
-# Inference v3
+# Inference v3.1
 
 Production analysis is target monitoring. A Post Revision is eligible only when a Unicode-aware,
-case-insensitive literal match finds an approved alias of a monitored registry entity. Matching
-requires letter/digit boundaries and performs no fuzzy or morphological search.
+case-insensitive match finds an approved alias of a monitored registry entity. Exact matches use
+letter/digit boundaries. A conservative deterministic Ukrainian/Russian nominal-inflection
+matcher also recognizes grammatical forms token by token; it does not perform fuzzy matching.
 
 The AI worker makes exactly three semantic model calls:
 
@@ -12,24 +13,34 @@ The AI worker makes exactly three semantic model calls:
 3. `classification` classifies every monitored claim-target pair for Ukrainian stance and up to
    two attack-rhetoric categories.
 
-Between calls, backend code validates grounding, resolves approved aliases, assigns `e*` and `c*`
-IDs, records candidates, and derives deterministic evidence offsets. Pass 2 receives the whole
-post. Pass 3 receives the normalized claim, exact evidence, and the evidence sentences with one
-neighboring sentence on each side.
+Between calls, backend code validates grounding, resolves approved aliases including inflected
+forms, assigns `e*` and `c*` IDs, records candidates, and derives deterministic evidence offsets.
+Before Pass 1 validation it removes repeated strings and ungrounded strings, retaining each entity
+group that still has at least one exact mention. A mention repeated inside one group is harmless;
+the same grounded mention in separate groups remains a reference failure. Pass 2 receives the
+whole post. Pass 3 receives the normalized claim, exact evidence, and the evidence sentences with
+one neighboring sentence on each side.
 
 Schemas live in `monitoring_common/contracts/schemas/inference_v3_*`. Prompts are Ukrainian and
 technical JSON keys remain English. IDs, canonical resolution, offsets, candidates, persistence,
 and retry bookkeeping are deterministic backend responsibilities.
 
-Every primary response is persisted raw before dependent work proceeds. JSON parse, schema,
-grounding, and reference failures receive one repair request containing the original output,
-categorized validation errors, and expected schema. A second failure is terminal. Generation and
+Every primary response is persisted raw before dependent work proceeds. The flow is raw output,
+deterministic sanitation, validation, and at most one repair followed by the same sanitation and
+validation. Per-pass diagnostics retain both raw outputs, both sanitized payloads, categorized
+validation errors, the final validation status and the final parsed payload. JSON parse, schema,
+grounding, and reference failures remain distinct. A second failure is terminal. Generation and
 provider failures retain separate categories. Successful prior passes are reused after transient
 job retries.
 
+Mamay calls use strict guided JSON and an explicit 4,096-token completion budget. The Pass 2
+schema emits `source_entity_id` before `source_kind`, and `presentation` before
+`epistemic_status`: controlled probes showed that the previous property orders let the model emit
+EOS before required fields, leaving whitespace even when the token budget was raised.
+
 Final results are stored relationally as post-local entities, atomic claims, claim/entity links,
-and claim-target classifications. `analysis_runs.final_payload` keeps an inspectable immutable v3
-document. Aggregation and product analytics are intentionally deferred.
+and claim-target classifications. `analysis_runs.final_payload` keeps an inspectable immutable
+v3.1 document. Aggregation and product analytics are intentionally deferred.
 
 The previous `extraction_schema_v1` remains packaged only so historical DVC experiments can be
 reproduced; it is no longer a production runtime contract.

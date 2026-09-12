@@ -10,6 +10,7 @@ from mamay_golden_v2 import (
     completed_example_ids,
     generate_comparisons,
     load_seed_aliases,
+    summarize_comparisons,
     validate_comparisons,
 )
 from telegram_monitor_ai_worker.models import ModelResponse
@@ -82,7 +83,11 @@ async def test_analysis_records_prefilter_all_passes_and_final_output() -> None:
         "claims",
         "classification",
     ]
-    assert row["final_output"]["pipeline_version"] == "inference_v3"
+    assert row["final_output"]["pipeline_version"] == "inference_v3_1"
+    assert len(row["pass_diagnostics"]) == 3
+    assert row["pass_diagnostics"][0]["sanitized_primary_output"] == {
+        "entities": [{"mentions": ["Шабунін"]}]
+    }
 
 
 async def test_filtered_records_make_no_model_requests() -> None:
@@ -99,6 +104,21 @@ async def test_generator_resumes_and_validator_checks_artifact(tmp_path: Path) -
     assert (written, failures) == (1, 0)
     assert validate_comparisons(output) == 1
     assert completed_example_ids(output) == {"golden-1"}
+    assert summarize_comparisons(output) == {
+        "examples": 1,
+        "status": {"filtered_out": 0, "failed": 0, "completed": 1},
+        "passes": {
+            "entities": {"primary_valid": 1, "valid_after_repair": 0},
+            "claims": {"primary_valid": 1, "valid_after_repair": 0},
+            "classification": {"valid": 1},
+        },
+        "failure_reasons": {
+            "json_parse_failure": 0,
+            "schema_failure": 0,
+            "grounding_failure": 0,
+            "reference_failure": 0,
+        },
+    }
     assert await generate_comparisons(
         [annotation()], ALIASES, output, FakeClient(), logging.getLogger("test")
     ) == (0, 0)

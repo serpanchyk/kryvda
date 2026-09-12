@@ -4,4 +4,5 @@ analysis_model: MamayLM-Gemma-3-27B-IT
 analysis_poll_interval_seconds: 5
 analysis_lease_seconds: 300
 analysis_request_timeout_seconds: 120
+analysis_max_output_tokens: 4096
 analysis_max_attempts: 3

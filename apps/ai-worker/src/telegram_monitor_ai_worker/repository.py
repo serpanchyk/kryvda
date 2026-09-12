@@ -51,9 +51,11 @@ class AnalysisJobRepository:
             if row is None:
                 return None
             run_id = await connection.fetchval(
-                """INSERT INTO analysis_runs (job_id, post_revision_id, model_name)
-                   VALUES ($1, $2, $3)
-                   ON CONFLICT (job_id) DO UPDATE SET status = 'running'
+                """INSERT INTO analysis_runs
+                   (job_id, post_revision_id, model_name, pipeline_version)
+                   VALUES ($1, $2, $3, 'inference_v3_1')
+                   ON CONFLICT (job_id) DO UPDATE
+                   SET status = 'running', pipeline_version = 'inference_v3_1'
                    RETURNING id""",
                 row["id"],
                 row["post_revision_id"],
@@ -124,22 +126,30 @@ class AnalysisJobRepository:
         model: str,
         raw_output: str | None,
         parsed_payload: dict[str, Any] | None,
+        sanitized_payload: dict[str, Any] | None,
         status: str,
         failure_kind: str | None,
         errors: list[dict[str, str]],
         duration_ms: int | None,
+        finish_reason: str | None = None,
+        completion_tokens: int | None = None,
     ) -> None:
         """Persist one raw primary or repair response before continuing."""
         await self._pool.execute(
             """INSERT INTO inference_pass_attempts
                (run_id, pass_name, attempt_kind, prompt_version, schema_version, model_name,
-                raw_output, parsed_payload, status, failure_kind, validation_errors, duration_ms)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11::jsonb, $12)
+                raw_output, parsed_payload, sanitized_payload, status, failure_kind,
+                validation_errors, duration_ms, finish_reason, completion_tokens)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11,
+                       $12::jsonb, $13, $14, $15)
                ON CONFLICT (run_id, pass_name, attempt_kind) DO UPDATE
                SET raw_output = EXCLUDED.raw_output, parsed_payload = EXCLUDED.parsed_payload,
+                   sanitized_payload = EXCLUDED.sanitized_payload,
                    status = EXCLUDED.status, failure_kind = EXCLUDED.failure_kind,
                    validation_errors = EXCLUDED.validation_errors,
-                   duration_ms = EXCLUDED.duration_ms, created_at = now()""",
+                   duration_ms = EXCLUDED.duration_ms,
+                   finish_reason = EXCLUDED.finish_reason,
+                   completion_tokens = EXCLUDED.completion_tokens, created_at = now()""",
             run_id,
             pass_name,
             attempt_kind,
@@ -148,16 +158,65 @@ class AnalysisJobRepository:
             model,
             raw_output,
             json.dumps(parsed_payload) if parsed_payload is not None else None,
+            json.dumps(sanitized_payload) if sanitized_payload is not None else None,
             status,
             failure_kind,
             json.dumps(errors),
             duration_ms,
+            finish_reason,
+            completion_tokens,
+        )
+
+    async def record_pass_diagnostic(
+        self,
+        *,
+        run_id: int,
+        pass_name: str,
+        raw_primary_output: str | None,
+        sanitized_primary_payload: dict[str, Any] | None,
+        primary_validation_errors: list[dict[str, str]],
+        raw_repair_output: str | None,
+        sanitized_repair_payload: dict[str, Any] | None,
+        repair_validation_errors: list[dict[str, str]],
+        final_validation_status: str,
+        final_parsed_payload: dict[str, Any] | None,
+    ) -> None:
+        """Upsert the complete primary-to-repair diagnostic record for one pass."""
+        await self._pool.execute(
+            """INSERT INTO inference_pass_diagnostics
+               (run_id, pass_name, raw_primary_output, sanitized_primary_payload,
+                primary_validation_errors, raw_repair_output, sanitized_repair_payload,
+                repair_validation_errors, final_validation_status, final_parsed_payload)
+               VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7::jsonb, $8::jsonb, $9,
+                       $10::jsonb)
+               ON CONFLICT (run_id, pass_name) DO UPDATE
+               SET raw_primary_output = EXCLUDED.raw_primary_output,
+                   sanitized_primary_payload = EXCLUDED.sanitized_primary_payload,
+                   primary_validation_errors = EXCLUDED.primary_validation_errors,
+                   raw_repair_output = EXCLUDED.raw_repair_output,
+                   sanitized_repair_payload = EXCLUDED.sanitized_repair_payload,
+                   repair_validation_errors = EXCLUDED.repair_validation_errors,
+                   final_validation_status = EXCLUDED.final_validation_status,
+                   final_parsed_payload = EXCLUDED.final_parsed_payload,
+                   updated_at = now()""",
+            run_id,
+            pass_name,
+            raw_primary_output,
+            json.dumps(sanitized_primary_payload)
+            if sanitized_primary_payload is not None
+            else None,
+            json.dumps(primary_validation_errors),
+            raw_repair_output,
+            json.dumps(sanitized_repair_payload) if sanitized_repair_payload is not None else None,
+            json.dumps(repair_validation_errors),
+            final_validation_status,
+            json.dumps(final_parsed_payload) if final_parsed_payload is not None else None,
         )
 
     async def completed_pass_payload(self, run_id: int, pass_name: str) -> dict[str, Any] | None:
         """Return the last validated pass payload so transient retries can resume."""
         value = await self._pool.fetchval(
-            """SELECT parsed_payload FROM inference_pass_attempts
+            """SELECT sanitized_payload FROM inference_pass_attempts
                WHERE run_id = $1 AND pass_name = $2 AND status = 'valid'
                ORDER BY id DESC LIMIT 1""",
             run_id,

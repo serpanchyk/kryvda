@@ -30,6 +30,7 @@ ALIASES = [
 
 def test_prefilter_and_resolution_keep_bookkeeping_out_of_model() -> None:
     assert matched_monitored_entity_ids("Шабунін і ЦПК", ALIASES) == [10]
+    assert matched_monitored_entity_ids("Шабуніна згадали", ALIASES) == [10]
     resolved = resolve_entity_groups(
         [
             {"mentions": ["Шабунін"]},
@@ -62,6 +63,13 @@ def test_resolution_merges_safe_registry_duplicates_and_rejects_conflicts() -> N
             [{"mentions": ["Шабунін", "ЦПК"]}],
             ALIASES,
         )
+
+
+def test_resolution_matches_inflected_registry_alias() -> None:
+    resolved = resolve_entity_groups([{"mentions": ["Шабуніна"]}], ALIASES)
+
+    assert resolved[0]["registry_entity_id"] == 10
+    assert resolved[0]["monitored"] is True
 
 
 def test_claim_ids_offsets_and_local_context_are_deterministic() -> None:

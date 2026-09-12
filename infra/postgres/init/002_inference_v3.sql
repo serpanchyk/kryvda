@@ -75,7 +75,7 @@ CREATE TABLE analysis_runs (
     status TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'completed', 'failed')),
     matched_entity_ids BIGINT[] NOT NULL DEFAULT '{}',
     model_name TEXT NOT NULL,
-    pipeline_version TEXT NOT NULL DEFAULT 'inference_v3',
+    pipeline_version TEXT NOT NULL DEFAULT 'inference_v3_1',
     final_payload JSONB,
     failure_kind TEXT,
     failure_detail JSONB,

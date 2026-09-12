@@ -34,11 +34,17 @@ def resolve_entity_groups(
     by_registry_id: dict[int, dict[str, Any]] = {}
     for group in groups:
         mentions = cast(list[str], group["mentions"])
-        matched_rows = {
-            int(row["entity_id"]): row
-            for mention in mentions
-            if (row := aliases_by_normalized.get(normalize_match_text(mention))) is not None
-        }
+        matched_rows: dict[int, Mapping[str, Any]] = {}
+        for mention in mentions:
+            exact = aliases_by_normalized.get(normalize_match_text(mention))
+            matching_aliases = (
+                [exact]
+                if exact is not None
+                else [row for row in aliases if alias_occurs(mention, cast(str, row["alias"]))]
+            )
+            matched_rows.update(
+                {int(row["entity_id"]): row for row in matching_aliases if row is not None}
+            )
         if len(matched_rows) > 1:
             raise InferenceValidationError(
                 [
@@ -155,7 +161,7 @@ def final_payload(
 ) -> dict[str, Any]:
     """Build the inspectable immutable v3 result document."""
     return {
-        "pipeline_version": "inference_v3",
+        "pipeline_version": "inference_v3_1",
         "entities": [dict(entity) for entity in entities],
         "claims": [dict(claim) for claim in claims],
         "classifications": [dict(row) for row in classifications],
