@@ -63,7 +63,9 @@ administration; product UI remains a shell.
   completed 46 examples (versus seven in v3.1), with zero grounding failures and 18 deterministic
   evidence realignments; it remains a contract-health measurement rather than a semantic score.
 - `mamay_vs_golden_v3_3` reruns the unchanged 55 examples with prefilter entity fallback,
-  attribution normalization, and pair-level classification retries.
+  attribution normalization, and pair-level classification retries. The completed run reached
+  final output for all 55 posts: 42 completed, 12 partial classifications, and one entity
+  fallback; it recorded 18 attribution sanitizations and 120 permanently missing pairs.
 
 ## Documentation
 
