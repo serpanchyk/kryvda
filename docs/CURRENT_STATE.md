@@ -3,7 +3,7 @@
 ## Current State
 
 The Telegram collection foundation persists an agreed fixed channel pool, raw posts and
-revisions, current channel avatars, a human-maintained monitored-entity registry, inference-v3.4
+revisions, current channel avatars, a human-maintained monitored-entity registry, inference-v3.5
 jobs, pass diagnostics, candidates, claims and claim-target classifications. Production analysis
 uses deterministic target filtering followed by three focused Mamay passes. The API exposes
 service health, collection health, current-avatar URLs and unauthenticated registry/candidate
@@ -34,8 +34,9 @@ administration; product UI remains a shell.
 - Current Telegram channel avatars are stored in a shared Docker volume, not PostgreSQL; their
   stable relative URLs use `/channel-images/{channel_id}` and are refreshed every collection poll.
 - LiteLLM provides the internal-only OpenAI-compatible endpoint `http://litellm:4000` for
-  `MamayLM-Gemma-3-27B-IT`. Inference v3.4 preserves v3.3 reliability, batches Pass 3 pairs,
-  salvages complete truncated JSON objects, and retries only still-missing pairs.
+  `MamayLM-Gemma-3-27B-IT`. Inference v3.5 preserves v3.4 reliability and three-pass topology,
+  sanitizes forbidden rhetoric on non-negative stances, and tightens Pass 2 attribution/modality
+  and Pass 3 corruption/personal-gain and hypocrisy/double-standard semantics.
 - The supplied 128-entry registry seed is active and monitored. Approved aliases alone drive
   filtering and resolution. Registry expansion backfills only the latest accessible revision of
   each stored post.

@@ -137,7 +137,7 @@ async def test_worker_runs_three_passes_and_persists_final_result() -> None:
     assert await worker.process_next() is True
     assert repository.failures == []
     assert repository.completed is not None
-    assert repository.completed["pipeline_version"] == "inference_v3_4"
+    assert repository.completed["pipeline_version"] == "inference_v3_5"
     assert [item[:2] for item in repository.attempts] == [
         ("entities", "primary"),
         ("claims", "primary"),

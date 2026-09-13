@@ -1,4 +1,4 @@
-# Inference v3.4
+# Inference v3.5
 
 Production analysis is target monitoring. A Post Revision is eligible only when a Unicode-aware,
 case-insensitive match finds an approved alias of a monitored registry entity. Exact matches use
@@ -35,7 +35,9 @@ technical JSON keys remain English. IDs, canonical resolution, offsets, candidat
 and retry bookkeeping are deterministic backend responsibilities. Pass 3 splits stable expected
 pairs into bounded requests (default five). After a whole-document parse failure it salvages only
 complete classification objects, retries still-missing pairs in bounded batches, then retries each
-remaining pair individually. Permanently absent pairs produce partial completion without losing
+remaining pair individually. A non-negative stance with returned rhetoric is sanitized to an empty
+rhetoric list without changing the stance, so that invariant violation does not cause pair retry.
+Permanently absent pairs produce partial completion without losing
 successful classifications; diagnostics retain batch raw/parsed output, salvaged rows and errors.
 
 Every primary response is persisted raw before dependent work proceeds. The flow is raw output,
@@ -53,7 +55,10 @@ whitespace even when the token budget was raised.
 
 Final results are stored relationally as post-local entities, atomic claims, claim/entity links,
 and claim-target classifications. `analysis_runs.final_payload` keeps an inspectable immutable
-v3.4 document, including completion/degradation status. Aggregation and product analytics are
+v3.5 document, including completion/degradation status. The v3.5 prompt restricts
+`external_unnamed` to explicit unnamed-source attribution, improves recall for explicitly
+uncertain claims, and narrows corruption/personal-gain and hypocrisy/double-standard rhetoric.
+Aggregation and product analytics are
 intentionally deferred.
 
 The previous `extraction_schema_v1` remains packaged only so historical DVC experiments can be

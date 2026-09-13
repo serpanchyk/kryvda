@@ -5,7 +5,11 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
-from monitoring_common.contracts import matched_registry_entities, resolve_registry_mention
+from monitoring_common.contracts import (
+    matched_registry_entities,
+    resolve_registry_mention,
+    sanitize_pass_payload_with_actions,
+)
 from monitoring_common.contracts import matched_registry_entity_ids as matched_registry_ids
 
 
@@ -35,10 +39,12 @@ def classification_subset(
         for entity_id in cast(list[str], claim["entity_ids"])
         if entity_id in monitored
     ]
+    sanitized_result = sanitize_pass_payload_with_actions("classification", payload, "", ())
+    sanitized_payload = sanitized_result.payload
     retained: list[dict[str, Any]] = []
-    actions: list[dict[str, Any]] = []
+    actions = list(sanitized_result.actions)
     seen: set[tuple[str, str]] = set()
-    rows = payload.get("classifications")
+    rows = sanitized_payload.get("classifications")
     if not isinstance(rows, list):
         return retained, expected, [{"action": "invalid_classification_payload"}]
     rhetoric_labels = {
@@ -245,10 +251,11 @@ def final_payload(
     classifications: Sequence[Mapping[str, Any]],
     status: str = "completed",
     degradations: Sequence[Mapping[str, Any]] = (),
+    pipeline_version: str = "inference_v3_5",
 ) -> dict[str, Any]:
     """Build the inspectable immutable v3 result document."""
     return {
-        "pipeline_version": "inference_v3_4",
+        "pipeline_version": pipeline_version,
         "status": status,
         "degradations": [dict(item) for item in degradations],
         "entities": [dict(entity) for entity in entities],

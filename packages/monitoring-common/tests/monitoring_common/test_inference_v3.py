@@ -232,6 +232,29 @@ def test_classification_validation_requires_every_monitored_pair_once() -> None:
         validate_pass("classification", payload, TEXT, ENTITIES, claims)
 
 
+def test_classification_sanitizer_clears_forbidden_rhetoric_without_changing_stance() -> None:
+    payload = {
+        "classifications": [
+            {
+                "claim_id": "c1",
+                "entity_id": "e1",
+                "stance": "відсутнє",
+                "rhetoric": ["делегітимізація", "делегітимізація"],
+            }
+        ]
+    }
+
+    result = sanitize_pass_payload_with_actions("classification", payload, TEXT, ENTITIES)
+
+    assert result.payload["classifications"][0] == {
+        "claim_id": "c1",
+        "entity_id": "e1",
+        "stance": "відсутнє",
+        "rhetoric": [],
+    }
+    assert result.actions == ({"action": "cleared_rhetoric_for_non_negative_stance", "index": 0},)
+
+
 def test_json_parser_categorizes_malformed_and_non_object_values() -> None:
     assert parse_json_object('{"entities": []}') == {"entities": []}
     with pytest.raises(InferenceValidationError) as malformed:

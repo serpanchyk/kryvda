@@ -559,7 +559,14 @@ async def analyze_annotation(
             degradations.append({"pass": "entities", "fallback": "prefilter_entities_only"})
         if classification_partial:
             degradations.append({"pass": "classification", "status": "partial"})
-        result = final_payload(entities, claims, classifications, status, degradations)
+        result = final_payload(
+            entities,
+            claims,
+            classifications,
+            status,
+            degradations,
+            pipeline_version="inference_v3_4",
+        )
     except Exception as error:
         failure = (
             validation_errors(error)

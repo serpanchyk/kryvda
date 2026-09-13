@@ -251,6 +251,9 @@ def sanitize_pass_payload_with_actions(
     """Clean one pass payload and retain item-level recovery diagnostics."""
     sanitized = deepcopy(dict(payload))
     actions: list[dict[str, Any]] = []
+    if pass_name == "classification":
+        _sanitize_classification_rhetoric(sanitized, actions)
+        return SanitizedPayload(sanitized, tuple(actions))
     if pass_name == "claims" and isinstance(sanitized.get("claims"), list):
         sanitized["claims"] = _sanitize_claims(
             cast(list[Any], sanitized["claims"]), source_text, entities, actions
@@ -282,6 +285,25 @@ def sanitize_pass_payload_with_actions(
             actions.append({"action": "dropped_empty_entity_group"})
     sanitized["entities"] = groups
     return SanitizedPayload(sanitized, tuple(actions))
+
+
+def _sanitize_classification_rhetoric(
+    payload: dict[str, Any], actions: list[dict[str, Any]]
+) -> None:
+    """Clear rhetoric forbidden by the stance contract without changing stance."""
+    rows = payload.get("classifications")
+    if not isinstance(rows, list):
+        return
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            continue
+        is_non_negative = row.get("stance") in {"позитивне", "відсутнє"}
+        if is_non_negative and isinstance(row.get("rhetoric"), list):
+            if row["rhetoric"]:
+                row["rhetoric"] = []
+                actions.append(
+                    {"action": "cleared_rhetoric_for_non_negative_stance", "index": index}
+                )
 
 
 def _sanitize_claims(

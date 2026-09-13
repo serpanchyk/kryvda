@@ -4,6 +4,7 @@ from telegram_monitor_ai_worker.pipeline import (
     assign_claim_ids,
     classification_batches,
     classification_items,
+    classification_subset,
     local_context,
     matched_monitored_entity_ids,
     resolve_entity_groups,
@@ -124,3 +125,26 @@ def test_classification_batches_and_salvage_keep_only_complete_objects() -> None
       {"claim_id":"c2","entity_id":"e1","stance":"негативне","rhetoric":[]},
       {"claim_id":"c3"'''
     assert [item["claim_id"] for item in salvage_classification_objects(raw)] == ["c1", "c2"]
+
+
+def test_classification_subset_clears_rhetoric_for_non_negative_stance() -> None:
+    payload = {
+        "classifications": [
+            {
+                "claim_id": "c1",
+                "entity_id": "e1",
+                "stance": "позитивне",
+                "rhetoric": ["корупція_або_особиста_вигода"],
+            }
+        ]
+    }
+    entities = [{"id": "e1", "monitored": True}]
+    claims = [{"id": "c1", "entity_ids": ["e1"]}]
+
+    retained, missing, actions = classification_subset(payload, entities, claims)
+
+    assert retained == [
+        {"claim_id": "c1", "entity_id": "e1", "stance": "позитивне", "rhetoric": []}
+    ]
+    assert missing == []
+    assert actions == [{"action": "cleared_rhetoric_for_non_negative_stance", "index": 0}]

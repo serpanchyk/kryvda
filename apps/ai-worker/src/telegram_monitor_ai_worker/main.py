@@ -642,7 +642,7 @@ async def run(
         settings.analysis_max_output_tokens,
     )
     worker = AnalysisWorker(AnalysisJobRepository(pool), client, settings, logger)
-    logger.info("analysis worker started", extra={"pipeline_version": "inference_v3_4"})
+    logger.info("analysis worker started", extra={"pipeline_version": "inference_v3_5"})
     try:
         while not stop.is_set():
             if await worker.process_next():
