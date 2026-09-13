@@ -41,6 +41,66 @@ def test_alias_matching_is_casefolded_literal_and_boundary_aware() -> None:
     assert normalize_match_text("  Дар’я   КАЛЕНЮК ") == "дар’я каленюк"
 
 
+def test_chesno_prefilter_requires_the_organization_name() -> None:
+    aliases = [
+        {
+            "entity_id": 22,
+            "canonical_name": "Рух ЧЕСНО",
+            "coarse_type": "organization",
+            "monitored": True,
+            "alias": "Рух ЧЕСНО",
+        },
+        {
+            "entity_id": 22,
+            "canonical_name": "Рух ЧЕСНО",
+            "coarse_type": "organization",
+            "monitored": True,
+            "alias": "CHESNO",
+        },
+    ]
+
+    assert matched_registry_entity_ids("Чесно кажучи, давно його не бачив.", aliases) == []
+    assert matched_registry_entity_ids("Чесна мобілізація потрібна державі.", aliases) == []
+    assert matched_registry_entity_ids("Рух ЧЕСНО опублікував заяву.", aliases) == [22]
+
+
+def test_attribution_examples_preserve_editorial_and_explicit_unnamed_sources() -> None:
+    entities = [{"id": "e1", "monitored": True}]
+    editorial_source = "Федоров отримав бронювання після звільнення."
+    external_source = "За даними слідства, Федоров отримав бронювання після звільнення."
+    editorial = {
+        "claims": [
+            {
+                "normalized_text": editorial_source,
+                "entity_ids": ["e1"],
+                "evidence_text": editorial_source,
+                "attribution": {"source_kind": "channel_editorial", "source_entity_id": None},
+                "epistemic_status": "ствердження",
+            }
+        ]
+    }
+    external = {
+        "claims": [
+            {
+                "normalized_text": editorial_source,
+                "entity_ids": ["e1"],
+                "evidence_text": editorial_source,
+                "attribution": {"source_kind": "external_unnamed", "source_entity_id": None},
+                "epistemic_status": "ствердження",
+            }
+        ]
+    }
+
+    assert (
+        sanitize_pass_payload_with_actions("claims", editorial, editorial_source, entities).payload
+        == editorial
+    )
+    assert (
+        sanitize_pass_payload_with_actions("claims", external, external_source, entities).payload
+        == external
+    )
+
+
 def test_registry_matching_admits_only_unique_inflected_person_surnames() -> None:
     aliases = [
         {

@@ -26,7 +26,7 @@ Transparency International Ukraine	organization	Transparency International Ukrai
 Детектор медіа	media	Детектор медіа; Detector Media
 Стейтвотч	organization	Стейтвотч; StateWatch; Statewatch
 ТОМ 14	organization	ТОМ 14; TOM 14
-Рух ЧЕСНО	organization	Рух ЧЕСНО; ЧЕСНО; CHESNO; CHESNO Movement
+Рух ЧЕСНО	organization	Рух ЧЕСНО; CHESNO; CHESNO Movement
 Асоціація правників України	organization	Асоціація правників України; АПУ; Ukrainian Bar Association; UBA
 Інститут законодавчих ідей	organization	Інститут законодавчих ідей; ІЗІ; Institute of Legislative Ideas; IZI
 Незалежна антикорупційна комісія	organization	Незалежна антикорупційна комісія; НАКО; NAKO; Незалежний антикорупційний комітет з питань оборони

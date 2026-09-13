@@ -1,4 +1,4 @@
-# Inference v3.5
+# Inference v3.5.1
 
 Production analysis is target monitoring. A Post Revision is eligible only when a Unicode-aware,
 case-insensitive match finds an approved alias of a monitored registry entity. Exact matches use
@@ -55,9 +55,10 @@ whitespace even when the token budget was raised.
 
 Final results are stored relationally as post-local entities, atomic claims, claim/entity links,
 and claim-target classifications. `analysis_runs.final_payload` keeps an inspectable immutable
-v3.5 document, including completion/degradation status. The v3.5 prompt restricts
-`external_unnamed` to explicit unnamed-source attribution, improves recall for explicitly
-uncertain claims, and narrows corruption/personal-gain and hypocrisy/double-standard rhetoric.
+v3.5.1 document, including completion/degradation status. The v3.5.1 prompt restricts
+`external_unnamed` to explicit unnamed-source attribution and defaults all unanchored claims to
+`channel_editorial`; it also prevents a reported actor's attack on a target from being mistaken
+for the channel's negative stance toward that target. The v3.5 rhetoric constraints remain intact.
 Aggregation and product analytics are
 intentionally deferred.
 

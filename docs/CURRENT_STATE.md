@@ -3,7 +3,7 @@
 ## Current State
 
 The Telegram collection foundation persists an agreed fixed channel pool, raw posts and
-revisions, current channel avatars, a human-maintained monitored-entity registry, inference-v3.5
+revisions, current channel avatars, a human-maintained monitored-entity registry, inference-v3.5.1
 jobs, pass diagnostics, candidates, claims and claim-target classifications. Production analysis
 uses deterministic target filtering followed by three focused Mamay passes. The API exposes
 service health, collection health, current-avatar URLs and unauthenticated registry/candidate
@@ -34,9 +34,10 @@ administration; product UI remains a shell.
 - Current Telegram channel avatars are stored in a shared Docker volume, not PostgreSQL; their
   stable relative URLs use `/channel-images/{channel_id}` and are refreshed every collection poll.
 - LiteLLM provides the internal-only OpenAI-compatible endpoint `http://litellm:4000` for
-  `MamayLM-Gemma-3-27B-IT`. Inference v3.5 preserves v3.4 reliability and three-pass topology,
-  sanitizes forbidden rhetoric on non-negative stances, and tightens Pass 2 attribution/modality
-  and Pass 3 corruption/personal-gain and hypocrisy/double-standard semantics.
+  `MamayLM-Gemma-3-27B-IT`. Inference v3.5.1 preserves v3.5 reliability and three-pass topology,
+  removes the ambiguous bare `ЧЕСНО` alias, defaults unanchored Pass 2 claims to
+  `channel_editorial`, and prevents Pass 3 from treating a reported attack on a target as the
+  channel's negative stance toward that target.
 - The supplied 128-entry registry seed is active and monitored. Approved aliases alone drive
   filtering and resolution. Registry expansion backfills only the latest accessible revision of
   each stored post.
@@ -70,7 +71,8 @@ administration; product UI remains a shell.
   pair recovery. Its DVC artifact preserves the raw batch and individual-retry audit trail.
 - `mamay_vs_golden_v3_5` uses the same runner and input with the v3.5 semantic prompts and
   deterministic non-negative-rhetoric sanitation; its summary compares contract-health metrics
-  with the preserved v3.4 artifact.
+  with the preserved v3.4 artifact. `mamay_vs_golden_v3_5_1` is its frozen single regression run:
+  it compares against v3.5 without changing reliability behavior or the dataset.
 
 ## Documentation
 
