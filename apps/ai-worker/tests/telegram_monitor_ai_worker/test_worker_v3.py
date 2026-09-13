@@ -137,11 +137,11 @@ async def test_worker_runs_three_passes_and_persists_final_result() -> None:
     assert await worker.process_next() is True
     assert repository.failures == []
     assert repository.completed is not None
-    assert repository.completed["pipeline_version"] == "inference_v3_3"
+    assert repository.completed["pipeline_version"] == "inference_v3_4"
     assert [item[:2] for item in repository.attempts] == [
         ("entities", "primary"),
         ("claims", "primary"),
-        ("classification", "primary"),
+        ("classification", "batch_primary"),
     ]
     assert all(item["final_validation_status"] == "valid" for item in repository.diagnostics)
 
@@ -175,6 +175,64 @@ async def test_worker_completes_when_claim_sanitizer_drops_every_claim() -> None
         ("entities", "primary"),
         ("claims", "primary"),
     ]
+
+
+async def test_classification_salvages_prefix_then_retries_only_missing_pair() -> None:
+    class SequentialClient:
+        def __init__(self) -> None:
+            self.requests: list[dict[str, Any]] = []
+            self.outputs = [
+                '{"classifications":[{"claim_id":"c1","entity_id":"e1",'
+                '"stance":"негативне","rhetoric":[]},{"claim_id":"c2"',
+                json.dumps(
+                    {
+                        "classifications": [
+                            {
+                                "claim_id": "c2",
+                                "entity_id": "e1",
+                                "stance": "відсутнє",
+                                "rhetoric": [],
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+            ]
+
+        async def infer(self, name: str, request: dict[str, Any]) -> ModelResponse:
+            assert name == "classification"
+            self.requests.append(request)
+            return ModelResponse(self.outputs.pop(0), 1, "length")
+
+        async def repair(self, *args: Any) -> ModelResponse:
+            raise AssertionError("Pass 3 does not use generic repair")
+
+    repository = FakeRepository()
+    client = SequentialClient()
+    worker = AnalysisWorker(
+        repository,  # type: ignore[arg-type]
+        client,  # type: ignore[arg-type]
+        AiWorkerSettings(litellm_api_key="key"),
+        logging.getLogger("test"),
+    )
+    claims = [{"id": "c1", "entity_ids": ["e1"]}, {"id": "c2", "entity_ids": ["e1"]}]
+    entities = [{"id": "e1", "monitored": True}]
+    items = [
+        {"claim_id": "c1", "entity_id": "e1"},
+        {"claim_id": "c2", "entity_id": "e1"},
+    ]
+
+    rows, partial = await worker._execute_classification(repository.job, items, entities, claims)
+
+    assert partial is False
+    assert [row["claim_id"] for row in rows] == ["c1", "c2"]
+    assert [[item["claim_id"] for item in request["items"]] for request in client.requests] == [
+        ["c1", "c2"],
+        ["c2"],
+    ]
+    metadata = repository.diagnostics[-1]["recovery_metadata"]
+    assert metadata["salvaged_pairs"] == [["c1", "e1"]]
+    assert metadata["retried_pairs"] == [["c2", "e1"]]
 
 
 async def test_worker_repairs_invalid_primary_once() -> None:

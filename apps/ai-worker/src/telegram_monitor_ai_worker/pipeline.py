@@ -1,5 +1,6 @@
 """Deterministic transformations between inference-v3 semantic passes."""
 
+import json
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
@@ -75,6 +76,51 @@ def classification_subset(
         seen.add(cast(tuple[str, str], pair))
         retained.append(dict(row))
     return retained, [pair for pair in expected if pair not in seen], actions
+
+
+def classification_batches(
+    items: Sequence[Mapping[str, Any]], batch_size: int
+) -> list[list[dict[str, Any]]]:
+    """Split classification items into stable, bounded provider requests."""
+    if batch_size < 1:
+        raise ValueError("classification batch size must be at least one")
+    return [
+        [dict(item) for item in items[index : index + batch_size]]
+        for index in range(0, len(items), batch_size)
+    ]
+
+
+def salvage_classification_objects(raw_output: str) -> list[dict[str, Any]]:
+    """Recover only complete objects from a truncated classifications array.
+
+    This deliberately accepts a contiguous JSON-object prefix of the generated array. It never
+    closes brackets, fills fields, or searches beyond malformed content, so recovery cannot alter
+    the model's semantic output.
+    """
+    match = re.search(r'"classifications"\s*:\s*\[', raw_output)
+    if match is None:
+        return []
+    decoder = json.JSONDecoder()
+    position = match.end()
+    recovered: list[dict[str, Any]] = []
+    while position < len(raw_output):
+        while position < len(raw_output) and raw_output[position].isspace():
+            position += 1
+        if position < len(raw_output) and raw_output[position] == ",":
+            position += 1
+            continue
+        if position >= len(raw_output) or raw_output[position] == "]":
+            break
+        if raw_output[position] != "{":
+            break
+        try:
+            value, position = decoder.raw_decode(raw_output, position)
+        except json.JSONDecodeError:
+            break
+        if not isinstance(value, dict):
+            break
+        recovered.append(value)
+    return recovered
 
 
 def resolve_entity_groups(
@@ -202,7 +248,7 @@ def final_payload(
 ) -> dict[str, Any]:
     """Build the inspectable immutable v3 result document."""
     return {
-        "pipeline_version": "inference_v3_3",
+        "pipeline_version": "inference_v3_4",
         "status": status,
         "degradations": [dict(item) for item in degradations],
         "entities": [dict(entity) for entity in entities],

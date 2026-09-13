@@ -3,7 +3,7 @@
 ## Current State
 
 The Telegram collection foundation persists an agreed fixed channel pool, raw posts and
-revisions, current channel avatars, a human-maintained monitored-entity registry, inference-v3.3
+revisions, current channel avatars, a human-maintained monitored-entity registry, inference-v3.4
 jobs, pass diagnostics, candidates, claims and claim-target classifications. Production analysis
 uses deterministic target filtering followed by three focused Mamay passes. The API exposes
 service health, collection health, current-avatar URLs and unauthenticated registry/candidate
@@ -34,9 +34,8 @@ administration; product UI remains a shell.
 - Current Telegram channel avatars are stored in a shared Docker volume, not PostgreSQL; their
   stable relative URLs use `/channel-images/{channel_id}` and are refreshed every collection poll.
 - LiteLLM provides the internal-only OpenAI-compatible endpoint `http://litellm:4000` for
-  `MamayLM-Gemma-3-27B-IT`. Inference v3.3 preserves prefilter-matched monitored entities,
-  sanitizes Pass 2 attribution item-by-item, and retains partial Pass 3 classifications with
-  categorized recovery diagnostics.
+  `MamayLM-Gemma-3-27B-IT`. Inference v3.4 preserves v3.3 reliability, batches Pass 3 pairs,
+  salvages complete truncated JSON objects, and retries only still-missing pairs.
 - The supplied 128-entry registry seed is active and monitored. Approved aliases alone drive
   filtering and resolution. Registry expansion backfills only the latest accessible revision of
   each stored post.
@@ -66,6 +65,8 @@ administration; product UI remains a shell.
   attribution normalization, and pair-level classification retries. The completed run reached
   final output for all 55 posts: 42 completed, 12 partial classifications, and one entity
   fallback; it recorded 18 attribution sanitizations and 120 permanently missing pairs.
+- `mamay_vs_golden_v3_4` uses the same 55 examples with bounded Pass 3 batches and hierarchical
+  pair recovery. Its DVC artifact preserves the raw batch and individual-retry audit trail.
 
 ## Documentation
 

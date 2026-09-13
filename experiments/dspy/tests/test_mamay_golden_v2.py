@@ -82,7 +82,7 @@ async def test_analysis_records_prefilter_all_passes_and_final_output() -> None:
         "claims",
         "classification",
     ]
-    assert row["final_output"]["pipeline_version"] == "inference_v3_3"
+    assert row["final_output"]["pipeline_version"] == "inference_v3_4"
     assert len(row["pass_diagnostics"]) == 3
     assert row["pass_diagnostics"][0]["sanitized_primary_output"] == {
         "entities": [{"mentions": ["Шабунін"]}]
@@ -116,6 +116,10 @@ async def test_generator_resumes_and_validator_checks_artifact(tmp_path: Path) -
             "entities": {"primary_valid": 1, "valid_after_repair": 0},
             "claims": {"primary_valid": 1, "valid_after_repair": 0},
             "classification": {
+                "expected_pairs": 1,
+                "primary_valid_pairs": 1,
+                "salvaged_pairs": 0,
+                "retry_recovered_pairs": 0,
                 "complete": 1,
                 "partial": 0,
                 "pair_retries": 0,

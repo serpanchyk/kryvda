@@ -2,10 +2,12 @@
 
 from telegram_monitor_ai_worker.pipeline import (
     assign_claim_ids,
+    classification_batches,
     classification_items,
     local_context,
     matched_monitored_entity_ids,
     resolve_entity_groups,
+    salvage_classification_objects,
 )
 
 ALIASES = [
@@ -109,3 +111,16 @@ def test_claim_ids_offsets_and_local_context_are_deterministic() -> None:
     )
     assert items[0]["target"] == "Віталій Шабунін"
     assert items[0]["local_context"].startswith("Перше")
+
+
+def test_classification_batches_and_salvage_keep_only_complete_objects() -> None:
+    items = [{"claim_id": f"c{index}", "entity_id": "e1"} for index in range(1, 7)]
+    assert [[item["claim_id"] for item in batch] for batch in classification_batches(items, 5)] == [
+        ["c1", "c2", "c3", "c4", "c5"],
+        ["c6"],
+    ]
+    raw = '''{"classifications":[
+      {"claim_id":"c1","entity_id":"e1","stance":"негативне","rhetoric":[]},
+      {"claim_id":"c2","entity_id":"e1","stance":"негативне","rhetoric":[]},
+      {"claim_id":"c3"'''
+    assert [item["claim_id"] for item in salvage_classification_objects(raw)] == ["c1", "c2"]

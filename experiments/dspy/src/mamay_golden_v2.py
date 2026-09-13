@@ -24,21 +24,23 @@ from telegram_monitor_ai_worker.client import LiteLlmInferenceClient
 from telegram_monitor_ai_worker.models import ModelOutputError, ModelResponse
 from telegram_monitor_ai_worker.pipeline import (
     assign_claim_ids,
+    classification_batches,
     classification_items,
     classification_subset,
     final_payload,
     matched_monitored_entity_ids,
     prefilter_entity_groups,
     resolve_entity_groups,
+    salvage_classification_objects,
 )
 
 DEFAULT_ANNOTATIONS = Path("experiments/datasets/golden_v0/data/annotations.jsonl")
-DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v3_3/comparisons.jsonl")
-DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v3_2/comparisons.jsonl")
+DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v3_4/comparisons.jsonl")
+DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v3_3/comparisons.jsonl")
 DEFAULT_SEED = Path("infra/postgres/init/003_registry_seed.sql")
 DEFAULT_MODEL = "MamayLM-Gemma-3-27B-IT"
 DEFAULT_BASE_URL = "http://litellm:4000"
-COMPARISON_SCHEMA_VERSION = "mamay_golden_comparison_v3_3"
+COMPARISON_SCHEMA_VERSION = "mamay_golden_comparison_v3_4"
 
 
 class InferenceClient(Protocol):
@@ -307,77 +309,117 @@ async def _run_classification(
     attempts: list[dict[str, Any]],
     diagnostics: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], bool]:
-    """Keep returned valid pairs and retry the precise missing set once."""
+    """Mirror production Pass 3 batching and partial JSON recovery."""
     rows: list[dict[str, Any]] = []
-    missing = [(item["claim_id"], item["entity_id"]) for item in items]
-    errors: list[dict[str, str]] = []
-    actions: list[dict[str, Any]] = []
-    primary: ModelResponse | None = None
-    try:
-        primary = await client.infer("classification", {"items": items})
-        payload = parse_json_object(primary.raw_output)
-        rows, missing, actions = classification_subset(payload, entities, claims)
-        attempts.append(
-            _attempt_record(
-                "classification",
-                "primary",
-                primary,
-                payload,
-                {"classifications": rows},
-                "valid",
-                [],
-                actions,
-            )
-        )
-    except (InferenceValidationError, ModelOutputError) as error:
-        errors = (
-            validation_errors(error)
-            if isinstance(error, InferenceValidationError)
-            else [{"kind": "generation_failure", "message": str(error)}]
-        )
-    retry: ModelResponse | None = None
-    retry_errors: list[dict[str, str]] = []
-    retry_actions: list[dict[str, Any]] = []
-    if missing:
-        retry_items = [item for item in items if (item["claim_id"], item["entity_id"]) in missing]
-        try:
-            retry = await client.infer("classification", {"items": retry_items})
-            payload = parse_json_object(retry.raw_output)
-            recovered, _, retry_actions = classification_subset(payload, entities, claims)
-            recovered = [row for row in recovered if (row["claim_id"], row["entity_id"]) in missing]
-            rows.extend(recovered)
-            recovered_pairs = {(row["claim_id"], row["entity_id"]) for row in recovered}
-            missing = [pair for pair in missing if pair not in recovered_pairs]
-            attempts.append(
-                _attempt_record(
-                    "classification",
-                    "retry",
-                    retry,
-                    payload,
-                    {"classifications": recovered},
-                    "valid",
-                    [],
-                    retry_actions,
+    expected = [(item["claim_id"], item["entity_id"]) for item in items]
+    missing = list(expected)
+    history: list[dict[str, Any]] = []
+    primary_pairs: list[tuple[str, str]] = []
+    salvaged_pairs: list[tuple[str, str]] = []
+    retried_pairs: list[tuple[str, str]] = []
+
+    async def run_batches(candidate_items: list[dict[str, Any]], kind: str) -> None:
+        nonlocal missing
+        for batch_index, batch in enumerate(classification_batches(candidate_items, 5), start=1):
+            requested = [(item["claim_id"], item["entity_id"]) for item in batch]
+            response: ModelResponse | None = None
+            payload: dict[str, Any] | None = None
+            errors: list[dict[str, str]] = []
+            actions: list[dict[str, Any]] = []
+            salvaged: list[dict[str, Any]] = []
+            recovered: list[dict[str, Any]] = []
+            try:
+                response = await client.infer("classification", {"items": batch})
+                try:
+                    payload = parse_json_object(response.raw_output)
+                except InferenceValidationError as error:
+                    errors = validation_errors(error)
+                    objects = salvage_classification_objects(response.raw_output)
+                    salvaged, _, actions = classification_subset(
+                        {"classifications": objects}, entities, claims
+                    )
+                    salvaged = [
+                        row for row in salvaged if (row["claim_id"], row["entity_id"]) in requested
+                    ]
+                    if objects or response.finish_reason in {"length", "max_tokens"}:
+                        errors.append({"kind": "generation_truncation", "message": "partial JSON"})
+                else:
+                    recovered, _, actions = classification_subset(payload, entities, claims)
+                    recovered = [
+                        row for row in recovered if (row["claim_id"], row["entity_id"]) in requested
+                    ]
+                accepted = [*recovered, *salvaged]
+                accepted_pairs = {(row["claim_id"], row["entity_id"]) for row in accepted}
+                errors.extend(
+                    {
+                        "kind": "missing_pair",
+                        "message": f"missing pair: {pair[0]}/{pair[1]}",
+                    }
+                    for pair in requested
+                    if pair not in accepted_pairs
                 )
+                rows.extend(accepted)
+                missing = [pair for pair in missing if pair not in accepted_pairs]
+                if kind == "batch_primary":
+                    primary_pairs.extend(accepted_pairs)
+                    salvaged_pairs.extend((row["claim_id"], row["entity_id"]) for row in salvaged)
+                else:
+                    retried_pairs.extend(accepted_pairs)
+                attempts.append(
+                    _attempt_record(
+                        "classification",
+                        kind,
+                        response,
+                        payload,
+                        {"classifications": accepted},
+                        "valid" if not errors else "invalid",
+                        errors,
+                        actions,
+                    )
+                )
+            except ModelOutputError as error:
+                errors = [{"kind": "generation_failure", "message": str(error)}]
+            history.append(
+                {
+                    "attempt_kind": kind,
+                    "batch_index": batch_index,
+                    "requested_pairs": [list(pair) for pair in requested],
+                    "raw_output": response.raw_output if response else None,
+                    "parsed_output": payload,
+                    "salvaged_objects": salvaged,
+                    "validation_errors": errors,
+                }
             )
-        except (InferenceValidationError, ModelOutputError) as error:
-            retry_errors = (
-                validation_errors(error)
-                if isinstance(error, InferenceValidationError)
-                else [{"kind": "generation_failure", "message": str(error)}]
-            )
+
+    await run_batches(items, "batch_primary")
+    retry_items = [item for item in items if (item["claim_id"], item["entity_id"]) in missing]
+    if retry_items:
+        await run_batches(retry_items, "batch_retry")
+    for item in [item for item in items if (item["claim_id"], item["entity_id"]) in missing]:
+        await run_batches([item], "individual_retry")
     diagnostics.append(
         {
             "pass": "classification",
-            "raw_primary_output": primary.raw_output if primary else None,
-            "primary_validation_errors": errors,
-            "primary_sanitization_actions": actions,
-            "raw_repair_output": retry.raw_output if retry else None,
-            "repair_validation_errors": retry_errors,
-            "repair_sanitization_actions": retry_actions,
+            "raw_primary_output": None,
+            "primary_validation_errors": [],
+            "primary_sanitization_actions": [],
+            "raw_repair_output": None,
+            "repair_validation_errors": [],
+            "repair_sanitization_actions": [],
             "final_validation_status": "partial" if missing else "valid",
             "final_parsed_payload": {"classifications": rows},
-            "recovery_metadata": {"permanently_failed_pairs": [list(pair) for pair in missing]},
+            "recovery_metadata": {
+                "expected_pairs": [list(pair) for pair in expected],
+                "primary_valid_pairs": [list(pair) for pair in primary_pairs],
+                "salvaged_pairs": [list(pair) for pair in salvaged_pairs],
+                "retried_pairs": [list(pair) for pair in retried_pairs],
+                "permanently_failed_pairs": [list(pair) for pair in missing],
+                "final_validation_errors": [
+                    {"kind": "missing_pair", "message": f"unclassified pair: {pair[0]}/{pair[1]}"}
+                    for pair in missing
+                ],
+                "attempts": history,
+            },
         }
     )
     return rows, bool(missing)
@@ -454,7 +496,7 @@ async def analyze_annotation(
         "prefilter": {"matched_entity_ids": matched},
         "run_metadata": {
             "model": DEFAULT_MODEL,
-            "pipeline_version": "inference_v3_3",
+            "pipeline_version": "inference_v3_4",
             "run_timestamp": datetime.now(UTC).isoformat(),
         },
     }
@@ -636,6 +678,30 @@ def summarize_comparisons(path: Path) -> dict[str, Any]:
             ),
         }
     pass_metrics["classification"] = {
+        "expected_pairs": sum(
+            len(diagnostic.get("recovery_metadata", {}).get("expected_pairs", []))
+            for row in rows
+            for diagnostic in row.get("pass_diagnostics", [])
+            if diagnostic.get("pass") == "classification"
+        ),
+        "primary_valid_pairs": sum(
+            len(diagnostic.get("recovery_metadata", {}).get("primary_valid_pairs", []))
+            for row in rows
+            for diagnostic in row.get("pass_diagnostics", [])
+            if diagnostic.get("pass") == "classification"
+        ),
+        "salvaged_pairs": sum(
+            len(diagnostic.get("recovery_metadata", {}).get("salvaged_pairs", []))
+            for row in rows
+            for diagnostic in row.get("pass_diagnostics", [])
+            if diagnostic.get("pass") == "classification"
+        ),
+        "retry_recovered_pairs": sum(
+            len(diagnostic.get("recovery_metadata", {}).get("retried_pairs", []))
+            for row in rows
+            for diagnostic in row.get("pass_diagnostics", [])
+            if diagnostic.get("pass") == "classification"
+        ),
         "complete": sum(
             any(
                 diagnostic.get("pass") == "classification"

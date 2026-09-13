@@ -38,12 +38,14 @@ from telegram_monitor_ai_worker.models import (
 )
 from telegram_monitor_ai_worker.pipeline import (
     assign_claim_ids,
+    classification_batches,
     classification_items,
     classification_subset,
     final_payload,
     matched_monitored_entity_ids,
     prefilter_entity_groups,
     resolve_entity_groups,
+    salvage_classification_objects,
 )
 from telegram_monitor_ai_worker.prompt import PROMPT_VERSIONS
 from telegram_monitor_ai_worker.repository import AnalysisJobRepository
@@ -61,6 +63,7 @@ class AiWorkerSettings(BaseServiceSettings):
     analysis_request_timeout_seconds: int = 120
     analysis_max_output_tokens: int = 4096
     analysis_max_attempts: int = 3
+    analysis_classification_batch_size: int = 5
 
 
 class InferenceClient(Protocol):
@@ -201,111 +204,136 @@ class AnalysisWorker:
         entities: Sequence[Mapping[str, Any]],
         claims: Sequence[Mapping[str, Any]],
     ) -> tuple[list[dict[str, Any]], bool]:
-        """Keep valid pairs and make one inference call for only missing pairs."""
+        """Classify bounded batches and degrade only pairs that cannot be recovered."""
         rows: list[dict[str, Any]] = []
-        missing = [(item["claim_id"], item["entity_id"]) for item in items]
-        primary: ModelResponse | None = None
-        primary_errors: list[dict[str, str]] = []
-        primary_actions: list[dict[str, Any]] = []
-        try:
-            await self._repository.renew_lease(job.id, self._settings.analysis_lease_seconds)
-            primary = await self._client.infer("classification", {"items": items})
-            payload = parse_json_object(primary.raw_output)
-            rows, missing, primary_actions = classification_subset(payload, entities, claims)
-            await self._record_attempt(
-                job,
-                "classification",
-                "primary",
-                primary,
-                payload,
-                {"classifications": rows},
-                "valid",
-                [],
-                primary_actions,
+        expected = [(item["claim_id"], item["entity_id"]) for item in items]
+        missing = list(expected)
+        history: list[dict[str, Any]] = []
+        primary_pairs: list[tuple[str, str]] = []
+        salvaged_pairs: list[tuple[str, str]] = []
+        retried_pairs: list[tuple[str, str]] = []
+
+        async def run_batches(candidate_items: list[dict[str, Any]], kind: str) -> None:
+            nonlocal missing
+            batches = classification_batches(
+                candidate_items, self._settings.analysis_classification_batch_size
             )
-        except (InferenceValidationError, ModelOutputError) as error:
-            primary_errors = (
-                validation_errors(error)
-                if isinstance(error, InferenceValidationError)
-                else [{"kind": "generation_failure", "message": str(error)}]
-            )
-            if primary is None:
-                await self._record_generation_failure(job, "classification", "primary", error)
-            else:
-                await self._record_attempt(
-                    job,
-                    "classification",
-                    "primary",
-                    primary,
-                    None,
-                    None,
-                    "invalid",
-                    primary_errors,
-                    primary_actions,
-                )
-        retry: ModelResponse | None = None
-        retry_errors: list[dict[str, str]] = []
-        retry_actions: list[dict[str, Any]] = []
-        if missing:
-            retry_items = [
-                item for item in items if (item["claim_id"], item["entity_id"]) in missing
-            ]
-            try:
-                await self._repository.renew_lease(job.id, self._settings.analysis_lease_seconds)
-                retry = await self._client.infer("classification", {"items": retry_items})
-                payload = parse_json_object(retry.raw_output)
-                recovered, _, retry_actions = classification_subset(payload, entities, claims)
-                recovered = [
-                    row for row in recovered if (row["claim_id"], row["entity_id"]) in missing
-                ]
-                rows.extend(recovered)
-                recovered_pairs = {(row["claim_id"], row["entity_id"]) for row in recovered}
-                missing = [pair for pair in missing if pair not in recovered_pairs]
-                await self._record_attempt(
-                    job,
-                    "classification",
-                    "retry",
-                    retry,
-                    payload,
-                    {"classifications": recovered},
-                    "valid",
-                    [],
-                    retry_actions,
-                )
-            except (InferenceValidationError, ModelOutputError) as error:
-                retry_errors = (
-                    validation_errors(error)
-                    if isinstance(error, InferenceValidationError)
-                    else [{"kind": "generation_failure", "message": str(error)}]
-                )
-                if retry is None:
-                    await self._record_generation_failure(job, "classification", "retry", error)
-                else:
+            for batch_index, batch in enumerate(batches, start=1):
+                requested = [(item["claim_id"], item["entity_id"]) for item in batch]
+                response: ModelResponse | None = None
+                payload: dict[str, Any] | None = None
+                errors: list[dict[str, str]] = []
+                actions: list[dict[str, Any]] = []
+                salvaged: list[dict[str, Any]] = []
+                recovered: list[dict[str, Any]] = []
+                try:
+                    await self._repository.renew_lease(
+                        job.id, self._settings.analysis_lease_seconds
+                    )
+                    response = await self._client.infer("classification", {"items": batch})
+                    try:
+                        payload = parse_json_object(response.raw_output)
+                    except InferenceValidationError as error:
+                        errors = validation_errors(error)
+                        objects = salvage_classification_objects(response.raw_output)
+                        salvaged, _, actions = classification_subset(
+                            {"classifications": objects}, entities, claims
+                        )
+                        salvaged = [
+                            row
+                            for row in salvaged
+                            if (row["claim_id"], row["entity_id"]) in requested
+                        ]
+                        if objects or response.finish_reason in {"length", "max_tokens"}:
+                            errors.append(
+                                {
+                                    "kind": "generation_truncation",
+                                    "message": "recovered complete classification-object prefix",
+                                }
+                            )
+                    else:
+                        recovered, _, actions = classification_subset(payload, entities, claims)
+                        recovered = [
+                            row
+                            for row in recovered
+                            if (row["claim_id"], row["entity_id"]) in requested
+                        ]
+                    accepted = [*recovered, *salvaged]
+                    accepted_pairs = {(row["claim_id"], row["entity_id"]) for row in accepted}
+                    errors.extend(
+                        {
+                            "kind": "missing_pair",
+                            "message": f"missing pair: {pair[0]}/{pair[1]}",
+                        }
+                        for pair in requested
+                        if pair not in accepted_pairs
+                    )
+                    rows.extend(accepted)
+                    missing = [pair for pair in missing if pair not in accepted_pairs]
+                    if kind == "batch_primary":
+                        primary_pairs.extend(accepted_pairs)
+                        salvaged_pairs.extend(
+                            (row["claim_id"], row["entity_id"]) for row in salvaged
+                        )
+                    else:
+                        retried_pairs.extend(accepted_pairs)
                     await self._record_attempt(
                         job,
                         "classification",
-                        "retry",
-                        retry,
-                        None,
-                        None,
-                        "invalid",
-                        retry_errors,
-                        retry_actions,
+                        kind,
+                        response,
+                        payload,
+                        {"classifications": accepted},
+                        "valid" if not errors else "invalid",
+                        errors,
+                        actions,
                     )
+                except ModelOutputError as error:
+                    errors = [{"kind": "generation_failure", "message": str(error)}]
+                    await self._record_generation_failure(job, "classification", kind, error)
+                history.append(
+                    {
+                        "attempt_kind": kind,
+                        "batch_index": batch_index,
+                        "requested_pairs": [list(pair) for pair in requested],
+                        "raw_output": response.raw_output if response else None,
+                        "parsed_output": payload,
+                        "salvaged_objects": salvaged,
+                        "validation_errors": errors,
+                    }
+                )
+
+        await run_batches(items, "batch_primary")
+        retry_items = [item for item in items if (item["claim_id"], item["entity_id"]) in missing]
+        if retry_items:
+            await run_batches(retry_items, "batch_retry")
+        for item in [item for item in items if (item["claim_id"], item["entity_id"]) in missing]:
+            await run_batches([item], "individual_retry")
         await self._repository.record_pass_diagnostic(
             run_id=job.run_id,
             pass_name="classification",
-            raw_primary_output=primary.raw_output if primary else None,
+            raw_primary_output=None,
             sanitized_primary_payload={"classifications": rows},
-            primary_sanitization_actions=primary_actions,
-            primary_validation_errors=primary_errors,
-            raw_repair_output=retry.raw_output if retry else None,
+            primary_sanitization_actions=[],
+            primary_validation_errors=[],
+            raw_repair_output=None,
             sanitized_repair_payload=None,
-            repair_sanitization_actions=retry_actions,
-            repair_validation_errors=retry_errors,
+            repair_sanitization_actions=[],
+            repair_validation_errors=[],
             final_validation_status="partial" if missing else "valid",
             final_parsed_payload={"classifications": rows},
-            recovery_metadata={"permanently_failed_pairs": [list(pair) for pair in missing]},
+            recovery_metadata={
+                "expected_pairs": [list(pair) for pair in expected],
+                "primary_valid_pairs": [list(pair) for pair in primary_pairs],
+                "salvaged_pairs": [list(pair) for pair in salvaged_pairs],
+                "retried_pairs": [list(pair) for pair in retried_pairs],
+                "permanently_failed_pairs": [list(pair) for pair in missing],
+                "final_validation_errors": [
+                    {"kind": "missing_pair", "message": f"unclassified pair: {pair[0]}/{pair[1]}"}
+                    for pair in missing
+                ],
+                "attempts": history,
+            },
         )
         return rows, bool(missing)
 
@@ -614,7 +642,7 @@ async def run(
         settings.analysis_max_output_tokens,
     )
     worker = AnalysisWorker(AnalysisJobRepository(pool), client, settings, logger)
-    logger.info("analysis worker started", extra={"pipeline_version": "inference_v3_3"})
+    logger.info("analysis worker started", extra={"pipeline_version": "inference_v3_4"})
     try:
         while not stop.is_set():
             if await worker.process_next():
