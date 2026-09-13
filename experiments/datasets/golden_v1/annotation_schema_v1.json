@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://telegram-monitor.local/schemas/golden_v1/annotation_schema_v1.json",
+  "title": "Golden v1 semantic annotation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "example_id", "source", "entities", "claims", "classifications"],
+  "properties": {
+    "schema_version": {"const": "golden_v1"},
+    "example_id": {"type": "string", "pattern": "^golden_v1-[0-9]{3}$"},
+    "source": {"type": "object", "additionalProperties": true, "required": ["text"], "properties": {"text": {"type": "string"}}},
+    "entities": {"type": "array", "items": {"$ref": "#/$defs/entity"}},
+    "claims": {"type": "array", "items": {"$ref": "#/$defs/claim"}},
+    "classifications": {"type": "array", "items": {"$ref": "#/$defs/classification"}}
+  },
+  "$defs": {
+    "entity": {"type": "object", "additionalProperties": false, "required": ["id", "registry_entity_id", "canonical_name", "monitored"], "properties": {"id": {"type": "string"}, "registry_entity_id": {"type": ["integer", "null"]}, "canonical_name": {"type": ["string", "null"]}, "monitored": {"type": "boolean"}}},
+    "attribution": {"type": "object", "additionalProperties": false, "required": ["source_kind", "source_entity_id"], "properties": {"source_kind": {"enum": ["channel_editorial", "named_entity", "external_unnamed", "unknown"]}, "source_entity_id": {"type": ["string", "null"]}}},
+    "claim": {"type": "object", "additionalProperties": false, "required": ["id", "normalized_text", "entity_ids", "evidence_text", "attribution", "epistemic_status"], "properties": {"id": {"type": "string"}, "normalized_text": {"type": "string", "minLength": 1}, "entity_ids": {"type": "array", "items": {"type": "string"}, "minItems": 1}, "evidence_text": {"type": "string", "minLength": 1}, "evidence_start": {"type": "integer", "minimum": 0}, "evidence_end": {"type": "integer", "minimum": 1}, "attribution": {"$ref": "#/$defs/attribution"}, "epistemic_status": {"enum": ["ствердження", "невпевнене", "питання"]}}},
+    "classification": {"type": "object", "additionalProperties": false, "required": ["claim_id", "entity_id", "stance", "rhetoric"], "properties": {"claim_id": {"type": "string"}, "entity_id": {"type": "string"}, "stance": {"enum": ["позитивне", "негативне", "відсутнє"]}, "rhetoric": {"type": "array", "maxItems": 2, "uniqueItems": true, "items": {"enum": ["корупція_або_особиста_вигода", "злочинна_або_незаконна_поведінка", "делегітимізація", "лицемірство_або_подвійні_стандарти", "висміювання_або_особиста_образа", "зовнішній_контроль_або_нелояльність"]}}}}
+  }
+}

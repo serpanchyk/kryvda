@@ -12,6 +12,23 @@ Validate the source data first:
 uv run python experiments/datasets/golden_v0/src/golden_v0_validation.py
 ```
 
+## Canonical golden schema
+
+Semantic evaluation consumes a single canonical representation. Immutable `golden_v0` records use
+the deterministic legacy adapter; the new held-out annotations use native `golden_v1`. Inspect the
+old55 migration without changing its source data:
+
+```bash
+uv run python experiments/dspy/src/inspect_golden_mapping.py
+```
+
+To write a separately inspectable generated view, pass an output ending in
+`.generated.jsonl`; never write it into the source dataset or DVC-add it as an annotation source.
+The command reports mapped claims, generated claim-target classifications, unmapped legacy
+rhetoric, ambiguous rhetoric-to-claim mappings, and unresolved stances. Native v1 evidence must
+be an exact substring of `source.text`; classifications are the only stance/rhetoric objects and
+must have empty rhetoric unless stance is `негативне`.
+
 With the normal Compose stack running, execute the generator in an ephemeral AI-worker container.
 The bind mount makes the input and DVC-managed output available while the container reaches the
 internal-only LiteLLM service. It receives the existing `LITELLM_API_KEY` from Compose; do not put

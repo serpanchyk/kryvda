@@ -73,6 +73,10 @@ administration; product UI remains a shell.
   deterministic non-negative-rhetoric sanitation; its summary compares contract-health metrics
   with the preserved v3.4 artifact. `mamay_vs_golden_v3_5_1` is its frozen single regression run:
   it compares against v3.5 without changing reliability behavior or the dataset.
+- Golden semantic evaluation now has a versioned canonical representation. Immutable old55
+  `golden_v0` records are adapted with explicit actions/warnings (including unresolved stances,
+  ambiguous rhetoric links, and legacy-only rhetoric exclusions); native `golden_v1` is frozen for
+  the new45 held-out annotations. This migration changes no inference behavior.
 
 ## Documentation
 
