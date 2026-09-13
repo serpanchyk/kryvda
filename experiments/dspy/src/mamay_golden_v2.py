@@ -35,12 +35,12 @@ from telegram_monitor_ai_worker.pipeline import (
 )
 
 DEFAULT_ANNOTATIONS = Path("experiments/datasets/golden_v0/data/annotations.jsonl")
-DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v3_4/comparisons.jsonl")
-DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v3_3/comparisons.jsonl")
+DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v3_5/comparisons.jsonl")
+DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v3_4/comparisons.jsonl")
 DEFAULT_SEED = Path("infra/postgres/init/003_registry_seed.sql")
 DEFAULT_MODEL = "MamayLM-Gemma-3-27B-IT"
 DEFAULT_BASE_URL = "http://litellm:4000"
-COMPARISON_SCHEMA_VERSION = "mamay_golden_comparison_v3_4"
+COMPARISON_SCHEMA_VERSION = "mamay_golden_comparison_v3_5"
 
 
 class InferenceClient(Protocol):
@@ -496,7 +496,7 @@ async def analyze_annotation(
         "prefilter": {"matched_entity_ids": matched},
         "run_metadata": {
             "model": DEFAULT_MODEL,
-            "pipeline_version": "inference_v3_4",
+            "pipeline_version": "inference_v3_5",
             "run_timestamp": datetime.now(UTC).isoformat(),
         },
     }
@@ -565,7 +565,7 @@ async def analyze_annotation(
             classifications,
             status,
             degradations,
-            pipeline_version="inference_v3_4",
+            pipeline_version="inference_v3_5",
         )
     except Exception as error:
         failure = (

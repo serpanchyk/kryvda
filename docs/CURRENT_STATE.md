@@ -68,6 +68,9 @@ administration; product UI remains a shell.
   fallback; it recorded 18 attribution sanitizations and 120 permanently missing pairs.
 - `mamay_vs_golden_v3_4` uses the same 55 examples with bounded Pass 3 batches and hierarchical
   pair recovery. Its DVC artifact preserves the raw batch and individual-retry audit trail.
+- `mamay_vs_golden_v3_5` uses the same runner and input with the v3.5 semantic prompts and
+  deterministic non-negative-rhetoric sanitation; its summary compares contract-health metrics
+  with the preserved v3.4 artifact.
 
 ## Documentation
 
