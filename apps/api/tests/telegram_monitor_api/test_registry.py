@@ -53,8 +53,15 @@ class FakeConnection:
                 {"id": 11, "content": "Шабунін згаданий."},
                 {"id": 12, "content": "Інший пост."},
             ]
-        if "SELECT alias FROM" in query:
-            return [{"alias": "Шабунін"}]
+        if "JOIN entity_aliases" in query:
+            return [
+                {
+                    "entity_id": 4,
+                    "alias": "Шабунін",
+                    "coarse_type": "person",
+                    "monitored": True,
+                }
+            ]
         return []
 
 

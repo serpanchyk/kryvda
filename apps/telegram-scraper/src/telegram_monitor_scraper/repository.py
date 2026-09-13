@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import cast
 
 import asyncpg
-from monitoring_common.contracts import alias_occurs
+from monitoring_common.contracts import matched_registry_entity_ids
 
 from telegram_monitor_scraper.models import MonitoredChannel, TelegramPost
 
@@ -142,13 +142,12 @@ class CollectionRepository:
                 json.dumps(post.attachments),
             )
             aliases = await connection.fetch(
-                """SELECT alias.alias FROM entity_aliases AS alias
+                """SELECT entity.id AS entity_id, entity.coarse_type, entity.monitored, alias.alias
+                   FROM entity_aliases AS alias
                    JOIN registry_entities AS entity ON entity.id = alias.entity_id
                    WHERE entity.monitored"""
             )
-            if post.content.strip() and any(
-                alias_occurs(post.content, str(row["alias"])) for row in aliases
-            ):
+            if post.content.strip() and matched_registry_entity_ids(post.content, aliases):
                 await connection.execute(
                     """INSERT INTO analysis_jobs (post_revision_id, priority, trigger_kind)
                        VALUES ($1, $2, 'collection') ON CONFLICT DO NOTHING""",

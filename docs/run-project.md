@@ -22,6 +22,8 @@ migration intentionally removes v1 analysis jobs/results, preserves raw posts an
 the supplied monitored registry, and enqueues matching latest historical revisions.
 Apply `infra/postgres/migrations/004_inference_v3_1.sql` after it to add the v3.1 sanitized and
 final per-pass diagnostic fields without replacing the three-pass schema.
+Apply `infra/postgres/migrations/005_inference_v3_2.sql` after it to remove the collapsed claim
+presentation field and add v3.2 item-sanitization diagnostics.
 
 Registry and candidate-review endpoints are currently unauthenticated. Keep the API behind trusted
 deployment network controls until authentication is added.

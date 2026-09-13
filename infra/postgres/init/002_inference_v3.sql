@@ -75,7 +75,7 @@ CREATE TABLE analysis_runs (
     status TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'completed', 'failed')),
     matched_entity_ids BIGINT[] NOT NULL DEFAULT '{}',
     model_name TEXT NOT NULL,
-    pipeline_version TEXT NOT NULL DEFAULT 'inference_v3_1',
+    pipeline_version TEXT NOT NULL DEFAULT 'inference_v3_2',
     final_payload JSONB,
     failure_kind TEXT,
     failure_detail JSONB,
@@ -128,7 +128,6 @@ CREATE TABLE claims (
     epistemic_status TEXT NOT NULL CHECK (
         epistemic_status IN ('ствердження', 'невпевнене', 'питання')
     ),
-    presentation TEXT NOT NULL CHECK (presentation IN ('цитата', 'не_цитата')),
     UNIQUE (run_id, local_id)
 );
 

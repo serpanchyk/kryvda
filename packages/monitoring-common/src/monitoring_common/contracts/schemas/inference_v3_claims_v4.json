@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["claims"],
+  "properties": {
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["normalized_text", "entity_ids", "evidence_text", "attribution", "epistemic_status"],
+        "properties": {
+          "normalized_text": {"type": "string", "minLength": 1},
+          "entity_ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "pattern": "^e[1-9][0-9]*$"}
+          },
+          "evidence_text": {"type": "string", "minLength": 1},
+          "attribution": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source_entity_id", "source_kind"],
+            "properties": {
+              "source_entity_id": {"type": ["string", "null"], "pattern": "^e[1-9][0-9]*$"},
+              "source_kind": {"enum": ["channel_editorial", "named_entity", "external_unnamed"]}
+            }
+          },
+          "epistemic_status": {"enum": ["ствердження", "невпевнене", "питання"]}
+        }
+      }
+    }
+  }
+}

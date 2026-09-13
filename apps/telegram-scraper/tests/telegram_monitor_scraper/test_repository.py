@@ -24,7 +24,14 @@ class FakeConnection:
         return None
 
     async def fetch(self, query: str, *args: object) -> list[dict[str, str]]:
-        return [{"alias": "text"}]
+        return [
+            {
+                "entity_id": "1",
+                "alias": "text",
+                "coarse_type": "organization",
+                "monitored": "true",
+            }
+        ]
 
     async def execute(self, query: str, *args: object) -> None:
         self.executed.append((query, args))

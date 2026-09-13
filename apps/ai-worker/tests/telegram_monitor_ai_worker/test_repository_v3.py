@@ -154,13 +154,12 @@ async def test_repository_completes_relational_result_and_job() -> None:
             "evidence_end": 7,
             "attribution": {"source_kind": "channel_editorial", "source_entity_id": None},
             "epistemic_status": "ствердження",
-            "presentation": "не_цитата",
         }
     ]
     classifications = [{"claim_id": "c1", "entity_id": "e1", "stance": "відсутнє", "rhetoric": []}]
 
     await repository.complete(
-        job, [], claims, classifications, {"pipeline_version": "inference_v3_1"}
+        job, [], claims, classifications, {"pipeline_version": "inference_v3_2"}
     )
 
     queries = [query for query, _ in pool.connection.executed]
@@ -187,6 +186,7 @@ async def test_repository_records_attempt_skip_retry_and_failure() -> None:
         "valid",
         None,
         [],
+        [],
         5,
     )
     await repository.record_pass_diagnostic(
@@ -194,9 +194,11 @@ async def test_repository_records_attempt_skip_retry_and_failure() -> None:
         pass_name="entities",
         raw_primary_output="{}",
         sanitized_primary_payload={},
+        primary_sanitization_actions=[],
         primary_validation_errors=[],
         raw_repair_output=None,
         sanitized_repair_payload=None,
+        repair_sanitization_actions=[],
         repair_validation_errors=[],
         final_validation_status="valid",
         final_parsed_payload={},

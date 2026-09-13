@@ -53,9 +53,9 @@ class AnalysisJobRepository:
             run_id = await connection.fetchval(
                 """INSERT INTO analysis_runs
                    (job_id, post_revision_id, model_name, pipeline_version)
-                   VALUES ($1, $2, $3, 'inference_v3_1')
+                   VALUES ($1, $2, $3, 'inference_v3_2')
                    ON CONFLICT (job_id) DO UPDATE
-                   SET status = 'running', pipeline_version = 'inference_v3_1'
+                   SET status = 'running', pipeline_version = 'inference_v3_2'
                    RETURNING id""",
                 row["id"],
                 row["post_revision_id"],
@@ -73,7 +73,8 @@ class AnalysisJobRepository:
     async def registry_aliases(self) -> list[dict[str, Any]]:
         """Return all registry aliases used for resolution and monitored filtering."""
         rows = await self._pool.fetch(
-            """SELECT entity.id AS entity_id, entity.canonical_name, entity.monitored,
+            """SELECT entity.id AS entity_id, entity.canonical_name, entity.coarse_type,
+                      entity.monitored,
                       alias.alias, alias.normalized_alias
                FROM registry_entities AS entity
                JOIN entity_aliases AS alias ON alias.entity_id = entity.id
@@ -130,6 +131,7 @@ class AnalysisJobRepository:
         status: str,
         failure_kind: str | None,
         errors: list[dict[str, str]],
+        sanitization_actions: list[dict[str, Any]],
         duration_ms: int | None,
         finish_reason: str | None = None,
         completion_tokens: int | None = None,
@@ -139,14 +141,16 @@ class AnalysisJobRepository:
             """INSERT INTO inference_pass_attempts
                (run_id, pass_name, attempt_kind, prompt_version, schema_version, model_name,
                 raw_output, parsed_payload, sanitized_payload, status, failure_kind,
-                validation_errors, duration_ms, finish_reason, completion_tokens)
+                validation_errors, sanitization_actions, duration_ms, finish_reason,
+                completion_tokens)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11,
-                       $12::jsonb, $13, $14, $15)
+                       $12::jsonb, $13::jsonb, $14, $15, $16)
                ON CONFLICT (run_id, pass_name, attempt_kind) DO UPDATE
                SET raw_output = EXCLUDED.raw_output, parsed_payload = EXCLUDED.parsed_payload,
                    sanitized_payload = EXCLUDED.sanitized_payload,
                    status = EXCLUDED.status, failure_kind = EXCLUDED.failure_kind,
                    validation_errors = EXCLUDED.validation_errors,
+                   sanitization_actions = EXCLUDED.sanitization_actions,
                    duration_ms = EXCLUDED.duration_ms,
                    finish_reason = EXCLUDED.finish_reason,
                    completion_tokens = EXCLUDED.completion_tokens, created_at = now()""",
@@ -162,6 +166,7 @@ class AnalysisJobRepository:
             status,
             failure_kind,
             json.dumps(errors),
+            json.dumps(sanitization_actions),
             duration_ms,
             finish_reason,
             completion_tokens,
@@ -174,9 +179,11 @@ class AnalysisJobRepository:
         pass_name: str,
         raw_primary_output: str | None,
         sanitized_primary_payload: dict[str, Any] | None,
+        primary_sanitization_actions: list[dict[str, Any]],
         primary_validation_errors: list[dict[str, str]],
         raw_repair_output: str | None,
         sanitized_repair_payload: dict[str, Any] | None,
+        repair_sanitization_actions: list[dict[str, Any]],
         repair_validation_errors: list[dict[str, str]],
         final_validation_status: str,
         final_parsed_payload: dict[str, Any] | None,
@@ -184,17 +191,20 @@ class AnalysisJobRepository:
         """Upsert the complete primary-to-repair diagnostic record for one pass."""
         await self._pool.execute(
             """INSERT INTO inference_pass_diagnostics
-               (run_id, pass_name, raw_primary_output, sanitized_primary_payload,
-                primary_validation_errors, raw_repair_output, sanitized_repair_payload,
+                (run_id, pass_name, raw_primary_output, sanitized_primary_payload,
+                primary_validation_errors, primary_sanitization_actions, raw_repair_output,
+                sanitized_repair_payload, repair_sanitization_actions,
                 repair_validation_errors, final_validation_status, final_parsed_payload)
-               VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7::jsonb, $8::jsonb, $9,
-                       $10::jsonb)
+               VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8::jsonb, $9::jsonb,
+                       $10::jsonb, $11, $12::jsonb)
                ON CONFLICT (run_id, pass_name) DO UPDATE
                SET raw_primary_output = EXCLUDED.raw_primary_output,
                    sanitized_primary_payload = EXCLUDED.sanitized_primary_payload,
                    primary_validation_errors = EXCLUDED.primary_validation_errors,
+                   primary_sanitization_actions = EXCLUDED.primary_sanitization_actions,
                    raw_repair_output = EXCLUDED.raw_repair_output,
                    sanitized_repair_payload = EXCLUDED.sanitized_repair_payload,
+                   repair_sanitization_actions = EXCLUDED.repair_sanitization_actions,
                    repair_validation_errors = EXCLUDED.repair_validation_errors,
                    final_validation_status = EXCLUDED.final_validation_status,
                    final_parsed_payload = EXCLUDED.final_parsed_payload,
@@ -206,8 +216,10 @@ class AnalysisJobRepository:
             if sanitized_primary_payload is not None
             else None,
             json.dumps(primary_validation_errors),
+            json.dumps(primary_sanitization_actions),
             raw_repair_output,
             json.dumps(sanitized_repair_payload) if sanitized_repair_payload is not None else None,
+            json.dumps(repair_sanitization_actions),
             json.dumps(repair_validation_errors),
             final_validation_status,
             json.dumps(final_parsed_payload) if final_parsed_payload is not None else None,
@@ -309,9 +321,8 @@ class AnalysisJobRepository:
                     await connection.fetchval(
                         """INSERT INTO claims
                            (run_id, local_id, normalized_text, evidence_text, evidence_start,
-                            evidence_end, source_kind, source_post_entity_id, epistemic_status,
-                            presentation)
-                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id""",
+                            evidence_end, source_kind, source_post_entity_id, epistemic_status)
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id""",
                         job.run_id,
                         claim["id"],
                         claim["normalized_text"],
@@ -321,7 +332,6 @@ class AnalysisJobRepository:
                         attribution["source_kind"],
                         entity_db_ids.get(source_local_id) if source_local_id else None,
                         claim["epistemic_status"],
-                        claim["presentation"],
                     )
                 )
                 claim_db_ids[cast(str, claim["id"])] = claim_id

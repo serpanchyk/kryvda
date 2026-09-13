@@ -14,6 +14,7 @@ ALIASES = [
     {
         "entity_id": 10,
         "canonical_name": "Віталій Шабунін",
+        "coarse_type": "person",
         "monitored": True,
         "alias": "Шабунін",
         "normalized_alias": "шабунін",
@@ -36,7 +37,6 @@ def pass_payloads() -> dict[str, dict[str, Any]]:
                         "source_entity_id": None,
                     },
                     "epistemic_status": "ствердження",
-                    "presentation": "не_цитата",
                 }
             ]
         },
@@ -136,13 +136,44 @@ async def test_worker_runs_three_passes_and_persists_final_result() -> None:
     assert await worker.process_next() is True
     assert repository.failures == []
     assert repository.completed is not None
-    assert repository.completed["pipeline_version"] == "inference_v3_1"
+    assert repository.completed["pipeline_version"] == "inference_v3_2"
     assert [item[:2] for item in repository.attempts] == [
         ("entities", "primary"),
         ("claims", "primary"),
         ("classification", "primary"),
     ]
     assert all(item["final_validation_status"] == "valid" for item in repository.diagnostics)
+
+
+async def test_worker_completes_when_claim_sanitizer_drops_every_claim() -> None:
+    payloads = pass_payloads()
+    payloads["claims"] = {
+        "claims": [
+            {
+                "normalized_text": "Інший актор працює.",
+                "entity_ids": ["missing"],
+                "evidence_text": SOURCE,
+                "attribution": {"source_entity_id": None, "source_kind": "channel_editorial"},
+                "epistemic_status": "ствердження",
+            }
+        ]
+    }
+    repository = FakeRepository()
+    worker = AnalysisWorker(
+        repository,  # type: ignore[arg-type]
+        FakeClient(payloads),  # type: ignore[arg-type]
+        AiWorkerSettings(litellm_api_key="key"),
+        logging.getLogger("test"),
+    )
+
+    assert await worker.process_next() is True
+    assert repository.completed is not None
+    assert repository.completed["claims"] == []
+    assert repository.completed["classifications"] == []
+    assert [item[:2] for item in repository.attempts] == [
+        ("entities", "primary"),
+        ("claims", "primary"),
+    ]
 
 
 async def test_worker_repairs_invalid_primary_once() -> None:

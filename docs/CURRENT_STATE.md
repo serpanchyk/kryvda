@@ -3,7 +3,7 @@
 ## Current State
 
 The Telegram collection foundation persists an agreed fixed channel pool, raw posts and
-revisions, current channel avatars, a human-maintained monitored-entity registry, inference-v3.1
+revisions, current channel avatars, a human-maintained monitored-entity registry, inference-v3.2
 jobs, pass diagnostics, candidates, claims and claim-target classifications. Production analysis
 uses deterministic target filtering followed by three focused Mamay passes. The API exposes
 service health, collection health, current-avatar URLs and unauthenticated registry/candidate
@@ -34,9 +34,10 @@ administration; product UI remains a shell.
 - Current Telegram channel avatars are stored in a shared Docker volume, not PostgreSQL; their
   stable relative URLs use `/channel-images/{channel_id}` and are refreshed every collection poll.
 - LiteLLM provides the internal-only OpenAI-compatible endpoint `http://litellm:4000` for
-  `MamayLM-Gemma-3-27B-IT`. Inference v3.1 sanitizes Pass 1 before independently validating
-  entities, claims and claim-target classifications, permits one contract repair per pass, and
-  retains raw, sanitized and final payloads with categorized diagnostics.
+  `MamayLM-Gemma-3-27B-IT`. Inference v3.2 sanitizes Pass 1 and individual Pass 2 claims before
+  independently validating entities, claims and claim-target classifications, permits one
+  contract repair per pass, and retains raw, sanitized and final payloads with categorized
+  diagnostics.
 - The supplied 128-entry registry seed is active and monitored. Approved aliases alone drive
   filtering and resolution. Registry expansion backfills only the latest accessible revision of
   each stored post.
@@ -57,6 +58,11 @@ administration; product UI remains a shell.
   filtered post, 47 failed analyses and seven completed analyses; Pass 2 primary-valid outputs
   rose from zero to seven and JSON parse failures fell from 20 to four. The run remains an
   operational contract measurement, not a semantic-quality score.
+- `mamay_vs_golden_v3_2` reruns the unchanged 55 examples with item-level Pass 2 sanitation,
+  evidence realignment, mixed-group resolution, and collision-safe surname morphology. Its DVC
+  summary compares recovery/drop action counts and contract-health results with v3.1. The run
+  completed 46 examples (versus seven in v3.1), with zero grounding failures and 18 deterministic
+  evidence realignments; it remains a contract-health measurement rather than a semantic score.
 
 ## Documentation
 

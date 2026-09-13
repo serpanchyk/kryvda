@@ -13,7 +13,7 @@ from monitoring_common.contracts import (
     PassName,
     ValidationIssue,
     parse_json_object,
-    sanitize_pass_payload,
+    sanitize_pass_payload_with_actions,
     validate_pass,
     validation_errors,
 )
@@ -148,15 +148,33 @@ class AnalysisWorker:
             entities=entities,
         )
         claims = assign_claim_ids(claim_payload, job.post_text)
-        classification_payload = await self._execute_pass(
-            job,
-            "classification",
-            {"items": classification_items(job.post_text, entities, claims)},
-            source_text=job.post_text,
-            entities=entities,
-            claims=claims,
-        )
-        classifications = classification_payload["classifications"]
+        items = classification_items(job.post_text, entities, claims)
+        if items:
+            classification_payload = await self._execute_pass(
+                job,
+                "classification",
+                {"items": items},
+                source_text=job.post_text,
+                entities=entities,
+                claims=claims,
+            )
+            classifications = classification_payload["classifications"]
+        else:
+            classifications = []
+            await self._repository.record_pass_diagnostic(
+                run_id=job.run_id,
+                pass_name="classification",
+                raw_primary_output=None,
+                sanitized_primary_payload={"classifications": []},
+                primary_sanitization_actions=[],
+                primary_validation_errors=[],
+                raw_repair_output=None,
+                sanitized_repair_payload=None,
+                repair_sanitization_actions=[],
+                repair_validation_errors=[],
+                final_validation_status="valid",
+                final_parsed_payload={"classifications": []},
+            )
         result = final_payload(entities, claims, classifications)
         await self._repository.complete(job, entities, claims, classifications, result)
 
@@ -187,9 +205,11 @@ class AnalysisWorker:
                 pass_name=pass_name,
                 raw_primary_output=None,
                 sanitized_primary_payload=None,
+                primary_sanitization_actions=[],
                 primary_validation_errors=generation_errors,
                 raw_repair_output=None,
                 sanitized_repair_payload=None,
+                repair_sanitization_actions=[],
                 repair_validation_errors=[],
                 final_validation_status="generation_failure",
                 final_parsed_payload=None,
@@ -197,9 +217,14 @@ class AnalysisWorker:
             raise
         payload: dict[str, Any] | None = None
         sanitized_payload: dict[str, Any] | None = None
+        primary_actions: list[dict[str, Any]] = []
         try:
             payload = parse_json_object(response.raw_output)
-            sanitized_payload = sanitize_pass_payload(pass_name, payload, source_text)
+            primary_result = sanitize_pass_payload_with_actions(
+                pass_name, payload, source_text, entities
+            )
+            sanitized_payload = primary_result.payload
+            primary_actions = list(primary_result.actions)
             validate_pass(pass_name, sanitized_payload, source_text, entities, claims)
             if post_validate is not None:
                 post_validate(sanitized_payload)
@@ -214,6 +239,7 @@ class AnalysisWorker:
                 sanitized_payload,
                 "invalid",
                 errors,
+                primary_actions,
             )
             await self._repository.renew_lease(job.id, self._settings.analysis_lease_seconds)
             try:
@@ -226,9 +252,11 @@ class AnalysisWorker:
                     pass_name=pass_name,
                     raw_primary_output=response.raw_output,
                     sanitized_primary_payload=sanitized_payload,
+                    primary_sanitization_actions=primary_actions,
                     primary_validation_errors=errors,
                     raw_repair_output=None,
                     sanitized_repair_payload=None,
+                    repair_sanitization_actions=[],
                     repair_validation_errors=repair_errors,
                     final_validation_status="generation_failure",
                     final_parsed_payload=None,
@@ -236,11 +264,14 @@ class AnalysisWorker:
                 raise
             repaired_payload: dict[str, Any] | None = None
             sanitized_repaired_payload: dict[str, Any] | None = None
+            repair_actions: list[dict[str, Any]] = []
             try:
                 repaired_payload = parse_json_object(repaired.raw_output)
-                sanitized_repaired_payload = sanitize_pass_payload(
-                    pass_name, repaired_payload, source_text
+                repair_result = sanitize_pass_payload_with_actions(
+                    pass_name, repaired_payload, source_text, entities
                 )
+                sanitized_repaired_payload = repair_result.payload
+                repair_actions = list(repair_result.actions)
                 validate_pass(pass_name, sanitized_repaired_payload, source_text, entities, claims)
                 if post_validate is not None:
                     post_validate(sanitized_repaired_payload)
@@ -255,15 +286,18 @@ class AnalysisWorker:
                     sanitized_repaired_payload,
                     "invalid",
                     repair_errors,
+                    repair_actions,
                 )
                 await self._repository.record_pass_diagnostic(
                     run_id=job.run_id,
                     pass_name=pass_name,
                     raw_primary_output=response.raw_output,
                     sanitized_primary_payload=sanitized_payload,
+                    primary_sanitization_actions=primary_actions,
                     primary_validation_errors=errors,
                     raw_repair_output=repaired.raw_output,
                     sanitized_repair_payload=sanitized_repaired_payload,
+                    repair_sanitization_actions=repair_actions,
                     repair_validation_errors=repair_errors,
                     final_validation_status="invalid",
                     final_parsed_payload=None,
@@ -279,15 +313,18 @@ class AnalysisWorker:
                 sanitized_repaired_payload,
                 "valid",
                 [],
+                repair_actions,
             )
             await self._repository.record_pass_diagnostic(
                 run_id=job.run_id,
                 pass_name=pass_name,
                 raw_primary_output=response.raw_output,
                 sanitized_primary_payload=sanitized_payload,
+                primary_sanitization_actions=primary_actions,
                 primary_validation_errors=errors,
                 raw_repair_output=repaired.raw_output,
                 sanitized_repair_payload=sanitized_repaired_payload,
+                repair_sanitization_actions=repair_actions,
                 repair_validation_errors=[],
                 final_validation_status="valid",
                 final_parsed_payload=sanitized_repaired_payload,
@@ -295,16 +332,26 @@ class AnalysisWorker:
             return sanitized_repaired_payload
         assert sanitized_payload is not None
         await self._record_attempt(
-            job, pass_name, "primary", response, payload, sanitized_payload, "valid", []
+            job,
+            pass_name,
+            "primary",
+            response,
+            payload,
+            sanitized_payload,
+            "valid",
+            [],
+            primary_actions,
         )
         await self._repository.record_pass_diagnostic(
             run_id=job.run_id,
             pass_name=pass_name,
             raw_primary_output=response.raw_output,
             sanitized_primary_payload=sanitized_payload,
+            primary_sanitization_actions=primary_actions,
             primary_validation_errors=[],
             raw_repair_output=None,
             sanitized_repair_payload=None,
+            repair_sanitization_actions=[],
             repair_validation_errors=[],
             final_validation_status="valid",
             final_parsed_payload=sanitized_payload,
@@ -321,6 +368,7 @@ class AnalysisWorker:
         sanitized_payload: dict[str, Any] | None,
         status: str,
         errors: list[dict[str, str]],
+        sanitization_actions: list[dict[str, Any]],
     ) -> None:
         await self._repository.record_attempt(
             job.run_id,
@@ -335,6 +383,7 @@ class AnalysisWorker:
             status,
             errors[0]["kind"] if errors else None,
             errors,
+            sanitization_actions,
             response.duration_ms,
             response.finish_reason,
             response.completion_tokens,
@@ -360,6 +409,7 @@ class AnalysisWorker:
             "failed",
             "generation_failure",
             [{"kind": "generation_failure", "message": str(error)}],
+            [],
             None,
         )
 
@@ -433,7 +483,7 @@ async def run(
         settings.analysis_max_output_tokens,
     )
     worker = AnalysisWorker(AnalysisJobRepository(pool), client, settings, logger)
-    logger.info("analysis worker started", extra={"pipeline_version": "inference_v3_1"})
+    logger.info("analysis worker started", extra={"pipeline_version": "inference_v3_2"})
     try:
         while not stop.is_set():
             if await worker.process_next():

@@ -50,7 +50,6 @@ class FakeClient:
                             "source_entity_id": None,
                         },
                         "epistemic_status": "ствердження",
-                        "presentation": "не_цитата",
                     }
                 ]
             },
@@ -83,7 +82,7 @@ async def test_analysis_records_prefilter_all_passes_and_final_output() -> None:
         "claims",
         "classification",
     ]
-    assert row["final_output"]["pipeline_version"] == "inference_v3_1"
+    assert row["final_output"]["pipeline_version"] == "inference_v3_2"
     assert len(row["pass_diagnostics"]) == 3
     assert row["pass_diagnostics"][0]["sanitized_primary_output"] == {
         "entities": [{"mentions": ["Шабунін"]}]
@@ -118,6 +117,7 @@ async def test_generator_resumes_and_validator_checks_artifact(tmp_path: Path) -
             "grounding_failure": 0,
             "reference_failure": 0,
         },
+        "sanitization_actions": {},
     }
     assert await generate_comparisons(
         [annotation()], ALIASES, output, FakeClient(), logging.getLogger("test")

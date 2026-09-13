@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import asyncpg
-from monitoring_common.contracts import alias_occurs, normalize_match_text
+from monitoring_common.contracts import matched_registry_entity_ids, normalize_match_text
 
 
 class RegistryRepository:
@@ -49,7 +49,7 @@ class RegistryRepository:
             )
             await self._insert_aliases(connection, entity_id, unique_aliases)
             jobs = (
-                await self._enqueue_backfill(connection, unique_aliases, trigger_kind)
+                await self._enqueue_backfill(connection, entity_id, trigger_kind)
                 if monitored
                 else 0
             )
@@ -83,12 +83,7 @@ class RegistryRepository:
             activated = monitored is True and not bool(previous["monitored"])
             if not activated:
                 return 0
-            rows = await connection.fetch(
-                "SELECT alias FROM entity_aliases WHERE entity_id = $1 ORDER BY id", entity_id
-            )
-            return await self._enqueue_backfill(
-                connection, [str(row["alias"]) for row in rows], "monitoring_enabled"
-            )
+            return await self._enqueue_backfill(connection, entity_id, "monitoring_enabled")
 
     async def add_alias(self, entity_id: int, alias: str) -> int | None:
         """Approve one permanent alias and backfill if its entity is monitored."""
@@ -100,7 +95,7 @@ class RegistryRepository:
                 return None
             await self._insert_aliases(connection, entity_id, [alias])
             return (
-                await self._enqueue_backfill(connection, [alias], "alias_added")
+                await self._enqueue_backfill(connection, entity_id, "alias_added")
                 if bool(monitored)
                 else 0
             )
@@ -205,7 +200,7 @@ class RegistryRepository:
             alias = str(row["surface_form"])
             await self._insert_aliases(connection, int(row["entity_id"]), [alias])
             return (
-                await self._enqueue_backfill(connection, [alias], "alias_added")
+                await self._enqueue_backfill(connection, int(row["entity_id"]), "alias_added")
                 if bool(row["monitored"])
                 else 0
             )
@@ -225,8 +220,14 @@ class RegistryRepository:
 
     @staticmethod
     async def _enqueue_backfill(
-        connection: asyncpg.Connection, aliases: Sequence[str], trigger_kind: str
+        connection: asyncpg.Connection, entity_id: int, trigger_kind: str
     ) -> int:
+        aliases = await connection.fetch(
+            """SELECT entity.id AS entity_id, entity.coarse_type, entity.monitored, alias.alias
+               FROM registry_entities AS entity
+               JOIN entity_aliases AS alias ON alias.entity_id = entity.id
+               WHERE entity.monitored"""
+        )
         rows = await connection.fetch(
             """SELECT DISTINCT ON (post.id) revision.id, revision.content
                FROM raw_posts AS post
@@ -236,7 +237,7 @@ class RegistryRepository:
         )
         count = 0
         for row in rows:
-            if not any(alias_occurs(str(row["content"]), alias) for alias in aliases):
+            if entity_id not in matched_registry_entity_ids(str(row["content"]), aliases):
                 continue
             job_id = await connection.fetchval(
                 """INSERT INTO analysis_jobs (post_revision_id, priority, trigger_kind)

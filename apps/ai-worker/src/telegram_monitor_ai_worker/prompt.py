@@ -7,7 +7,7 @@ from monitoring_common.contracts import PassName
 
 PROMPT_VERSIONS: dict[PassName, str] = {
     "entities": "inference_v3_entities_prompt_v2",
-    "claims": "inference_v3_claims_prompt_v2",
+    "claims": "inference_v3_claims_prompt_v3",
     "classification": "inference_v3_classification_prompt_v1",
 }
 
@@ -41,17 +41,16 @@ monitored=true. Використовуй лише передані entity IDs; �
 згадку monitored entity. Займенник можна зіставити з entity лише за однозначного контексту.
 
 normalized_text пиши українською. evidence_text має бути рівно одним дослівним фрагментом поста.
-Те, що evidence_text дослівний, не робить presentation цитатою: "цитата" лише коли сам пост подає
-контент як quoted speech. Attribution означає відповідального за твердження: channel_editorial,
-named_entity або external_unnamed. Speaker не входить до entity_ids, якщо proposition не про нього.
-Epistemic status: "ствердження" для поданого як факт, "невпевнене" для підозри/можливості/
-гіпотези, "питання" для справжнього питання. Негативне звинувачення, подане як факт, залишається
-"ствердженням".
+Attribution означає відповідального за твердження: channel_editorial, named_entity або
+external_unnamed. Для "слідство", "правоохоронці", "джерела", "військові", "експерти" та інших
+неназваних зовнішніх джерел обирай external_unnamed з source_entity_id=null. Speaker не входить до
+entity_ids, якщо proposition не про нього. Epistemic status: "невпевнене" для "підозрює", "нібито",
+"можливо", "за версією" та інших явних маркерів невпевненості; "питання" лише для справжнього
+питання; інакше "ствердження". Негативне звинувачення, подане як факт, залишається "ствердженням".
 
 Кожен claim обов'язково поверни з усіма полями в такому порядку: normalized_text, entity_ids,
-evidence_text, attribution, presentation, epistemic_status. Не завершуй JSON до заповнення
-presentation та epistemic_status. Усередині attribution спочатку вкажи source_entity_id, потім
-source_kind."""
+evidence_text, attribution, epistemic_status. Не завершуй JSON до заповнення epistemic_status.
+Усередині attribution спочатку вкажи source_entity_id, потім source_kind."""
 
 CLASSIFICATION_PROMPT = f"""{COMMON}
 

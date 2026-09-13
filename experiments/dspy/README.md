@@ -85,16 +85,17 @@ uv run dvc add experiments/dspy/data/mamay_vs_golden_v2
 uv run dvc status
 ```
 
-## Inference v3.1 hardening comparison
+## Inference v3.2 hardening comparison
 
 The same `mamay_golden_v2.py` runner now defaults to a separate
-`mamay_vs_golden_v3_1` directory and the unchanged 55-row `golden_v0` input. Each row adds
-sanitized primary/repair payloads and final per-pass diagnostics. `summary.json` reports status,
-primary-versus-repair validity and categorized failure counts against the preserved v3 baseline.
+`mamay_vs_golden_v3_2` directory and the unchanged 55-row `golden_v0` input. Each row adds
+sanitized primary/repair payloads, item-level sanitizer actions, and final per-pass diagnostics.
+`summary.json` reports status, primary-versus-repair validity, categorized failures, and recovery
+counts against the preserved v3.1 benchmark.
 
 ```bash
 uv run python experiments/dspy/src/mamay_golden_v2.py
 uv run python experiments/dspy/src/mamay_golden_v2.py --validate-only
-uv run dvc add experiments/dspy/data/mamay_vs_golden_v3_1
+uv run dvc add experiments/dspy/data/mamay_vs_golden_v3_2
 uv run dvc status
 ```

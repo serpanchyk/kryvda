@@ -16,7 +16,7 @@ from monitoring_common.contracts import (
     PassName,
     ValidationIssue,
     parse_json_object,
-    sanitize_pass_payload,
+    sanitize_pass_payload_with_actions,
     validate_pass,
     validation_errors,
 )
@@ -32,12 +32,12 @@ from telegram_monitor_ai_worker.pipeline import (
 )
 
 DEFAULT_ANNOTATIONS = Path("experiments/datasets/golden_v0/data/annotations.jsonl")
-DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v3_1/comparisons.jsonl")
-DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v2/comparisons.jsonl")
+DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v3_2/comparisons.jsonl")
+DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v3_1/comparisons.jsonl")
 DEFAULT_SEED = Path("infra/postgres/init/003_registry_seed.sql")
 DEFAULT_MODEL = "MamayLM-Gemma-3-27B-IT"
 DEFAULT_BASE_URL = "http://litellm:4000"
-COMPARISON_SCHEMA_VERSION = "mamay_golden_comparison_v3_1"
+COMPARISON_SCHEMA_VERSION = "mamay_golden_comparison_v3_2"
 
 
 class InferenceClient(Protocol):
@@ -76,7 +76,7 @@ def load_seed_aliases(path: Path) -> list[dict[str, Any]]:
     copy_data = content.split("FROM stdin;\n", 1)[1].split("\n\\.\n", 1)[0]
     rows: list[dict[str, Any]] = []
     for entity_id, line in enumerate(copy_data.splitlines(), start=1):
-        canonical_name, _coarse_type, raw_aliases = line.split("\t")
+        canonical_name, coarse_type, raw_aliases = line.split("\t")
         aliases = [canonical_name, *(value.strip() for value in raw_aliases.split(";"))]
         normalized_seen: set[str] = set()
         for alias in aliases:
@@ -88,6 +88,7 @@ def load_seed_aliases(path: Path) -> list[dict[str, Any]]:
                 {
                     "entity_id": entity_id,
                     "canonical_name": canonical_name,
+                    "coarse_type": coarse_type,
                     "monitored": True,
                     "alias": alias,
                     "normalized_alias": normalized,
@@ -140,9 +141,12 @@ async def _run_pass(
         raise
     payload: dict[str, Any] | None = None
     sanitized_payload: dict[str, Any] | None = None
+    primary_actions: list[dict[str, Any]] = []
     try:
         payload = parse_json_object(response.raw_output)
-        sanitized_payload = sanitize_pass_payload(pass_name, payload, source_text)
+        sanitized = sanitize_pass_payload_with_actions(pass_name, payload, source_text, entities)
+        sanitized_payload = sanitized.payload
+        primary_actions = list(sanitized.actions)
         validate_pass(pass_name, sanitized_payload, source_text, entities, claims)
         if post_validate is not None:
             post_validate(sanitized_payload)
@@ -150,7 +154,14 @@ async def _run_pass(
         errors = validation_errors(error)
         attempts.append(
             _attempt_record(
-                pass_name, "primary", response, payload, sanitized_payload, "invalid", errors
+                pass_name,
+                "primary",
+                response,
+                payload,
+                sanitized_payload,
+                "invalid",
+                errors,
+                primary_actions,
             )
         )
         try:
@@ -181,16 +192,20 @@ async def _run_pass(
                     repair_errors,
                     "generation_failure",
                     None,
+                    primary_actions=primary_actions,
                 )
             )
             raise
         repaired_payload: dict[str, Any] | None = None
         sanitized_repaired_payload: dict[str, Any] | None = None
+        repair_actions: list[dict[str, Any]] = []
         try:
             repaired_payload = parse_json_object(repaired.raw_output)
-            sanitized_repaired_payload = sanitize_pass_payload(
-                pass_name, repaired_payload, source_text
+            repaired_result = sanitize_pass_payload_with_actions(
+                pass_name, repaired_payload, source_text, entities
             )
+            sanitized_repaired_payload = repaired_result.payload
+            repair_actions = list(repaired_result.actions)
             validate_pass(pass_name, sanitized_repaired_payload, source_text, entities, claims)
             if post_validate is not None:
                 post_validate(sanitized_repaired_payload)
@@ -205,6 +220,7 @@ async def _run_pass(
                     sanitized_repaired_payload,
                     "invalid",
                     repair_errors,
+                    repair_actions,
                 )
             )
             diagnostics.append(
@@ -218,6 +234,8 @@ async def _run_pass(
                     repair_errors,
                     "invalid",
                     None,
+                    primary_actions=primary_actions,
+                    repair_actions=repair_actions,
                 )
             )
             raise
@@ -231,6 +249,7 @@ async def _run_pass(
                 sanitized_repaired_payload,
                 "valid",
                 [],
+                repair_actions,
             )
         )
         diagnostics.append(
@@ -244,12 +263,23 @@ async def _run_pass(
                 [],
                 "valid",
                 sanitized_repaired_payload,
+                primary_actions=primary_actions,
+                repair_actions=repair_actions,
             )
         )
         return sanitized_repaired_payload
     assert sanitized_payload is not None
     attempts.append(
-        _attempt_record(pass_name, "primary", response, payload, sanitized_payload, "valid", [])
+        _attempt_record(
+            pass_name,
+            "primary",
+            response,
+            payload,
+            sanitized_payload,
+            "valid",
+            [],
+            primary_actions,
+        )
     )
     diagnostics.append(
         _pass_diagnostic(
@@ -262,6 +292,7 @@ async def _run_pass(
             [],
             "valid",
             sanitized_payload,
+            primary_actions=primary_actions,
         )
     )
     return sanitized_payload
@@ -275,6 +306,7 @@ def _attempt_record(
     sanitized_payload: dict[str, Any] | None,
     status: str,
     errors: list[dict[str, str]],
+    sanitization_actions: list[dict[str, Any]],
 ) -> dict[str, Any]:
     return {
         "pass": pass_name,
@@ -284,6 +316,7 @@ def _attempt_record(
         "sanitized_payload": sanitized_payload,
         "status": status,
         "validation_errors": errors,
+        "sanitization_actions": sanitization_actions,
         "finish_reason": response.finish_reason,
         "completion_tokens": response.completion_tokens,
     }
@@ -299,14 +332,18 @@ def _pass_diagnostic(
     repair_errors: list[dict[str, str]],
     final_status: str,
     final_payload: dict[str, Any] | None,
+    primary_actions: list[dict[str, Any]] | None = None,
+    repair_actions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "pass": pass_name,
         "raw_primary_output": primary.raw_output,
         "sanitized_primary_output": sanitized_primary,
+        "primary_sanitization_actions": primary_actions or [],
         "primary_validation_errors": primary_errors,
         "raw_repair_output": repair.raw_output if repair is not None else None,
         "sanitized_repair_output": sanitized_repair,
+        "repair_sanitization_actions": repair_actions or [],
         "repair_validation_errors": repair_errors,
         "final_validation_status": final_status,
         "final_parsed_payload": final_payload,
@@ -332,7 +369,7 @@ async def analyze_annotation(
         "prefilter": {"matched_entity_ids": matched},
         "run_metadata": {
             "model": DEFAULT_MODEL,
-            "pipeline_version": "inference_v3_1",
+            "pipeline_version": "inference_v3_2",
             "run_timestamp": datetime.now(UTC).isoformat(),
         },
     }
@@ -379,17 +416,22 @@ async def analyze_annotation(
             entities,
         )
         claims = assign_claim_ids(claim_payload, source_text)
-        classification_payload = await _run_pass(
-            client,
-            "classification",
-            {"items": classification_items(source_text, entities, claims)},
-            source_text,
-            attempts,
-            diagnostics,
-            entities,
-            claims,
-        )
-        result = final_payload(entities, claims, classification_payload["classifications"])
+        items = classification_items(source_text, entities, claims)
+        if items:
+            classification_payload = await _run_pass(
+                client,
+                "classification",
+                {"items": items},
+                source_text,
+                attempts,
+                diagnostics,
+                entities,
+                claims,
+            )
+            classifications = classification_payload["classifications"]
+        else:
+            classifications = []
+        result = final_payload(entities, claims, classifications)
     except Exception as error:
         failure = (
             validation_errors(error)
@@ -527,11 +569,19 @@ def summarize_comparisons(path: Path) -> dict[str, Any]:
         )
         for kind in failure_kinds
     }
+    sanitization_actions: dict[str, int] = {}
+    for row in rows:
+        for attempt in row.get("attempts", []):
+            for action in attempt.get("sanitization_actions", []):
+                name = action.get("action")
+                if isinstance(name, str):
+                    sanitization_actions[name] = sanitization_actions.get(name, 0) + 1
     return {
         "examples": len(rows),
         "status": status_counts,
         "passes": pass_metrics,
         "failure_reasons": failure_reasons,
+        "sanitization_actions": sanitization_actions,
     }
 
 

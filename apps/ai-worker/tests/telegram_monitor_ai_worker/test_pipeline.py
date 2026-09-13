@@ -1,7 +1,5 @@
 """Tests for backend-only inference-v3 transformations."""
 
-import pytest
-from monitoring_common.contracts import InferenceValidationError
 from telegram_monitor_ai_worker.pipeline import (
     assign_claim_ids,
     classification_items,
@@ -44,7 +42,7 @@ def test_prefilter_and_resolution_keep_bookkeeping_out_of_model() -> None:
     assert resolved[2]["registry_entity_id"] is None
 
 
-def test_resolution_merges_safe_registry_duplicates_and_rejects_conflicts() -> None:
+def test_resolution_merges_safe_registry_duplicates_and_splits_mixed_groups() -> None:
     merged = resolve_entity_groups(
         [{"mentions": ["Шабунін"]}, {"mentions": ["Віталій Шабунін"]}],
         [
@@ -58,11 +56,11 @@ def test_resolution_merges_safe_registry_duplicates_and_rejects_conflicts() -> N
     )
     assert merged[0]["mentions"] == ["Шабунін", "Віталій Шабунін"]
 
-    with pytest.raises(InferenceValidationError, match="multiple registry"):
-        resolve_entity_groups(
-            [{"mentions": ["Шабунін", "ЦПК"]}],
-            ALIASES,
-        )
+    split = resolve_entity_groups([{"mentions": ["Шабунін", "ЦПК"]}], ALIASES)
+    assert [(entity["registry_entity_id"], entity["mentions"]) for entity in split] == [
+        (10, ["Шабунін"]),
+        (11, ["ЦПК"]),
+    ]
 
 
 def test_resolution_matches_inflected_registry_alias() -> None:
@@ -86,7 +84,6 @@ def test_claim_ids_offsets_and_local_context_are_deterministic() -> None:
                         "source_entity_id": None,
                     },
                     "epistemic_status": "ствердження",
-                    "presentation": "не_цитата",
                 }
             ]
         },
