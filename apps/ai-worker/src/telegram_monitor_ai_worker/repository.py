@@ -53,9 +53,9 @@ class AnalysisJobRepository:
             run_id = await connection.fetchval(
                 """INSERT INTO analysis_runs
                    (job_id, post_revision_id, model_name, pipeline_version)
-                   VALUES ($1, $2, $3, 'inference_v3_2')
+                   VALUES ($1, $2, $3, 'inference_v3_3')
                    ON CONFLICT (job_id) DO UPDATE
-                   SET status = 'running', pipeline_version = 'inference_v3_2'
+                   SET status = 'running', pipeline_version = 'inference_v3_3'
                    RETURNING id""",
                 row["id"],
                 row["post_revision_id"],
@@ -112,7 +112,8 @@ class AnalysisJobRepository:
                 job.id,
             )
             await connection.execute(
-                """UPDATE analysis_runs SET status = 'failed', failure_kind = 'prefilter_miss',
+                """UPDATE analysis_runs
+                   SET status = 'filtered_out', failure_kind = 'prefilter_miss',
                           completed_at = now() WHERE id = $1""",
                 job.run_id,
             )
@@ -187,6 +188,8 @@ class AnalysisJobRepository:
         repair_validation_errors: list[dict[str, str]],
         final_validation_status: str,
         final_parsed_payload: dict[str, Any] | None,
+        fallback: str | None = None,
+        recovery_metadata: dict[str, Any] | None = None,
     ) -> None:
         """Upsert the complete primary-to-repair diagnostic record for one pass."""
         await self._pool.execute(
@@ -194,9 +197,10 @@ class AnalysisJobRepository:
                 (run_id, pass_name, raw_primary_output, sanitized_primary_payload,
                 primary_validation_errors, primary_sanitization_actions, raw_repair_output,
                 sanitized_repair_payload, repair_sanitization_actions,
-                repair_validation_errors, final_validation_status, final_parsed_payload)
+                repair_validation_errors, final_validation_status, final_parsed_payload, fallback,
+                recovery_metadata)
                VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8::jsonb, $9::jsonb,
-                       $10::jsonb, $11, $12::jsonb)
+                       $10::jsonb, $11, $12::jsonb, $13, $14::jsonb)
                ON CONFLICT (run_id, pass_name) DO UPDATE
                SET raw_primary_output = EXCLUDED.raw_primary_output,
                    sanitized_primary_payload = EXCLUDED.sanitized_primary_payload,
@@ -208,6 +212,8 @@ class AnalysisJobRepository:
                    repair_validation_errors = EXCLUDED.repair_validation_errors,
                    final_validation_status = EXCLUDED.final_validation_status,
                    final_parsed_payload = EXCLUDED.final_parsed_payload,
+                   fallback = EXCLUDED.fallback,
+                   recovery_metadata = EXCLUDED.recovery_metadata,
                    updated_at = now()""",
             run_id,
             pass_name,
@@ -223,6 +229,8 @@ class AnalysisJobRepository:
             json.dumps(repair_validation_errors),
             final_validation_status,
             json.dumps(final_parsed_payload) if final_parsed_payload is not None else None,
+            fallback,
+            json.dumps(recovery_metadata or {}),
         )
 
     async def completed_pass_payload(self, run_id: int, pass_name: str) -> dict[str, Any] | None:
@@ -305,6 +313,7 @@ class AnalysisJobRepository:
         claims: list[dict[str, Any]],
         classifications: list[dict[str, Any]],
         final_payload: dict[str, Any],
+        run_status: str = "completed",
     ) -> None:
         """Atomically persist claims/classifications and complete the leased job."""
         async with self._pool.acquire() as connection, connection.transaction():
@@ -352,9 +361,10 @@ class AnalysisJobRepository:
                     json.dumps(row["rhetoric"], ensure_ascii=False),
                 )
             await connection.execute(
-                """UPDATE analysis_runs SET status = 'completed', final_payload = $2::jsonb,
+                """UPDATE analysis_runs SET status = $2, final_payload = $3::jsonb,
                           completed_at = now() WHERE id = $1""",
                 job.run_id,
+                run_status,
                 json.dumps(final_payload, ensure_ascii=False),
             )
             await connection.execute(

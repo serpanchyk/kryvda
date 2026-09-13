@@ -11,7 +11,6 @@ from monitoring_common.contracts import (
     SCHEMA_VERSIONS,
     InferenceValidationError,
     PassName,
-    ValidationIssue,
     parse_json_object,
     sanitize_pass_payload_with_actions,
     validate_pass,
@@ -40,8 +39,10 @@ from telegram_monitor_ai_worker.models import (
 from telegram_monitor_ai_worker.pipeline import (
     assign_claim_ids,
     classification_items,
+    classification_subset,
     final_payload,
     matched_monitored_entity_ids,
+    prefilter_entity_groups,
     resolve_entity_groups,
 )
 from telegram_monitor_ai_worker.prompt import PROMPT_VERSIONS
@@ -115,26 +116,32 @@ class AnalysisWorker:
             await self._repository.skip(job)
             return
 
-        def validate_resolved_entities(payload: Mapping[str, Any]) -> None:
-            resolved = resolve_entity_groups(payload["entities"], aliases)
-            if not any(entity["monitored"] for entity in resolved):
-                raise InferenceValidationError(
-                    [
-                        ValidationIssue(
-                            "reference_failure",
-                            "Pass 1 omitted every monitored actor that admitted the post",
-                        )
-                    ]
-                )
-
-        entity_payload = await self._execute_pass(
-            job,
-            "entities",
-            {"post_text": job.post_text},
-            source_text=job.post_text,
-            post_validate=validate_resolved_entities,
-        )
-        entities = resolve_entity_groups(entity_payload["entities"], aliases)
+        fallback_groups = prefilter_entity_groups(job.post_text, aliases)
+        entity_fallback = False
+        try:
+            entity_payload = await self._execute_pass(
+                job, "entities", {"post_text": job.post_text}, source_text=job.post_text
+            )
+            model_groups = entity_payload["entities"]
+        except (InferenceValidationError, ModelOutputError):
+            entity_fallback = True
+            model_groups = []
+            await self._repository.record_pass_diagnostic(
+                run_id=job.run_id,
+                pass_name="entities",
+                raw_primary_output=None,
+                sanitized_primary_payload=None,
+                primary_sanitization_actions=[],
+                primary_validation_errors=[],
+                raw_repair_output=None,
+                sanitized_repair_payload=None,
+                repair_sanitization_actions=[],
+                repair_validation_errors=[],
+                final_validation_status="degraded",
+                final_parsed_payload={"entities": fallback_groups},
+                fallback="prefilter_entities_only",
+            )
+        entities = resolve_entity_groups([*fallback_groups, *model_groups], aliases)
         approved_aliases = {
             (int(alias["entity_id"]), str(alias["normalized_alias"])) for alias in aliases
         }
@@ -150,17 +157,12 @@ class AnalysisWorker:
         claims = assign_claim_ids(claim_payload, job.post_text)
         items = classification_items(job.post_text, entities, claims)
         if items:
-            classification_payload = await self._execute_pass(
-                job,
-                "classification",
-                {"items": items},
-                source_text=job.post_text,
-                entities=entities,
-                claims=claims,
+            classifications, classification_partial = await self._execute_classification(
+                job, items, entities, claims
             )
-            classifications = classification_payload["classifications"]
         else:
             classifications = []
+            classification_partial = False
             await self._repository.record_pass_diagnostic(
                 run_id=job.run_id,
                 pass_name="classification",
@@ -175,8 +177,137 @@ class AnalysisWorker:
                 final_validation_status="valid",
                 final_parsed_payload={"classifications": []},
             )
-        result = final_payload(entities, claims, classifications)
-        await self._repository.complete(job, entities, claims, classifications, result)
+        run_status = (
+            "completed_with_partial_classification"
+            if classification_partial
+            else "completed_with_entity_fallback"
+            if entity_fallback
+            else "completed"
+        )
+        degradations = []
+        if entity_fallback:
+            degradations.append({"pass": "entities", "fallback": "prefilter_entities_only"})
+        if classification_partial:
+            degradations.append({"pass": "classification", "status": "partial"})
+        result = final_payload(entities, claims, classifications, run_status, degradations)
+        await self._repository.complete(
+            job, entities, claims, classifications, result, run_status=run_status
+        )
+
+    async def _execute_classification(
+        self,
+        job: ClaimedAnalysisJob,
+        items: list[dict[str, Any]],
+        entities: Sequence[Mapping[str, Any]],
+        claims: Sequence[Mapping[str, Any]],
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """Keep valid pairs and make one inference call for only missing pairs."""
+        rows: list[dict[str, Any]] = []
+        missing = [(item["claim_id"], item["entity_id"]) for item in items]
+        primary: ModelResponse | None = None
+        primary_errors: list[dict[str, str]] = []
+        primary_actions: list[dict[str, Any]] = []
+        try:
+            await self._repository.renew_lease(job.id, self._settings.analysis_lease_seconds)
+            primary = await self._client.infer("classification", {"items": items})
+            payload = parse_json_object(primary.raw_output)
+            rows, missing, primary_actions = classification_subset(payload, entities, claims)
+            await self._record_attempt(
+                job,
+                "classification",
+                "primary",
+                primary,
+                payload,
+                {"classifications": rows},
+                "valid",
+                [],
+                primary_actions,
+            )
+        except (InferenceValidationError, ModelOutputError) as error:
+            primary_errors = (
+                validation_errors(error)
+                if isinstance(error, InferenceValidationError)
+                else [{"kind": "generation_failure", "message": str(error)}]
+            )
+            if primary is None:
+                await self._record_generation_failure(job, "classification", "primary", error)
+            else:
+                await self._record_attempt(
+                    job,
+                    "classification",
+                    "primary",
+                    primary,
+                    None,
+                    None,
+                    "invalid",
+                    primary_errors,
+                    primary_actions,
+                )
+        retry: ModelResponse | None = None
+        retry_errors: list[dict[str, str]] = []
+        retry_actions: list[dict[str, Any]] = []
+        if missing:
+            retry_items = [
+                item for item in items if (item["claim_id"], item["entity_id"]) in missing
+            ]
+            try:
+                await self._repository.renew_lease(job.id, self._settings.analysis_lease_seconds)
+                retry = await self._client.infer("classification", {"items": retry_items})
+                payload = parse_json_object(retry.raw_output)
+                recovered, _, retry_actions = classification_subset(payload, entities, claims)
+                recovered = [
+                    row for row in recovered if (row["claim_id"], row["entity_id"]) in missing
+                ]
+                rows.extend(recovered)
+                recovered_pairs = {(row["claim_id"], row["entity_id"]) for row in recovered}
+                missing = [pair for pair in missing if pair not in recovered_pairs]
+                await self._record_attempt(
+                    job,
+                    "classification",
+                    "retry",
+                    retry,
+                    payload,
+                    {"classifications": recovered},
+                    "valid",
+                    [],
+                    retry_actions,
+                )
+            except (InferenceValidationError, ModelOutputError) as error:
+                retry_errors = (
+                    validation_errors(error)
+                    if isinstance(error, InferenceValidationError)
+                    else [{"kind": "generation_failure", "message": str(error)}]
+                )
+                if retry is None:
+                    await self._record_generation_failure(job, "classification", "retry", error)
+                else:
+                    await self._record_attempt(
+                        job,
+                        "classification",
+                        "retry",
+                        retry,
+                        None,
+                        None,
+                        "invalid",
+                        retry_errors,
+                        retry_actions,
+                    )
+        await self._repository.record_pass_diagnostic(
+            run_id=job.run_id,
+            pass_name="classification",
+            raw_primary_output=primary.raw_output if primary else None,
+            sanitized_primary_payload={"classifications": rows},
+            primary_sanitization_actions=primary_actions,
+            primary_validation_errors=primary_errors,
+            raw_repair_output=retry.raw_output if retry else None,
+            sanitized_repair_payload=None,
+            repair_sanitization_actions=retry_actions,
+            repair_validation_errors=retry_errors,
+            final_validation_status="partial" if missing else "valid",
+            final_parsed_payload={"classifications": rows},
+            recovery_metadata={"permanently_failed_pairs": [list(pair) for pair in missing]},
+        )
+        return rows, bool(missing)
 
     async def _execute_pass(
         self,
@@ -483,7 +614,7 @@ async def run(
         settings.analysis_max_output_tokens,
     )
     worker = AnalysisWorker(AnalysisJobRepository(pool), client, settings, logger)
-    logger.info("analysis worker started", extra={"pipeline_version": "inference_v3_2"})
+    logger.info("analysis worker started", extra={"pipeline_version": "inference_v3_3"})
     try:
         while not stop.is_set():
             if await worker.process_next():

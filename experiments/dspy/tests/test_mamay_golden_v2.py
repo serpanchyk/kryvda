@@ -82,7 +82,7 @@ async def test_analysis_records_prefilter_all_passes_and_final_output() -> None:
         "claims",
         "classification",
     ]
-    assert row["final_output"]["pipeline_version"] == "inference_v3_2"
+    assert row["final_output"]["pipeline_version"] == "inference_v3_3"
     assert len(row["pass_diagnostics"]) == 3
     assert row["pass_diagnostics"][0]["sanitized_primary_output"] == {
         "entities": [{"mentions": ["Шабунін"]}]
@@ -105,11 +105,22 @@ async def test_generator_resumes_and_validator_checks_artifact(tmp_path: Path) -
     assert completed_example_ids(output) == {"golden-1"}
     assert summarize_comparisons(output) == {
         "examples": 1,
-        "status": {"filtered_out": 0, "failed": 0, "completed": 1},
+        "status": {
+            "filtered_out": 0,
+            "failed": 0,
+            "completed": 1,
+            "completed_with_partial_classification": 0,
+            "completed_with_entity_fallback": 0,
+        },
         "passes": {
             "entities": {"primary_valid": 1, "valid_after_repair": 0},
             "claims": {"primary_valid": 1, "valid_after_repair": 0},
-            "classification": {"valid": 1},
+            "classification": {
+                "complete": 1,
+                "partial": 0,
+                "pair_retries": 0,
+                "permanently_failed_pairs": 0,
+            },
         },
         "failure_reasons": {
             "json_parse_failure": 0,

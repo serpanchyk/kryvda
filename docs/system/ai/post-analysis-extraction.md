@@ -1,4 +1,4 @@
-# Inference v3.2
+# Inference v3.3
 
 Production analysis is target monitoring. A Post Revision is eligible only when a Unicode-aware,
 case-insensitive match finds an approved alias of a monitored registry entity. Exact matches use
@@ -19,7 +19,10 @@ The AI worker makes exactly three semantic model calls:
 Between calls, backend code validates grounding, resolves approved aliases including inflected
 forms, assigns `e*` and `c*` IDs, records candidates, and derives deterministic evidence offsets.
 Before Pass 1 validation it removes repeated strings and ungrounded strings, retaining each entity
-group that still has at least one exact mention. A mention repeated inside one group is harmless;
+group that still has at least one exact mention. Backend-created entities preserve every exact
+surface form that caused the monitored prefilter match; Pass 1 entities merge into this set. If
+Pass 1 remains invalid after repair, the pipeline continues with these prefilter entities only.
+A mention repeated inside one group is harmless;
 the same grounded mention in separate groups remains a reference failure. Mixed Pass 1 groups are
 partitioned by uniquely resolvable mention, leaving ambiguous text as a post-local candidate. Pass
 2 receives the whole post. Its deterministic sanitizer drops only invalid or non-monitored claims,
@@ -29,7 +32,8 @@ evidence, and the evidence sentences with one neighboring sentence on each side.
 
 Schemas live in `monitoring_common/contracts/schemas/inference_v3_*`. Prompts are Ukrainian and
 technical JSON keys remain English. IDs, canonical resolution, offsets, candidates, persistence,
-and retry bookkeeping are deterministic backend responsibilities.
+and retry bookkeeping are deterministic backend responsibilities. Pass 3 retains valid expected
+pairs, retries only missing pairs once, and records permanently absent pairs as partial completion.
 
 Every primary response is persisted raw before dependent work proceeds. The flow is raw output,
 deterministic sanitation, validation, and at most one repair followed by the same sanitation and
@@ -46,7 +50,8 @@ whitespace even when the token budget was raised.
 
 Final results are stored relationally as post-local entities, atomic claims, claim/entity links,
 and claim-target classifications. `analysis_runs.final_payload` keeps an inspectable immutable
-v3.2 document. Aggregation and product analytics are intentionally deferred.
+v3.3 document, including completion/degradation status. Aggregation and product analytics are
+intentionally deferred.
 
 The previous `extraction_schema_v1` remains packaged only so historical DVC experiments can be
 reproduced; it is no longer a production runtime contract.

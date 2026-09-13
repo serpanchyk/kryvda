@@ -109,6 +109,64 @@ def matched_registry_entity_ids(
     return sorted(matched)
 
 
+def matched_registry_entities(
+    source_text: str, aliases: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
+    """Return each admitted monitored registry entity with exact source surface forms."""
+    matched_ids = matched_registry_entity_ids(source_text, aliases)
+    matches: list[dict[str, Any]] = []
+    for entity_id in matched_ids:
+        rows = [row for row in aliases if int(row["entity_id"]) == entity_id]
+        surfaces: list[tuple[int, str]] = []
+        for row in rows:
+            surfaces.extend(_alias_surfaces(source_text, cast(str, row["alias"])))
+        if not surfaces:
+            surname_rows = [
+                row
+                for row in rows
+                if row.get("coarse_type") == "person"
+                and len(_word_tokens(cast(str, row["alias"]))) >= 2
+            ]
+            for row in surname_rows:
+                surname = _word_tokens(cast(str, row["alias"]))[-1]
+                surfaces.extend(_alias_surfaces(source_text, surname))
+        mentions: list[str] = []
+        for _, surface in sorted(set(surfaces)):
+            if surface not in mentions:
+                mentions.append(surface)
+        if not mentions:
+            raise ValueError(f"prefilter match {entity_id} has no exact source surface")
+        first = rows[0]
+        matches.append(
+            {
+                "entity_id": entity_id,
+                "canonical_name": first["canonical_name"],
+                "monitored": True,
+                "mentions": mentions,
+            }
+        )
+    return matches
+
+
+def _alias_surfaces(source_text: str, alias: str) -> list[tuple[int, str]]:
+    """Find every exact source substring accepted by the alias matcher."""
+    alias_tokens = _word_tokens(alias)
+    source_tokens = list(
+        re.finditer(r"[^\W\d_]+(?:[’'ʼ-][^\W\d_]+)*|\d+", source_text, re.IGNORECASE)
+    )
+    if not alias_tokens or len(alias_tokens) > len(source_tokens):
+        return []
+    results: list[tuple[int, str]] = []
+    for start in range(len(source_tokens) - len(alias_tokens) + 1):
+        window = source_tokens[start : start + len(alias_tokens)]
+        if all(
+            _tokens_match(expected, match.group(0).casefold())
+            for expected, match in zip(alias_tokens, window)
+        ):
+            results.append((window[0].start(), source_text[window[0].start() : window[-1].end()]))
+    return results
+
+
 def resolve_registry_mention(
     mention: str, aliases: Sequence[Mapping[str, Any]]
 ) -> Mapping[str, Any] | None:
@@ -317,11 +375,16 @@ def _sanitize_claims(
                 for field in unknown_attribution_fields:
                     attribution.pop(field)
                 actions.append({"action": "removed_unknown_attribution_fields", "index": index})
-        if not _valid_attribution(attribution, entity_by_id):
+        sanitized_attribution = _sanitize_attribution(attribution, entity_by_id)
+        if sanitized_attribution is None:
             actions.append(
                 {"action": "dropped_claim", "index": index, "reason": "invalid_attribution"}
             )
             continue
+        if sanitized_attribution != attribution:
+            claim["attribution"] = sanitized_attribution
+            attribution = sanitized_attribution
+            actions.append({"action": "sanitized_attribution", "index": index})
         fingerprint = json.dumps(
             {
                 "normalized_text": claim["normalized_text"],
@@ -349,6 +412,23 @@ def _valid_attribution(attribution: Any, entity_by_id: Mapping[str, Mapping[str,
     if source_kind == "named_entity":
         return isinstance(source_id, str) and source_id in entity_by_id
     return source_kind in {"channel_editorial", "external_unnamed"} and source_id is None
+
+
+def _sanitize_attribution(
+    attribution: Any, entity_by_id: Mapping[str, Mapping[str, Any]]
+) -> dict[str, Any] | None:
+    """Keep valid claims by replacing unsafe attribution with a conservative null source."""
+    if not isinstance(attribution, Mapping):
+        return None
+    source_kind = attribution.get("source_kind")
+    source_id = attribution.get("source_entity_id")
+    if source_kind in {"channel_editorial", "external_unnamed"}:
+        return {"source_kind": source_kind, "source_entity_id": None}
+    if source_kind == "named_entity" and isinstance(source_id, str) and source_id in entity_by_id:
+        return {"source_kind": source_kind, "source_entity_id": source_id}
+    if source_kind == "named_entity":
+        return {"source_kind": "external_unnamed", "source_entity_id": None}
+    return None
 
 
 def _realign_evidence(evidence: str, source_text: str) -> str | None:

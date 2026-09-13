@@ -100,6 +100,7 @@ class FakeRepository:
         claims: list[dict[str, Any]],
         classifications: list[dict[str, Any]],
         final_payload: dict[str, Any],
+        run_status: str = "completed",
     ) -> None:
         self.completed = final_payload
 
@@ -136,7 +137,7 @@ async def test_worker_runs_three_passes_and_persists_final_result() -> None:
     assert await worker.process_next() is True
     assert repository.failures == []
     assert repository.completed is not None
-    assert repository.completed["pipeline_version"] == "inference_v3_2"
+    assert repository.completed["pipeline_version"] == "inference_v3_3"
     assert [item[:2] for item in repository.attempts] == [
         ("entities", "primary"),
         ("claims", "primary"),
@@ -180,7 +181,6 @@ async def test_worker_repairs_invalid_primary_once() -> None:
     payloads = pass_payloads()
     payloads["entities"] = {"entities": [{"mentions": ["not source"]}]}
     client = FakeClient(payloads)
-    client.repairs["entities"] = pass_payloads()["entities"]
     repository = FakeRepository()
     worker = AnalysisWorker(
         repository,  # type: ignore[arg-type]
@@ -192,10 +192,8 @@ async def test_worker_repairs_invalid_primary_once() -> None:
     await worker.process_next()
 
     assert repository.completed is not None
-    assert repository.attempts[:2] == [
-        ("entities", "primary", "invalid", {"entities": []}),
-        ("entities", "repair", "valid", pass_payloads()["entities"]),
-    ]
+    assert repository.attempts[0] == ("entities", "primary", "valid", {"entities": []})
+    assert repository.completed["status"] == "completed"
 
 
 async def test_worker_sanitizes_entity_primary_without_repair() -> None:

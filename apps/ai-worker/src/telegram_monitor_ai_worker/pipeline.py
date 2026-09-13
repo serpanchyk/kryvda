@@ -4,17 +4,77 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
-from monitoring_common.contracts import (
-    matched_registry_entity_ids as matched_registry_ids,
-)
-from monitoring_common.contracts import (
-    resolve_registry_mention,
-)
+from monitoring_common.contracts import matched_registry_entities, resolve_registry_mention
+from monitoring_common.contracts import matched_registry_entity_ids as matched_registry_ids
 
 
 def matched_monitored_entity_ids(post_text: str, aliases: Sequence[Mapping[str, Any]]) -> list[int]:
     """Return stable registry IDs whose active aliases occur in source text."""
     return matched_registry_ids(post_text, aliases)
+
+
+def prefilter_entity_groups(
+    post_text: str, aliases: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
+    """Create non-optional monitored entity groups from prefilter matches."""
+    matches = matched_registry_entities(post_text, aliases)
+    return [{"mentions": item["mentions"]} for item in matches]
+
+
+def classification_subset(
+    payload: Mapping[str, Any],
+    entities: Sequence[Mapping[str, Any]],
+    claims: Sequence[Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], list[tuple[str, str]], list[dict[str, Any]]]:
+    """Retain valid expected classification rows and identify pairs still needing a retry."""
+    monitored = {str(entity["id"]) for entity in entities if bool(entity["monitored"])}
+    expected = [
+        (str(claim["id"]), entity_id)
+        for claim in claims
+        for entity_id in cast(list[str], claim["entity_ids"])
+        if entity_id in monitored
+    ]
+    retained: list[dict[str, Any]] = []
+    actions: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    rows = payload.get("classifications")
+    if not isinstance(rows, list):
+        return retained, expected, [{"action": "invalid_classification_payload"}]
+    rhetoric_labels = {
+        "корупція_або_особиста_вигода",
+        "злочинна_або_незаконна_поведінка",
+        "делегітимізація",
+        "лицемірство_або_подвійні_стандарти",
+        "висміювання_або_особиста_образа",
+        "зовнішній_контроль_або_нелояльність",
+    }
+    for index, row in enumerate(rows):
+        if not isinstance(row, Mapping):
+            actions.append(
+                {"action": "dropped_classification", "index": index, "reason": "not_object"}
+            )
+            continue
+        pair = (row.get("claim_id"), row.get("entity_id"))
+        rhetoric = row.get("rhetoric")
+        valid = (
+            isinstance(pair[0], str)
+            and isinstance(pair[1], str)
+            and pair in expected
+            and pair not in seen
+            and row.get("stance") in {"позитивне", "негативне", "відсутнє"}
+            and isinstance(rhetoric, list)
+            and all(isinstance(item, str) and item in rhetoric_labels for item in rhetoric)
+            and len(rhetoric) == len(set(rhetoric))
+            and (row.get("stance") == "негативне" or not rhetoric)
+        )
+        if not valid:
+            actions.append(
+                {"action": "dropped_classification", "index": index, "reason": "invalid_pair"}
+            )
+            continue
+        seen.add(cast(tuple[str, str], pair))
+        retained.append(dict(row))
+    return retained, [pair for pair in expected if pair not in seen], actions
 
 
 def resolve_entity_groups(
@@ -137,10 +197,14 @@ def final_payload(
     entities: Sequence[Mapping[str, Any]],
     claims: Sequence[Mapping[str, Any]],
     classifications: Sequence[Mapping[str, Any]],
+    status: str = "completed",
+    degradations: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """Build the inspectable immutable v3 result document."""
     return {
-        "pipeline_version": "inference_v3_2",
+        "pipeline_version": "inference_v3_3",
+        "status": status,
+        "degradations": [dict(item) for item in degradations],
         "entities": [dict(entity) for entity in entities],
         "claims": [dict(claim) for claim in claims],
         "classifications": [dict(row) for row in classifications],

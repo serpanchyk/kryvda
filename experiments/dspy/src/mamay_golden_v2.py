@@ -14,7 +14,6 @@ from typing import Any, Protocol, cast
 from monitoring_common.contracts import (
     InferenceValidationError,
     PassName,
-    ValidationIssue,
     parse_json_object,
     sanitize_pass_payload_with_actions,
     validate_pass,
@@ -26,18 +25,20 @@ from telegram_monitor_ai_worker.models import ModelOutputError, ModelResponse
 from telegram_monitor_ai_worker.pipeline import (
     assign_claim_ids,
     classification_items,
+    classification_subset,
     final_payload,
     matched_monitored_entity_ids,
+    prefilter_entity_groups,
     resolve_entity_groups,
 )
 
 DEFAULT_ANNOTATIONS = Path("experiments/datasets/golden_v0/data/annotations.jsonl")
-DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v3_2/comparisons.jsonl")
-DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v3_1/comparisons.jsonl")
+DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v3_3/comparisons.jsonl")
+DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v3_2/comparisons.jsonl")
 DEFAULT_SEED = Path("infra/postgres/init/003_registry_seed.sql")
 DEFAULT_MODEL = "MamayLM-Gemma-3-27B-IT"
 DEFAULT_BASE_URL = "http://litellm:4000"
-COMPARISON_SCHEMA_VERSION = "mamay_golden_comparison_v3_2"
+COMPARISON_SCHEMA_VERSION = "mamay_golden_comparison_v3_3"
 
 
 class InferenceClient(Protocol):
@@ -298,6 +299,90 @@ async def _run_pass(
     return sanitized_payload
 
 
+async def _run_classification(
+    client: InferenceClient,
+    items: list[dict[str, Any]],
+    entities: Sequence[Mapping[str, Any]],
+    claims: Sequence[Mapping[str, Any]],
+    attempts: list[dict[str, Any]],
+    diagnostics: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], bool]:
+    """Keep returned valid pairs and retry the precise missing set once."""
+    rows: list[dict[str, Any]] = []
+    missing = [(item["claim_id"], item["entity_id"]) for item in items]
+    errors: list[dict[str, str]] = []
+    actions: list[dict[str, Any]] = []
+    primary: ModelResponse | None = None
+    try:
+        primary = await client.infer("classification", {"items": items})
+        payload = parse_json_object(primary.raw_output)
+        rows, missing, actions = classification_subset(payload, entities, claims)
+        attempts.append(
+            _attempt_record(
+                "classification",
+                "primary",
+                primary,
+                payload,
+                {"classifications": rows},
+                "valid",
+                [],
+                actions,
+            )
+        )
+    except (InferenceValidationError, ModelOutputError) as error:
+        errors = (
+            validation_errors(error)
+            if isinstance(error, InferenceValidationError)
+            else [{"kind": "generation_failure", "message": str(error)}]
+        )
+    retry: ModelResponse | None = None
+    retry_errors: list[dict[str, str]] = []
+    retry_actions: list[dict[str, Any]] = []
+    if missing:
+        retry_items = [item for item in items if (item["claim_id"], item["entity_id"]) in missing]
+        try:
+            retry = await client.infer("classification", {"items": retry_items})
+            payload = parse_json_object(retry.raw_output)
+            recovered, _, retry_actions = classification_subset(payload, entities, claims)
+            recovered = [row for row in recovered if (row["claim_id"], row["entity_id"]) in missing]
+            rows.extend(recovered)
+            recovered_pairs = {(row["claim_id"], row["entity_id"]) for row in recovered}
+            missing = [pair for pair in missing if pair not in recovered_pairs]
+            attempts.append(
+                _attempt_record(
+                    "classification",
+                    "retry",
+                    retry,
+                    payload,
+                    {"classifications": recovered},
+                    "valid",
+                    [],
+                    retry_actions,
+                )
+            )
+        except (InferenceValidationError, ModelOutputError) as error:
+            retry_errors = (
+                validation_errors(error)
+                if isinstance(error, InferenceValidationError)
+                else [{"kind": "generation_failure", "message": str(error)}]
+            )
+    diagnostics.append(
+        {
+            "pass": "classification",
+            "raw_primary_output": primary.raw_output if primary else None,
+            "primary_validation_errors": errors,
+            "primary_sanitization_actions": actions,
+            "raw_repair_output": retry.raw_output if retry else None,
+            "repair_validation_errors": retry_errors,
+            "repair_sanitization_actions": retry_actions,
+            "final_validation_status": "partial" if missing else "valid",
+            "final_parsed_payload": {"classifications": rows},
+            "recovery_metadata": {"permanently_failed_pairs": [list(pair) for pair in missing]},
+        }
+    )
+    return rows, bool(missing)
+
+
 def _attempt_record(
     pass_name: PassName,
     attempt: str,
@@ -369,7 +454,7 @@ async def analyze_annotation(
         "prefilter": {"matched_entity_ids": matched},
         "run_metadata": {
             "model": DEFAULT_MODEL,
-            "pipeline_version": "inference_v3_2",
+            "pipeline_version": "inference_v3_3",
             "run_timestamp": datetime.now(UTC).isoformat(),
         },
     }
@@ -383,29 +468,25 @@ async def analyze_annotation(
     attempts: list[dict[str, Any]] = []
     diagnostics: list[dict[str, Any]] = []
     try:
-
-        def validate_resolved(payload: Mapping[str, Any]) -> None:
-            resolved = resolve_entity_groups(payload["entities"], aliases)
-            if not any(entity["monitored"] for entity in resolved):
-                raise InferenceValidationError(
-                    [
-                        ValidationIssue(
-                            "reference_failure",
-                            "Pass 1 omitted every monitored actor that admitted the post",
-                        )
-                    ]
-                )
-
-        entity_payload = await _run_pass(
-            client,
-            "entities",
-            {"post_text": source_text},
-            source_text,
-            attempts,
-            diagnostics,
-            post_validate=validate_resolved,
-        )
-        entities = resolve_entity_groups(entity_payload["entities"], aliases)
+        fallback_groups = prefilter_entity_groups(source_text, aliases)
+        entity_fallback = False
+        try:
+            entity_payload = await _run_pass(
+                client, "entities", {"post_text": source_text}, source_text, attempts, diagnostics
+            )
+            model_groups = entity_payload["entities"]
+        except (InferenceValidationError, ModelOutputError):
+            entity_fallback = True
+            model_groups = []
+            diagnostics.append(
+                {
+                    "pass": "entities",
+                    "final_validation_status": "degraded",
+                    "fallback": "prefilter_entities_only",
+                    "final_parsed_payload": {"entities": fallback_groups},
+                }
+            )
+        entities = resolve_entity_groups([*fallback_groups, *model_groups], aliases)
         claim_payload = await _run_pass(
             client,
             "claims",
@@ -418,20 +499,25 @@ async def analyze_annotation(
         claims = assign_claim_ids(claim_payload, source_text)
         items = classification_items(source_text, entities, claims)
         if items:
-            classification_payload = await _run_pass(
-                client,
-                "classification",
-                {"items": items},
-                source_text,
-                attempts,
-                diagnostics,
-                entities,
-                claims,
+            classifications, classification_partial = await _run_classification(
+                client, items, entities, claims, attempts, diagnostics
             )
-            classifications = classification_payload["classifications"]
         else:
             classifications = []
-        result = final_payload(entities, claims, classifications)
+            classification_partial = False
+        status = (
+            "completed_with_partial_classification"
+            if classification_partial
+            else "completed_with_entity_fallback"
+            if entity_fallback
+            else "completed"
+        )
+        degradations = []
+        if entity_fallback:
+            degradations.append({"pass": "entities", "fallback": "prefilter_entities_only"})
+        if classification_partial:
+            degradations.append({"pass": "classification", "status": "partial"})
+        result = final_payload(entities, claims, classifications, status, degradations)
     except Exception as error:
         failure = (
             validation_errors(error)
@@ -446,7 +532,7 @@ async def analyze_annotation(
             "final_output": None,
         }
     return base | {
-        "status": "completed",
+        "status": status,
         "attempts": attempts,
         "pass_diagnostics": diagnostics,
         "final_output": result,
@@ -519,7 +605,13 @@ def summarize_comparisons(path: Path) -> dict[str, Any]:
     rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
     status_counts = {
         status: sum(row.get("status") == status for row in rows)
-        for status in ("filtered_out", "failed", "completed")
+        for status in (
+            "filtered_out",
+            "failed",
+            "completed",
+            "completed_with_partial_classification",
+            "completed_with_entity_fallback",
+        )
     }
     pass_metrics: dict[str, dict[str, int]] = {}
     for pass_name in ("entities", "claims"):
@@ -544,13 +636,30 @@ def summarize_comparisons(path: Path) -> dict[str, Any]:
             ),
         }
     pass_metrics["classification"] = {
-        "valid": sum(
+        "complete": sum(
             any(
-                attempt["pass"] == "classification" and attempt["status"] == "valid"
+                diagnostic.get("pass") == "classification"
+                and diagnostic.get("final_validation_status") == "valid"
+                for diagnostic in row.get("pass_diagnostics", [])
+            )
+            for row in rows
+        ),
+        "partial": sum(
+            row.get("status") == "completed_with_partial_classification" for row in rows
+        ),
+        "pair_retries": sum(
+            any(
+                attempt.get("pass") == "classification" and attempt.get("attempt") == "retry"
                 for attempt in row.get("attempts", [])
             )
             for row in rows
-        )
+        ),
+        "permanently_failed_pairs": sum(
+            len(diagnostic.get("recovery_metadata", {}).get("permanently_failed_pairs", []))
+            for row in rows
+            for diagnostic in row.get("pass_diagnostics", [])
+            if diagnostic.get("pass") == "classification"
+        ),
     }
     failure_kinds = (
         "json_parse_failure",
