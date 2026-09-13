@@ -649,8 +649,9 @@ def summarize_comparisons(path: Path) -> dict[str, Any]:
         ),
         "pair_retries": sum(
             any(
-                attempt.get("pass") == "classification" and attempt.get("attempt") == "retry"
-                for attempt in row.get("attempts", [])
+                diagnostic.get("pass") == "classification"
+                and diagnostic.get("raw_repair_output") is not None
+                for diagnostic in row.get("pass_diagnostics", [])
             )
             for row in rows
         ),
