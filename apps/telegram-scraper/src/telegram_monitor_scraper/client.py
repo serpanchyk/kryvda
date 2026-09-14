@@ -28,7 +28,7 @@ class TelethonChannelClient:
 
     async def resolve(self, channel: MonitoredChannel) -> tuple[int, str | None, str | None]:
         """Resolve a configured handle and return durable identity plus current display data."""
-        entity = await self._client.get_entity(self._entity_reference(channel))
+        entity = await self._entity(channel)
         return int(entity.id), getattr(entity, "username", None), getattr(entity, "title", None)
 
     async def avatar(self, channel: MonitoredChannel) -> ChannelAvatar | None:
@@ -40,7 +40,7 @@ class TelethonChannelClient:
         Returns:
             Current image payload and MIME type, or ``None`` without a profile image.
         """
-        entity = await self._client.get_entity(self._entity_reference(channel))
+        entity = await self._entity(channel)
         content = await self._client.download_profile_photo(entity, file=bytes)
         if content is None:
             return None
@@ -51,7 +51,7 @@ class TelethonChannelClient:
     async def newer_posts(
         self, channel: MonitoredChannel, minimum_message_id: int
     ) -> AsyncIterator[TelegramPost]:
-        entity = await self._client.get_entity(self._entity_reference(channel))
+        entity = await self._entity(channel)
         async for message in self._client.iter_messages(
             entity, min_id=minimum_message_id, reverse=True
         ):
@@ -59,31 +59,45 @@ class TelethonChannelClient:
 
     async def newest_message_id(self, channel: MonitoredChannel) -> int:
         """Return the current head without walking a channel's full history."""
-        entity = await self._client.get_entity(self._entity_reference(channel))
+        entity = await self._entity(channel)
         messages = await self._client.get_messages(entity, limit=1)
         return int(messages[0].id) if messages else 0
 
     async def older_posts(
         self, channel: MonitoredChannel, before_message_id: int | None
     ) -> AsyncIterator[TelegramPost]:
-        entity = await self._client.get_entity(self._entity_reference(channel))
+        entity = await self._entity(channel)
         kwargs = {} if before_message_id is None else {"max_id": before_message_id}
         async for message in self._client.iter_messages(entity, **kwargs):
             yield self._to_post(message)
 
-    @staticmethod
-    def _entity_reference(channel: MonitoredChannel) -> int | str:
-        """Select a Telethon-resolvable reference for a monitored source.
+    async def _entity(self, channel: MonitoredChannel) -> Any:
+        """Resolve a monitored source, restoring private-channel access metadata when needed.
 
         Args:
             channel: Source whose Telegram entity will be fetched.
 
         Returns:
-            Public handle or a private source's durable peer identifier.
+            A Telethon entity accepted by message and profile-photo operations.
         """
         if channel.access_kind == "public":
-            return channel.configured_reference
-        return channel.telegram_peer_id or channel.configured_reference
+            return await self._client.get_entity(channel.configured_reference)
+        if channel.telegram_peer_id is None:
+            return await self._client.get_entity(channel.configured_reference)
+
+        cached_entities: dict[int, Any] = getattr(self, "_private_entities", {})
+        if entity := cached_entities.get(channel.telegram_peer_id):
+            return entity
+
+        for dialog in await self._client.get_dialogs():
+            entity = dialog.entity
+            if getattr(entity, "id", None) == channel.telegram_peer_id:
+                cached_entities[channel.telegram_peer_id] = entity
+                self._private_entities = cached_entities
+                return entity
+        raise ValueError(
+            f"Private channel peer ID {channel.telegram_peer_id} is absent from the session dialogs"
+        )
 
     @staticmethod
     def _to_post(message: Any) -> TelegramPost:

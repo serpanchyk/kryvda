@@ -20,6 +20,9 @@ class FakeTelegramClient:
     async def get_entity(self, reference: int | str) -> object:
         return reference
 
+    async def get_dialogs(self) -> list[SimpleNamespace]:
+        return []
+
     async def get_messages(self, entity: object, limit: int) -> list[SimpleNamespace]:
         return [SimpleNamespace(id=73)]
 
@@ -115,3 +118,17 @@ async def test_avatar_download_returns_none_without_a_profile_image() -> None:
     client._client = cast(Any, FakeTelegramClient())
 
     assert await client.avatar(MonitoredChannel(1, "example_channel", None, "public")) is None
+
+
+async def test_private_channel_is_resolved_from_session_dialogs() -> None:
+    private_entity = SimpleNamespace(id=123, title="Private channel")
+    fake_client = FakeTelegramClient()
+
+    async def private_dialogs() -> list[SimpleNamespace]:
+        return [SimpleNamespace(entity=private_entity)]
+
+    fake_client.get_dialogs = private_dialogs  # type: ignore[method-assign]
+    client = TelethonChannelClient.__new__(TelethonChannelClient)
+    client._client = cast(Any, fake_client)
+
+    assert await client.newest_message_id(MonitoredChannel(1, "private:123", 123, "private")) == 73

@@ -26,7 +26,9 @@ administration; product UI remains a shell.
 - PostgreSQL is the lightweight queue through a leased-job table. Live collection jobs take
   priority over throttled historical backfill jobs.
 - Public Telegram sources resolve through their configured handles; stored peer IDs are durable
-  source identity, not standalone Telethon lookup values.
+  source identity, not standalone Telethon lookup values. Private sources restore their Telegram
+  access metadata from the dedicated account's dialogs and are collected only while that account
+  remains a member.
 - Configuration priority is constructor arguments, environment, `.env`, `config.yaml`, then
   file secrets. See `system/foundation/configuration.md`.
 - The reviewed source seed contains INSIDER UA, Україна Сейчас, Реальна війна, Україна Online,
