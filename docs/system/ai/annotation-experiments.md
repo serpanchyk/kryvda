@@ -22,6 +22,10 @@ Git-tracked. No DVC remote is configured until project storage and access contro
 projection of `golden_v0`. It is not a migration of `extraction_schema_v1`: production candidate
 extraction continues to use its existing schema, prompt, validation, and worker path.
 
+`mamay_vs_golden_v3_5_1` is the DVC-tracked 100-post, production-aligned three-pass Mamay
+comparison artifact. It contains raw inference diagnostics and a standalone contract-health
+summary; it intentionally does not calculate a numeric delta against the 55-post v3.5 artifact.
+
 DSPy work begins only after the annotation schema is stable. Its evaluation uses component metrics
 for entity extraction/resolution, stance, claims, attribution/modality, and rhetorical features,
 with a documented weighted aggregate.

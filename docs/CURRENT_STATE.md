@@ -73,8 +73,9 @@ administration; product UI remains a shell.
   pair recovery. Its DVC artifact preserves the raw batch and individual-retry audit trail.
 - `mamay_vs_golden_v3_5` uses the same runner and input with the v3.5 semantic prompts and
   deterministic non-negative-rhetoric sanitation; its summary compares contract-health metrics
-  with the preserved v3.4 artifact. `mamay_vs_golden_v3_5_1` is its frozen single regression run:
-  it compares against v3.5 without changing reliability behavior or the dataset.
+  with the preserved v3.4 artifact. `mamay_vs_golden_v3_5_1` is a DVC-tracked standalone run over
+  the current 100-post annotated dataset. Its summary intentionally has no numeric baseline,
+  because the preserved v3.5 artifact contains only 55 examples.
 - Golden semantic evaluation now has a versioned canonical representation. Immutable old55
   `golden_v0` records are adapted with explicit actions/warnings (including unresolved stances,
   ambiguous rhetoric links, and legacy-only rhetoric exclusions); native `golden_v1` is frozen for

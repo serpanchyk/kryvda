@@ -168,10 +168,10 @@ def test_v1_rejects_rhetoric_on_non_negative_stance() -> None:
         )
 
 
-def test_all_old55_load_through_the_legacy_adapter() -> None:
+def test_all_active_annotations_load_through_the_legacy_adapter() -> None:
     records = load_golden_jsonl(Path("experiments/datasets/golden_v0/data/annotations.jsonl"))
-    assert len(records) == 55
+    assert len(records) == 100
     assert all(record.original_schema_version == "annotation_schema_v1" for record in records)
     summary = mapping_summary(records)
-    assert summary["mapped_claims"] == 486
-    assert summary["generated_classifications"] == 972
+    assert summary["mapped_claims"] == 785
+    assert summary["generated_classifications"] == 1579

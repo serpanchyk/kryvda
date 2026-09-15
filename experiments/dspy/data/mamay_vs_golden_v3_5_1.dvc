@@ -1,0 +1,6 @@
+outs:
+- md5: d94ee2b89e7d82543d3e2ad4175d2034.dir
+  size: 5212475
+  nfiles: 2
+  hash: md5
+  path: mamay_vs_golden_v3_5_1
