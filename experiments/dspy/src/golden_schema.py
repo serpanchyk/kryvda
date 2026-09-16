@@ -228,6 +228,7 @@ class GoldenV0Adapter:
                     "kind": "unresolved_legacy_epistemic",
                     "claim_id": claim["id"],
                     "legacy_value": old_epistemic,
+                    "resolution": "unresolved_legacy",
                 }
             )
         else:
@@ -278,6 +279,7 @@ class GoldenV0Adapter:
                             "claim_id": claim.id,
                             "entity_id": entity_id,
                             "legacy_value": selected.get("value"),
+                            "resolution": "unresolved_legacy",
                         }
                     )
                 elif stance is not None:
@@ -317,6 +319,7 @@ class GoldenV0Adapter:
                     "claim_id": claim.id,
                     "entity_id": entity_id,
                     "legacy_value": None,
+                    "resolution": "unresolved_legacy",
                 }
             )
             return None
@@ -452,6 +455,9 @@ def mapping_summary(records: list[CanonicalGolden]) -> dict[str, int]:
         ),
         "unresolved_stances": sum(
             warning["kind"] == "unresolved_legacy_stance" for warning in warnings
+        ),
+        "unresolved_epistemics": sum(
+            warning["kind"] == "unresolved_legacy_epistemic" for warning in warnings
         ),
     }
 

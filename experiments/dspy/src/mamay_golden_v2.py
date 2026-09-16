@@ -11,6 +11,8 @@ from itertools import batched
 from pathlib import Path
 from typing import Any, Protocol, cast
 
+from golden_report import EvaluationItem, benchmark_report, canonical_prediction
+from golden_schema import load_golden_jsonl
 from monitoring_common.contracts import (
     InferenceValidationError,
     PassName,
@@ -35,12 +37,12 @@ from telegram_monitor_ai_worker.pipeline import (
 )
 
 DEFAULT_ANNOTATIONS = Path("experiments/datasets/golden_v0/data/annotations.jsonl")
-DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v3_5_1/comparisons.jsonl")
+DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v3_5_2/comparisons.jsonl")
 DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v3_5/comparisons.jsonl")
 DEFAULT_SEED = Path("infra/postgres/init/003_registry_seed.sql")
 DEFAULT_MODEL = "MamayLM-Gemma-3-27B-IT"
 DEFAULT_BASE_URL = "http://litellm:4000"
-COMPARISON_SCHEMA_VERSION = "mamay_golden_comparison_v3_5_1"
+COMPARISON_SCHEMA_VERSION = "mamay_golden_comparison_v3_5_2"
 
 
 class InferenceClient(Protocol):
@@ -496,7 +498,7 @@ async def analyze_annotation(
         "prefilter": {"matched_entity_ids": matched},
         "run_metadata": {
             "model": DEFAULT_MODEL,
-            "pipeline_version": "inference_v3_5_1",
+            "pipeline_version": "inference_v3_5_2",
             "run_timestamp": datetime.now(UTC).isoformat(),
         },
     }
@@ -565,7 +567,7 @@ async def analyze_annotation(
             classifications,
             status,
             degradations,
-            pipeline_version="inference_v3_5_1",
+            pipeline_version="inference_v3_5_2",
         )
     except Exception as error:
         failure = (
@@ -768,6 +770,30 @@ def summarize_comparisons(path: Path) -> dict[str, Any]:
     }
 
 
+def semantic_benchmark_report(
+    comparisons_path: Path, annotations_path: Path, old55_comparisons_path: Path
+) -> dict[str, dict[str, Any]]:
+    """Evaluate comparison outputs only after both sides are canonicalised."""
+    golden_by_id = {record.example_id: record for record in load_golden_jsonl(annotations_path)}
+    old55_ids = completed_example_ids(old55_comparisons_path)
+    items: list[EvaluationItem] = []
+    for line in comparisons_path.read_text(encoding="utf-8").splitlines():
+        if not line:
+            continue
+        row = json.loads(line)
+        identifier = row["input"]["example_id"]
+        golden = golden_by_id[identifier]
+        prediction = canonical_prediction(row.get("final_output"), golden)
+        items.append(
+            EvaluationItem(
+                golden=golden,
+                prediction=prediction,
+                degraded=row.get("status") != "completed",
+            )
+        )
+    return benchmark_report(items, old55_ids)
+
+
 def compare_summaries(current: Mapping[str, Any], baseline: Mapping[str, Any]) -> dict[str, Any]:
     """Return current/baseline metrics and signed deltas for review."""
     current_status = cast(Mapping[str, int], current["status"])
@@ -827,13 +853,14 @@ async def run(arguments: Iterable[str] | None = None) -> None:
             args.concurrency,
         )
         current = summarize_comparisons(args.output)
+        semantic = semantic_benchmark_report(args.output, args.annotations, args.baseline)
         comparison = (
             compare_summaries(current, summarize_comparisons(args.baseline))
             if args.baseline.exists()
             else {"current": current, "baseline": None, "delta": None}
         )
         args.output.with_name("summary.json").write_text(
-            json.dumps(comparison, ensure_ascii=False, indent=2) + "\n",
+            json.dumps(comparison | {"semantic": semantic}, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
     finally:

@@ -251,7 +251,7 @@ def final_payload(
     classifications: Sequence[Mapping[str, Any]],
     status: str = "completed",
     degradations: Sequence[Mapping[str, Any]] = (),
-    pipeline_version: str = "inference_v3_5_1",
+    pipeline_version: str = "inference_v3_5_2",
 ) -> dict[str, Any]:
     """Build the inspectable immutable v3 result document."""
     return {

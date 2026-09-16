@@ -53,9 +53,9 @@ class AnalysisJobRepository:
             run_id = await connection.fetchval(
                 """INSERT INTO analysis_runs
                    (job_id, post_revision_id, model_name, pipeline_version)
-                   VALUES ($1, $2, $3, 'inference_v3_5_1')
+                   VALUES ($1, $2, $3, 'inference_v3_5_2')
                    ON CONFLICT (job_id) DO UPDATE
-                   SET status = 'running', pipeline_version = 'inference_v3_5_1'
+                   SET status = 'running', pipeline_version = 'inference_v3_5_2'
                    RETURNING id""",
                 row["id"],
                 row["post_revision_id"],

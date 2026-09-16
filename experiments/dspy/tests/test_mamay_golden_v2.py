@@ -82,7 +82,7 @@ async def test_analysis_records_prefilter_all_passes_and_final_output() -> None:
         "claims",
         "classification",
     ]
-    assert row["final_output"]["pipeline_version"] == "inference_v3_5_1"
+    assert row["final_output"]["pipeline_version"] == "inference_v3_5_2"
     assert len(row["pass_diagnostics"]) == 3
     assert row["pass_diagnostics"][0]["sanitized_primary_output"] == {
         "entities": [{"mentions": ["Шабунін"]}]

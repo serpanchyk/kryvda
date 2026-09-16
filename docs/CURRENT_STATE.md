@@ -76,10 +76,12 @@ administration; product UI remains a shell.
   with the preserved v3.4 artifact. `mamay_vs_golden_v3_5_1` is a DVC-tracked standalone run over
   the current 100-post annotated dataset. Its summary intentionally has no numeric baseline,
   because the preserved v3.5 artifact contains only 55 examples.
-- Golden semantic evaluation now has a versioned canonical representation. Immutable old55
-  `golden_v0` records are adapted with explicit actions/warnings (including unresolved stances,
-  ambiguous rhetoric links, and legacy-only rhetoric exclusions); native `golden_v1` is frozen for
-  the new45 held-out annotations. This migration changes no inference behavior.
+- Inference v3.5.2 preserves the v3.5.1 reliability path and makes two semantic changes: `Рух
+  ЧЕСНО` accepts its uppercase acronym only as an exact organization reference, and Pass 3 makes
+  stance attribution-aware so adverse events, polls, and another actor's attack are not treated as
+  the current perspective's negative stance. The 100-example report is canonical-only and labels
+  its tuned partitions `old55`, `diagnostic45`, and `all100`; `mixed` stance and `denied`
+  epistemics remain `unresolved_legacy` and are excluded from their respective metrics.
 
 ## Documentation
 

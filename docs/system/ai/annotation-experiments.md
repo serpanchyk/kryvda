@@ -26,6 +26,10 @@ extraction continues to use its existing schema, prompt, validation, and worker 
 comparison artifact. It contains raw inference diagnostics and a standalone contract-health
 summary; it intentionally does not calculate a numeric delta against the 55-post v3.5 artifact.
 
+`mamay_vs_golden_v3_5_2` reruns the same 100 examples with the v3.5.2 alias and stance semantics.
+Its canonical-only semantic report partitions the tuned data as `old55`, `diagnostic45`, and
+`all100`; the 45 diagnostic examples are not described as held-out after this tuning.
+
 DSPy work begins only after the annotation schema is stable. Its evaluation uses component metrics
 for entity extraction/resolution, stance, claims, attribution/modality, and rhetorical features,
 with a documented weighted aggregate.

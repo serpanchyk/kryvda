@@ -91,6 +91,24 @@ def test_insufficient_context_is_unscorable_not_neutral() -> None:
     assert any(item["kind"] == "unresolved_legacy_stance" for item in canonical.mapping_warnings)
 
 
+@pytest.mark.parametrize(("field", "legacy"), [("stance", "mixed"), ("epistemic", "denied")])
+def test_unsupported_legacy_semantics_remain_unresolved(field: str, legacy: str) -> None:
+    kwargs = {field: legacy}
+    canonical = GoldenV0Adapter().convert(legacy_record(**kwargs))
+    if field == "stance":
+        assert canonical.classifications[0].stance is None
+        warning_kind = "unresolved_legacy_stance"
+    else:
+        assert canonical.claims[0].epistemic_status is None
+        warning_kind = "unresolved_legacy_epistemic"
+    assert any(
+        warning["kind"] == warning_kind
+        and warning["legacy_value"] == legacy
+        and warning["resolution"] == "unresolved_legacy"
+        for warning in canonical.mapping_warnings
+    )
+
+
 @pytest.mark.parametrize("legacy", sorted(RHETORIC_MAP))
 def test_maps_every_supported_legacy_rhetoric_label(legacy: str) -> None:
     canonical = GoldenV0Adapter().convert(legacy_record(feature=legacy))

@@ -91,9 +91,7 @@ def matched_registry_entity_ids(
     """
     eligible = [row for row in aliases if not monitored_only or bool(row.get("monitored"))]
     matched = {
-        int(row["entity_id"])
-        for row in eligible
-        if alias_occurs(source_text, cast(str, row["alias"]))
+        int(row["entity_id"]) for row in eligible if _registry_alias_occurs(source_text, row)
     }
     surname_owners: dict[str, set[int]] = {}
     for row in eligible:
@@ -119,7 +117,7 @@ def matched_registry_entities(
         rows = [row for row in aliases if int(row["entity_id"]) == entity_id]
         surfaces: list[tuple[int, str]] = []
         for row in rows:
-            surfaces.extend(_alias_surfaces(source_text, cast(str, row["alias"])))
+            surfaces.extend(_registry_alias_surfaces(source_text, row))
         if not surfaces:
             surname_rows = [
                 row
@@ -167,13 +165,65 @@ def _alias_surfaces(source_text: str, alias: str) -> list[tuple[int, str]]:
     return results
 
 
+def _registry_alias_occurs(source_text: str, row: Mapping[str, Any]) -> bool:
+    """Apply entity-specific registry matching policy before generic morphology.
+
+    ``ЧЕСНО`` is an organization acronym that is also the common Ukrainian adverb/adjective
+    stem.  It must therefore never enter the generic inflection expansion used for ordinary
+    registry aliases.
+    """
+    alias = cast(str, row["alias"])
+    if row.get("canonical_name") != "Рух ЧЕСНО":
+        return alias_occurs(source_text, alias)
+    normalized_alias = normalize_match_text(alias)
+    if normalized_alias == "чесно":
+        return _exact_case_sensitive_occurs(source_text, "ЧЕСНО")
+    if normalized_alias == "рух чесно":
+        pattern = r'(?<!\w)(?i:рух)\s+[«"“]?ЧЕСНО[»"”]?(?!\w)'
+        return re.search(pattern, source_text) is not None
+    return alias_occurs(source_text, alias)
+
+
+def _registry_alias_surfaces(source_text: str, row: Mapping[str, Any]) -> list[tuple[int, str]]:
+    """Find source spans admitted by the corresponding registry alias policy."""
+    alias = cast(str, row["alias"])
+    if row.get("canonical_name") != "Рух ЧЕСНО":
+        return _alias_surfaces(source_text, alias)
+    normalized_alias = normalize_match_text(alias)
+    if normalized_alias == "чесно":
+        return _exact_case_sensitive_surfaces(source_text, "ЧЕСНО")
+    if normalized_alias == "рух чесно":
+        return [
+            (match.start(), match.group(0))
+            for match in re.finditer(r'(?<!\w)(?i:рух)\s+[«"“]?ЧЕСНО[»"”]?(?!\w)', source_text)
+        ]
+    return _alias_surfaces(source_text, alias)
+
+
+def _exact_case_sensitive_occurs(source_text: str, alias: str) -> bool:
+    """Match an acronym literally with word boundaries and no case folding."""
+    return bool(re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", source_text))
+
+
+def _exact_case_sensitive_surfaces(source_text: str, alias: str) -> list[tuple[int, str]]:
+    """Return literal acronym spans accepted by exact-case matching."""
+    return [
+        (match.start(), match.group(0))
+        for match in re.finditer(rf"(?<!\w){re.escape(alias)}(?!\w)", source_text)
+    ]
+
+
 def resolve_registry_mention(
     mention: str, aliases: Sequence[Mapping[str, Any]]
 ) -> Mapping[str, Any] | None:
     """Return the unique registry row for one mention, or ``None`` when ambiguous/unresolved."""
     normalized = normalize_match_text(mention)
-    exact = [row for row in aliases if cast(str, row["normalized_alias"]) == normalized]
-    matches = exact or [row for row in aliases if alias_occurs(mention, cast(str, row["alias"]))]
+    exact = [
+        row
+        for row in aliases
+        if cast(str, row["normalized_alias"]) == normalized and _registry_alias_occurs(mention, row)
+    ]
+    matches = exact or [row for row in aliases if _registry_alias_occurs(mention, row)]
     entity_ids = {int(row["entity_id"]) for row in matches}
     if not entity_ids:
         surname_matches = []

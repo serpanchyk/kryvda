@@ -17,7 +17,9 @@ def test_claim_prompt_defaults_to_editorial_without_explicit_source() -> None:
     assert PROMPT_VERSIONS["claims"] == "inference_v3_claims_prompt_v6"
 
 
-def test_classification_prompt_preserves_reported_attack_direction() -> None:
-    assert "не призначай автоматично негативне stance щодо\nTARGET" in CLASSIFICATION_PROMPT
+def test_classification_prompt_preserves_attribution_aware_direction() -> None:
+    assert "Stance описує лише її ставлення до\nTARGET" in CLASSIFICATION_PROMPT
     assert '"X атакує Y" може бути відсутнім, позитивним або' in CLASSIFICATION_PROMPT
-    assert PROMPT_VERSIONS["classification"] == "inference_v3_classification_prompt_v4"
+    assert "40% не довіряють TARGET" in CLASSIFICATION_PROMPT
+    assert "institution не є негативним stance" in CLASSIFICATION_PROMPT
+    assert PROMPT_VERSIONS["classification"] == "inference_v3_classification_prompt_v5"

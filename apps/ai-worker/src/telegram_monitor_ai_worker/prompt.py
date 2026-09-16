@@ -8,7 +8,7 @@ from monitoring_common.contracts import PassName
 PROMPT_VERSIONS: dict[PassName, str] = {
     "entities": "inference_v3_entities_prompt_v2",
     "claims": "inference_v3_claims_prompt_v6",
-    "classification": "inference_v3_classification_prompt_v4",
+    "classification": "inference_v3_classification_prompt_v5",
 }
 
 # Frozen names retained for the DVC-backed v0 experiment only.
@@ -75,11 +75,21 @@ CLASSIFICATION_PROMPT = f"""{COMMON}
 entities. Stance щодо target: "позитивне", "негативне" або "відсутнє". "відсутнє" означає, що
 proposition містить актора, але не має істотної оцінки щодо нього.
 
-Коли claim повідомляє, що інший actor атакує, критикує, звинувачує, тисне, переслідує, бере на
-приціл або інакше негативно діє щодо TARGET, не призначай автоматично негативне stance щодо
-TARGET. Класифікуй stance, виражене поточною перспективою/джерелом claim, а не stance іншого
-актора, описаного всередині proposition. "X атакує Y" може бути відсутнім, позитивним або
-підтримувальним щодо Y.
+Спочатку визнач current perspective/source з attribution. Stance описує лише її ставлення до
+TARGET, а не ставлення іншого актора, згаданого всередині proposition. Негативна подія,
+звинувачення, критика, атака, тиск, конфлікт, розслідування, недовіра, загроза, переслідування,
+стрілянина або санкція за участю TARGET самі по собі не означають негативне stance current
+perspective щодо TARGET. Завжди визначай, хто виражає негативне ставлення і хто є його object.
+
+Якщо TARGET є object чужої атаки, критики, звинувачення, тиску, розслідування, недовіри або
+загрози, або лише учасником негативної події, default "відсутнє", якщо current perspective
+окремо не оцінює TARGET. "X атакує Y" може бути відсутнім, позитивним або підтримувальним щодо
+Y. Повідомлення опитування чи громадської думки ("40% не довіряють TARGET", disapproval rating,
+"виборці критикують TARGET") описує ставлення респондентів, не current perspective: default
+"відсутнє" без окремого editorial framing. Так само нейтрально описані затримання, обшук,
+стрілянина, конфлікт, розслідування або prosecution за участю institution не є негативним stance
+до institution. Негативне stance дозволене лише коли current perspective сама негативно
+характеризує TARGET, підтримує таку характеристику або подає її як власну оцінку.
 
 Якщо stance не "негативне", rhetoric завжди []. Негативне stance саме по собі не є rhetoric.
 Поверни 0-2 лише найсильніші явно присутні labels; [] для негативної claim без чіткої риторики.

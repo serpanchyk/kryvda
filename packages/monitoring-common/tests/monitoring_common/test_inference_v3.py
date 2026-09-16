@@ -55,13 +55,29 @@ def test_chesno_prefilter_requires_the_organization_name() -> None:
             "canonical_name": "Рух ЧЕСНО",
             "coarse_type": "organization",
             "monitored": True,
+            "alias": "ЧЕСНО",
+        },
+        {
+            "entity_id": 22,
+            "canonical_name": "Рух ЧЕСНО",
+            "coarse_type": "organization",
+            "monitored": True,
             "alias": "CHESNO",
         },
     ]
 
     assert matched_registry_entity_ids("Чесно кажучи, давно його не бачив.", aliases) == []
+    assert matched_registry_entity_ids("рух чесно опублікував заяву.", aliases) == []
     assert matched_registry_entity_ids("Чесна мобілізація потрібна державі.", aliases) == []
+    assert (
+        matched_registry_entity_ids(
+            "Представники руху «Чесна мобілізація» виступили із заявою.", aliases
+        )
+        == []
+    )
     assert matched_registry_entity_ids("Рух ЧЕСНО опублікував заяву.", aliases) == [22]
+    assert matched_registry_entity_ids("рух ЧЕСНО опублікував заяву.", aliases) == [22]
+    assert matched_registry_entity_ids("У ЧЕСНО заявили про порушення.", aliases) == [22]
 
 
 def test_attribution_examples_preserve_editorial_and_explicit_unnamed_sources() -> None:
