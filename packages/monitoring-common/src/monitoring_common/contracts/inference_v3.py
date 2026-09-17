@@ -268,7 +268,9 @@ def _inflection_forms(token: str) -> frozenset[str]:
         stem = normalized[:-1]
         forms.update(stem + suffix for suffix in ("я", "ю", "ем", "єм", "і", "е"))
     elif re.search(r"[бвгґджзклмнпрстфхцчшщ]$", normalized):
-        forms.update(normalized + suffix for suffix in ("а", "у", "ом", "ем", "і", "ові", "еві"))
+        forms.update(
+            normalized + suffix for suffix in ("а", "у", "ом", "ем", "ім", "им", "і", "ові", "еві")
+        )
     return frozenset(forms)
 
 

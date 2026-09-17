@@ -35,6 +35,7 @@ def test_alias_matching_is_casefolded_literal_and_boundary_aware() -> None:
     assert alias_occurs("Про Anti-Corruption Action Centre!", "Anti-Corruption Action Centre")
     assert not alias_occurs("слово накопичено", "ОП")
     assert alias_occurs("Шабуніна згадали", "Шабунін")
+    assert alias_occurs("Шабуніним назвали активіста", "Шабунін")
     assert alias_occurs("Рішення Андрія Єрмака", "Андрій Єрмак")
     assert alias_occurs("Заява Михаила Федорова", "Михаил Федоров")
     assert not alias_occurs("Єрмаков виступив", "Єрмак")
