@@ -24,7 +24,8 @@ administration; product UI remains a shell.
 
 - Docker Compose starts PostgreSQL, a versioned migration gate, then all application services.
 - PostgreSQL migration state is stored in `schema_migrations`; fresh initialization records the
-  v3.5.2 baseline, while a legacy schema is upgraded through the v3 transition automatically.
+  v3.5.2 baseline and the v3 pass-attempt uniqueness repair, while a legacy schema is upgraded
+  through the v3 transition automatically.
 - PostgreSQL is the lightweight queue through a leased-job table. Live collection jobs take
   priority over throttled historical backfill jobs.
 - Public Telegram sources resolve through their configured handles; stored peer IDs are durable

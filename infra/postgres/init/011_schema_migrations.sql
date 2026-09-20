@@ -12,5 +12,6 @@ VALUES
     ('007_inference_v3_4.sql'),
     ('008_inference_v3_5.sql'),
     ('009_inference_v3_5_1.sql'),
-    ('010_inference_v3_5_2.sql')
+    ('010_inference_v3_5_2.sql'),
+    ('011_repair_inference_pass_attempts_unique.sql')
 ON CONFLICT (version) DO NOTHING;
