@@ -88,6 +88,9 @@ administration; product UI remains a shell.
   the current perspective's negative stance. The 100-example report is canonical-only and labels
   its tuned partitions `old55`, `diagnostic45`, and `all100`; `mixed` stance and `denied`
   epistemics remain `unresolved_legacy` and are excluded from their respective metrics.
+- `registry_post_coverage` is a DVC-tracked snapshot of the number of latest accessible posts
+  matching each active registry entity under the production alias policy. Its summary records the
+  live queue and a throughput-based ETA; it is an operational snapshot, not a model evaluation.
 
 ## Documentation
 

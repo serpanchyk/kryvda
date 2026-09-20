@@ -6,6 +6,27 @@ annotations and Mamay's runtime extraction. Parsed outputs that fail local groun
 preserved as `status: "invalid"` with a validation category for external review; request or JSON
 failures use a sanitized failure record.
 
+## Registry post coverage
+
+`registry_post_coverage.py` produces a DVC-tracked snapshot of every active registry entity's
+coverage among the latest accessible post revisions. It uses the production alias matcher, so a
+post is counted once for each entity matched by one or more approved aliases. Its `summary.json`
+also records the current analysis queue and a throughput-based ETA.
+
+Run it in an ephemeral worker container, then validate and version the generated directory:
+
+```bash
+docker compose run --rm --no-deps -w /workspace -v "$PWD:/workspace" \
+  -e PYTHONPATH=/workspace/apps/ai-worker/src:/workspace/packages/monitoring-common/src \
+  ai-worker python /workspace/experiments/dspy/src/registry_post_coverage.py
+uv run python experiments/dspy/src/registry_post_coverage.py --validate-only
+uv run dvc add experiments/dspy/data/registry_post_coverage
+uv run dvc status
+```
+
+The CSV and JSON contents are DVC-managed and must not be committed directly. No DVC remote is
+currently configured.
+
 Validate the source data first:
 
 ```bash
