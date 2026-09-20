@@ -4,6 +4,11 @@ analysis_model: MamayLM-Gemma-3-27B-IT
 analysis_poll_interval_seconds: 5
 analysis_lease_seconds: 300
 analysis_request_timeout_seconds: 120
-analysis_max_output_tokens: 4096
+analysis_entities_max_output_tokens: 1024
+analysis_claims_max_output_tokens: 4096
+analysis_classification_max_output_tokens: 1024
 analysis_max_attempts: 3
 analysis_classification_batch_size: 5
+analysis_concurrency: 1
+llm_max_concurrency: 1
+analysis_classification_concurrency: 1

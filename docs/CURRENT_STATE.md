@@ -22,7 +22,9 @@ administration; product UI remains a shell.
 
 ## Runtime Decisions
 
-- Docker Compose starts all services plus PostgreSQL 16.
+- Docker Compose starts PostgreSQL, a versioned migration gate, then all application services.
+- PostgreSQL migration state is stored in `schema_migrations`; fresh initialization records the
+  v3.5.2 baseline, while a legacy schema is upgraded through the v3 transition automatically.
 - PostgreSQL is the lightweight queue through a leased-job table. Live collection jobs take
   priority over throttled historical backfill jobs.
 - Public Telegram sources resolve through their configured handles; stored peer IDs are durable
@@ -43,6 +45,9 @@ administration; product UI remains a shell.
 - The supplied 128-entry registry seed is active and monitored. Approved aliases alone drive
   filtering and resolution. Registry expansion backfills only the latest accessible revision of
   each stored post.
+- The AI worker supports bounded PostgreSQL-coordinated job/provider/classification concurrency,
+  but Compose defaults remain one job and one provider request until throughput benchmarks justify
+  an increase. API `/analysis/health` exposes queue and recent-run operational state.
 - `golden_v0` is an offline, DVC-tracked pilot for annotation-schema validation. The offline Mamay
   comparison generator reuses the worker's inference request boundary to pair each golden input,
   full reviewed annotation, and Mamay output for external review. Parsed outputs that fail local

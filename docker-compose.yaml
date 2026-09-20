@@ -14,6 +14,21 @@ services:
       timeout: 3s
       retries: 10
 
+  migrate:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-telegram_monitor}
+      POSTGRES_USER: ${POSTGRES_USER:-telegram_monitor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      PGHOST: postgres
+    volumes:
+      - ./infra/postgres:/database:ro
+      - ./scripts/migrate.sh:/migrate.sh:ro
+    command: ["sh", "/migrate.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: .
@@ -25,8 +40,8 @@ services:
     volumes:
       - channel-images:/var/lib/telegram-monitor/channel-images:ro
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")'"]
       interval: 10s
@@ -48,8 +63,8 @@ services:
     volumes:
       - channel-images:/var/lib/telegram-monitor/channel-images
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   ai-worker:
     build:
@@ -58,9 +73,15 @@ services:
     environment:
       POSTGRES_DSN: postgresql://${POSTGRES_USER:-telegram_monitor}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-telegram_monitor}
       LITELLM_API_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY must be set}
+      ANALYSIS_CONCURRENCY: ${ANALYSIS_CONCURRENCY:-1}
+      LLM_MAX_CONCURRENCY: ${LLM_MAX_CONCURRENCY:-1}
+      ANALYSIS_CLASSIFICATION_CONCURRENCY: ${ANALYSIS_CLASSIFICATION_CONCURRENCY:-1}
+      ANALYSIS_ENTITIES_MAX_OUTPUT_TOKENS: ${ANALYSIS_ENTITIES_MAX_OUTPUT_TOKENS:-1024}
+      ANALYSIS_CLAIMS_MAX_OUTPUT_TOKENS: ${ANALYSIS_CLAIMS_MAX_OUTPUT_TOKENS:-4096}
+      ANALYSIS_CLASSIFICATION_MAX_OUTPUT_TOKENS: ${ANALYSIS_CLASSIFICATION_MAX_OUTPUT_TOKENS:-1024}
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       litellm:
         condition: service_healthy
     restart: unless-stopped

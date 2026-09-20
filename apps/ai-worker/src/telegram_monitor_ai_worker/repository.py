@@ -22,11 +22,23 @@ class AnalysisJobRepository:
         """Lease one job and create or resume its durable run."""
         async with self._pool.acquire() as connection, connection.transaction():
             await connection.execute(
-                """UPDATE analysis_jobs
-                   SET status = 'failed', leased_until = NULL, last_error_kind = 'lease_expired',
-                       last_error = 'Lease expired after the final allowed attempt',
-                       updated_at = now()
-                   WHERE status = 'leased' AND leased_until <= now() AND attempts >= $1""",
+                """WITH expired_jobs AS (
+                       UPDATE analysis_jobs
+                       SET status = 'failed', leased_until = NULL,
+                           last_error_kind = 'lease_expired',
+                           last_error = 'Lease expired after the final allowed attempt',
+                           updated_at = now()
+                       WHERE status = 'leased' AND leased_until <= now() AND attempts >= $1
+                       RETURNING id
+                   )
+                   UPDATE analysis_runs AS run
+                   SET status = 'failed', failure_kind = 'lease_expired',
+                       failure_detail = jsonb_build_object(
+                           'message', 'Lease expired after the final allowed attempt'
+                       ),
+                       completed_at = now()
+                   FROM expired_jobs
+                   WHERE run.job_id = expired_jobs.id AND run.status = 'running'""",
                 max_attempts,
             )
             row = await connection.fetchrow(

@@ -1,4 +1,4 @@
-CREATE TABLE registry_entities (
+CREATE TABLE IF NOT EXISTS registry_entities (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     canonical_name TEXT NOT NULL UNIQUE,
     coarse_type TEXT NOT NULL CHECK (
@@ -9,7 +9,7 @@ CREATE TABLE registry_entities (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE entity_aliases (
+CREATE TABLE IF NOT EXISTS entity_aliases (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     entity_id BIGINT NOT NULL REFERENCES registry_entities(id) ON DELETE CASCADE,
     alias TEXT NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE entity_aliases (
     UNIQUE (entity_id, alias)
 );
 
-CREATE TABLE candidate_entities (
+CREATE TABLE IF NOT EXISTS candidate_entities (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     normalized_key TEXT NOT NULL UNIQUE,
     representative_mention TEXT NOT NULL,
@@ -31,7 +31,7 @@ CREATE TABLE candidate_entities (
     CHECK ((status = 'linked') = (linked_entity_id IS NOT NULL))
 );
 
-CREATE TABLE entity_alias_candidates (
+CREATE TABLE IF NOT EXISTS entity_alias_candidates (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     entity_id BIGINT NOT NULL REFERENCES registry_entities(id) ON DELETE CASCADE,
     surface_form TEXT NOT NULL,
@@ -44,7 +44,7 @@ CREATE TABLE entity_alias_candidates (
     UNIQUE (entity_id, normalized_form)
 );
 
-CREATE TABLE analysis_jobs (
+CREATE TABLE IF NOT EXISTS analysis_jobs (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     post_revision_id BIGINT NOT NULL REFERENCES post_revisions(id),
     priority TEXT NOT NULL CHECK (priority IN ('live', 'backfill')),
@@ -64,11 +64,11 @@ CREATE TABLE analysis_jobs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX analysis_jobs_active_revision_idx
+CREATE UNIQUE INDEX IF NOT EXISTS analysis_jobs_active_revision_idx
     ON analysis_jobs (post_revision_id) WHERE status IN ('pending', 'leased');
-CREATE INDEX analysis_jobs_available_idx ON analysis_jobs (status, priority, available_at);
+CREATE INDEX IF NOT EXISTS analysis_jobs_available_idx ON analysis_jobs (status, priority, available_at);
 
-CREATE TABLE analysis_runs (
+CREATE TABLE IF NOT EXISTS analysis_runs (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     job_id BIGINT NOT NULL UNIQUE REFERENCES analysis_jobs(id),
     post_revision_id BIGINT NOT NULL REFERENCES post_revisions(id),
@@ -83,7 +83,7 @@ CREATE TABLE analysis_runs (
     completed_at TIMESTAMPTZ
 );
 
-CREATE TABLE inference_pass_attempts (
+CREATE TABLE IF NOT EXISTS inference_pass_attempts (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     run_id BIGINT NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,
     pass_name TEXT NOT NULL CHECK (pass_name IN ('entities', 'claims', 'classification')),
@@ -101,7 +101,7 @@ CREATE TABLE inference_pass_attempts (
     UNIQUE (run_id, pass_name, attempt_kind)
 );
 
-CREATE TABLE post_entities (
+CREATE TABLE IF NOT EXISTS post_entities (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     run_id BIGINT NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,
     local_id TEXT NOT NULL,
@@ -113,7 +113,7 @@ CREATE TABLE post_entities (
     CHECK (NOT (registry_entity_id IS NOT NULL AND candidate_entity_id IS NOT NULL))
 );
 
-CREATE TABLE claims (
+CREATE TABLE IF NOT EXISTS claims (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     run_id BIGINT NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,
     local_id TEXT NOT NULL,
@@ -131,13 +131,13 @@ CREATE TABLE claims (
     UNIQUE (run_id, local_id)
 );
 
-CREATE TABLE claim_entities (
+CREATE TABLE IF NOT EXISTS claim_entities (
     claim_id BIGINT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
     post_entity_id BIGINT NOT NULL REFERENCES post_entities(id),
     PRIMARY KEY (claim_id, post_entity_id)
 );
 
-CREATE TABLE claim_target_classifications (
+CREATE TABLE IF NOT EXISTS claim_target_classifications (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     claim_id BIGINT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
     post_entity_id BIGINT NOT NULL REFERENCES post_entities(id),
@@ -146,7 +146,7 @@ CREATE TABLE claim_target_classifications (
     UNIQUE (claim_id, post_entity_id)
 );
 
-CREATE INDEX candidate_entities_review_idx
+CREATE INDEX IF NOT EXISTS candidate_entities_review_idx
     ON candidate_entities (status, occurrence_count DESC, last_seen_at DESC);
-CREATE INDEX analysis_runs_revision_idx
+CREATE INDEX IF NOT EXISTS analysis_runs_revision_idx
     ON analysis_runs (post_revision_id, created_at DESC);

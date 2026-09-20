@@ -22,8 +22,55 @@ class FakePool:
         return None
 
 
+class AnalysisHealthPool(FakePool):
+    """Return an inspectable queue and run snapshot."""
+
+    async def fetchrow(self, query: str) -> dict[str, object]:
+        if "FROM analysis_jobs" in query:
+            return {
+                "pending_live": 2,
+                "pending_backfill": 5,
+                "leased": 1,
+                "failed": 3,
+                "oldest_pending_seconds": 12.0,
+            }
+        return {
+            "last_completed_at": "2026-09-20T10:00:00Z",
+            "completed_last_hour": 8,
+            "failed_last_hour": 1,
+            "partial_last_hour": 2,
+        }
+
+
 async def fake_create_pool(_: str) -> FakePool:
     return FakePool()
+
+
+async def fake_analysis_health_pool(_: str) -> AnalysisHealthPool:
+    return AnalysisHealthPool()
+
+
+async def test_analysis_health_endpoint(monkeypatch: object) -> None:
+    monkeypatch.setattr(main.asyncpg, "create_pool", fake_analysis_health_pool)  # type: ignore[union-attr]
+    transport = ASGITransport(app=create_app())
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/analysis/health")
+    assert response.status_code == 200
+    assert response.json() == {
+        "jobs": {
+            "pending_live": 2,
+            "pending_backfill": 5,
+            "leased": 1,
+            "failed": 3,
+            "oldest_pending_seconds": 12.0,
+        },
+        "runs": {
+            "last_completed_at": "2026-09-20T10:00:00Z",
+            "completed_last_hour": 8,
+            "failed_last_hour": 1,
+            "partial_last_hour": 2,
+        },
+    }
 
 
 async def test_channel_image_serves_stored_avatar(tmp_path: Path, monkeypatch: object) -> None:

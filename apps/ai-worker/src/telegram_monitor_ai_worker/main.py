@@ -2,7 +2,8 @@
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
+from contextlib import asynccontextmanager
 from typing import Any, Protocol
 
 import asyncpg
@@ -28,6 +29,7 @@ from openai import (
     PermissionDeniedError,
     RateLimitError,
 )
+from pydantic import Field
 
 from telegram_monitor_ai_worker.client import LiteLlmInferenceClient
 from telegram_monitor_ai_worker.models import (
@@ -61,9 +63,14 @@ class AiWorkerSettings(BaseServiceSettings):
     analysis_poll_interval_seconds: int = 5
     analysis_lease_seconds: int = 300
     analysis_request_timeout_seconds: int = 120
-    analysis_max_output_tokens: int = 4096
-    analysis_max_attempts: int = 3
-    analysis_classification_batch_size: int = 5
+    analysis_entities_max_output_tokens: int = Field(default=1024, ge=1)
+    analysis_claims_max_output_tokens: int = Field(default=4096, ge=1)
+    analysis_classification_max_output_tokens: int = Field(default=1024, ge=128)
+    analysis_max_attempts: int = Field(default=3, ge=1)
+    analysis_classification_batch_size: int = Field(default=5, ge=1)
+    analysis_concurrency: int = Field(default=1, ge=1)
+    llm_max_concurrency: int = Field(default=1, ge=1)
+    analysis_classification_concurrency: int = Field(default=1, ge=1)
 
 
 class InferenceClient(Protocol):
@@ -76,6 +83,57 @@ class InferenceClient(Protocol):
         self, pass_name: PassName, original_raw: str, errors: list[dict[str, str]]
     ) -> ModelResponse:
         """Return one contract-repair response."""
+
+
+class ProviderSlotLimiter:
+    """Coordinate a provider-wide request cap through PostgreSQL advisory locks."""
+
+    _slot_key = 94615231
+
+    def __init__(self, pool: asyncpg.Pool, max_concurrency: int) -> None:
+        self._pool = pool
+        self._max_concurrency = max_concurrency
+
+    @asynccontextmanager
+    async def slot(self) -> AsyncIterator[None]:
+        """Hold one shared provider slot for the duration of an inference request."""
+        while True:
+            for offset in range(self._max_concurrency):
+                connection = await self._pool.acquire()
+                locked = await connection.fetchval(
+                    "SELECT pg_try_advisory_lock($1)", self._slot_key + offset
+                )
+                if locked:
+                    try:
+                        yield
+                    finally:
+                        await connection.execute(
+                            "SELECT pg_advisory_unlock($1)", self._slot_key + offset
+                        )
+                        await self._pool.release(connection)
+                    return
+                await self._pool.release(connection)
+            await asyncio.sleep(0.05)
+
+
+class LimitedInferenceClient:
+    """Wrap an inference client with a cross-container provider concurrency limit."""
+
+    def __init__(self, client: InferenceClient, limiter: ProviderSlotLimiter) -> None:
+        self._client = client
+        self._limiter = limiter
+
+    async def infer(self, pass_name: PassName, request: dict[str, Any]) -> ModelResponse:
+        """Run one primary call while holding a provider slot."""
+        async with self._limiter.slot():
+            return await self._client.infer(pass_name, request)
+
+    async def repair(
+        self, pass_name: PassName, original_raw: str, errors: list[dict[str, str]]
+    ) -> ModelResponse:
+        """Run one repair call while holding a provider slot."""
+        async with self._limiter.slot():
+            return await self._client.repair(pass_name, original_raw, errors)
 
 
 class AnalysisWorker:
@@ -218,7 +276,9 @@ class AnalysisWorker:
             batches = classification_batches(
                 candidate_items, self._settings.analysis_classification_batch_size
             )
-            for batch_index, batch in enumerate(batches, start=1):
+            semaphore = asyncio.Semaphore(self._settings.analysis_classification_concurrency)
+
+            async def run_batch(batch_index: int, batch: list[dict[str, Any]]) -> dict[str, Any]:
                 requested = [(item["claim_id"], item["entity_id"]) for item in batch]
                 response: ModelResponse | None = None
                 payload: dict[str, Any] | None = None
@@ -227,10 +287,11 @@ class AnalysisWorker:
                 salvaged: list[dict[str, Any]] = []
                 recovered: list[dict[str, Any]] = []
                 try:
-                    await self._repository.renew_lease(
-                        job.id, self._settings.analysis_lease_seconds
-                    )
-                    response = await self._client.infer("classification", {"items": batch})
+                    async with semaphore:
+                        await self._repository.renew_lease(
+                            job.id, self._settings.analysis_lease_seconds
+                        )
+                        response = await self._client.infer("classification", {"items": batch})
                     try:
                         payload = parse_json_object(response.raw_output)
                     except InferenceValidationError as error:
@@ -268,15 +329,6 @@ class AnalysisWorker:
                         for pair in requested
                         if pair not in accepted_pairs
                     )
-                    rows.extend(accepted)
-                    missing = [pair for pair in missing if pair not in accepted_pairs]
-                    if kind == "batch_primary":
-                        primary_pairs.extend(accepted_pairs)
-                        salvaged_pairs.extend(
-                            (row["claim_id"], row["entity_id"]) for row in salvaged
-                        )
-                    else:
-                        retried_pairs.extend(accepted_pairs)
                     await self._record_attempt(
                         job,
                         "classification",
@@ -291,8 +343,11 @@ class AnalysisWorker:
                 except ModelOutputError as error:
                     errors = [{"kind": "generation_failure", "message": str(error)}]
                     await self._record_generation_failure(job, "classification", kind, error)
-                history.append(
-                    {
+                    accepted = []
+                return {
+                    "accepted": accepted,
+                    "batch_index": batch_index,
+                    "history": {
                         "attempt_kind": kind,
                         "batch_index": batch_index,
                         "requested_pairs": [list(pair) for pair in requested],
@@ -300,8 +355,29 @@ class AnalysisWorker:
                         "parsed_output": payload,
                         "salvaged_objects": salvaged,
                         "validation_errors": errors,
-                    }
+                    },
+                    "salvaged": salvaged,
+                }
+
+            outcomes = await asyncio.gather(
+                *(
+                    run_batch(batch_index, batch)
+                    for batch_index, batch in enumerate(batches, start=1)
                 )
+            )
+            for outcome in outcomes:
+                accepted = outcome["accepted"]
+                accepted_pairs = {(row["claim_id"], row["entity_id"]) for row in accepted}
+                rows.extend(accepted)
+                missing = [pair for pair in missing if pair not in accepted_pairs]
+                if kind == "batch_primary":
+                    primary_pairs.extend(accepted_pairs)
+                    salvaged_pairs.extend(
+                        (row["claim_id"], row["entity_id"]) for row in outcome["salvaged"]
+                    )
+                else:
+                    retried_pairs.extend(accepted_pairs)
+                history.append(outcome["history"])
 
         await run_batches(items, "batch_primary")
         retry_items = [item for item in items if (item["claim_id"], item["entity_id"]) in missing]
@@ -633,17 +709,25 @@ async def run(
     if not settings.litellm_api_key:
         raise RuntimeError("LITELLM_API_KEY must be configured for inference v3")
     logger = setup_logging(settings.service_name)
-    pool = await pool_factory(settings.postgres_dsn, min_size=1, max_size=1)
-    client = LiteLlmInferenceClient(
+    pool_size = max(2, settings.analysis_concurrency + settings.llm_max_concurrency)
+    pool = await pool_factory(settings.postgres_dsn, min_size=1, max_size=pool_size)
+    raw_client = LiteLlmInferenceClient(
         settings.litellm_base_url,
         settings.litellm_api_key,
         settings.analysis_model,
         settings.analysis_request_timeout_seconds,
-        settings.analysis_max_output_tokens,
+        settings.analysis_entities_max_output_tokens,
+        settings.analysis_claims_max_output_tokens,
+        settings.analysis_classification_max_output_tokens,
+    )
+    client = LimitedInferenceClient(
+        raw_client, ProviderSlotLimiter(pool, settings.llm_max_concurrency)
     )
     worker = AnalysisWorker(AnalysisJobRepository(pool), client, settings, logger)
     logger.info("analysis worker started", extra={"pipeline_version": "inference_v3_5_2"})
-    try:
+
+    async def worker_loop() -> None:
+        """Lease jobs until shutdown, polling only while this worker is idle."""
         while not stop.is_set():
             if await worker.process_next():
                 continue
@@ -651,8 +735,11 @@ async def run(
                 await asyncio.wait_for(stop.wait(), timeout=settings.analysis_poll_interval_seconds)
             except TimeoutError:
                 continue
+
+    try:
+        await asyncio.gather(*(worker_loop() for _ in range(settings.analysis_concurrency)))
     finally:
-        await client.close()
+        await raw_client.close()
         await pool.close()
 
 

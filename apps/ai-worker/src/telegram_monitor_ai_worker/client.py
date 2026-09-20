@@ -25,11 +25,15 @@ class LiteLlmInferenceClient:
         api_key: str,
         model: str,
         timeout_seconds: int,
-        max_output_tokens: int = 4096,
+        entities_max_output_tokens: int = 1024,
+        claims_max_output_tokens: int = 4096,
+        classification_max_output_tokens: int = 1024,
     ) -> None:
         self._client = AsyncOpenAI(base_url=base_url, api_key=api_key, timeout=timeout_seconds)
         self._model = model
-        self._max_output_tokens = max_output_tokens
+        self._entities_max_output_tokens = entities_max_output_tokens
+        self._claims_max_output_tokens = claims_max_output_tokens
+        self._classification_max_output_tokens = classification_max_output_tokens
 
     async def infer(self, pass_name: PassName, request: dict[str, Any]) -> ModelResponse:
         """Generate one primary pass response as raw JSON text."""
@@ -39,6 +43,7 @@ class LiteLlmInferenceClient:
                 {"role": "system", "content": SYSTEM_PROMPTS[pass_name]},
                 {"role": "user", "content": pass_message(pass_name, request)},
             ],
+            self._max_tokens(pass_name, request),
         )
 
     async def repair(
@@ -59,9 +64,22 @@ class LiteLlmInferenceClient:
                     ),
                 },
             ],
+            self._max_tokens(pass_name, {}),
         )
 
-    async def _request(self, pass_name: PassName, messages: list[dict[str, str]]) -> ModelResponse:
+    def _max_tokens(self, pass_name: PassName, request: dict[str, Any]) -> int:
+        """Return the output budget appropriate for one focused inference pass."""
+        if pass_name == "entities":
+            return self._entities_max_output_tokens
+        if pass_name == "claims":
+            return self._claims_max_output_tokens
+        items = request.get("items", [])
+        item_count = len(items) if isinstance(items, list) else 0
+        return min(128 + item_count * 128, self._classification_max_output_tokens)
+
+    async def _request(
+        self, pass_name: PassName, messages: list[dict[str, str]], max_tokens: int
+    ) -> ModelResponse:
         started = time.monotonic()
         response = await self._client.chat.completions.create(
             model=self._model,
@@ -78,7 +96,7 @@ class LiteLlmInferenceClient:
                 },
             ),
             temperature=0,
-            max_tokens=self._max_output_tokens,
+            max_tokens=max_tokens,
         )
         duration_ms = round((time.monotonic() - started) * 1000)
         content = response.choices[0].message.content if response.choices else None

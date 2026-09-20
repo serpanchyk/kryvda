@@ -97,6 +97,18 @@ async def test_repository_leases_job_and_creates_durable_run() -> None:
     assert "INSERT INTO analysis_runs" in pool.connection.executed[2][0]
 
 
+async def test_repository_finalizes_expired_job_run_before_leasing() -> None:
+    pool = FakePool()
+    repository = AnalysisJobRepository(pool)  # type: ignore[arg-type]
+
+    await repository.lease_next_job(300, 3, "model")
+
+    expiry_query = pool.connection.executed[0][0]
+    assert "WITH expired_jobs" in expiry_query
+    assert "UPDATE analysis_runs AS run" in expiry_query
+    assert "failure_kind = 'lease_expired'" in expiry_query
+
+
 async def test_repository_reads_aliases_cached_pass_and_renews_lease() -> None:
     pool = FakePool()
     repository = AnalysisJobRepository(pool)  # type: ignore[arg-type]

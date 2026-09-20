@@ -84,6 +84,46 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         finally:
             await pool.close()
 
+    @app.get("/analysis/health")
+    async def analysis_health() -> dict[str, object]:
+        """Return the current inference queue and recent run outcome snapshot."""
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            row = await pool.fetchrow(
+                """SELECT
+                       count(*) FILTER (WHERE status = 'pending' AND priority = 'live')
+                           AS pending_live,
+                       count(*) FILTER (WHERE status = 'pending' AND priority = 'backfill')
+                           AS pending_backfill,
+                       count(*) FILTER (WHERE status = 'leased') AS leased,
+                       count(*) FILTER (WHERE status = 'failed') AS failed,
+                       EXTRACT(EPOCH FROM now() - min(available_at) FILTER (
+                           WHERE status = 'pending' AND available_at <= now()
+                       )) AS oldest_pending_seconds
+                   FROM analysis_jobs"""
+            )
+            runs = await pool.fetchrow(
+                """SELECT
+                       max(completed_at) AS last_completed_at,
+                       count(*) FILTER (WHERE status IN (
+                           'completed', 'completed_with_partial_classification',
+                           'completed_with_entity_fallback'
+                       ) AND completed_at >= now() - interval '1 hour') AS completed_last_hour,
+                       count(*) FILTER (WHERE status = 'failed'
+                           AND completed_at >= now() - interval '1 hour') AS failed_last_hour,
+                       count(*) FILTER (WHERE status = 'completed_with_partial_classification'
+                           AND completed_at >= now() - interval '1 hour') AS partial_last_hour
+                   FROM analysis_runs"""
+            )
+            assert row is not None
+            assert runs is not None
+            return {
+                "jobs": dict(row),
+                "runs": dict(runs),
+            }
+        finally:
+            await pool.close()
+
     @app.get("/channel-images/{channel_id}")
     async def channel_image(channel_id: int) -> FileResponse:
         """Serve a monitored channel's current locally stored Telegram avatar.
