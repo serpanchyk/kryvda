@@ -148,10 +148,12 @@ def build_summary(
     first_started_at: datetime | None,
     last_completed_at: datetime | None,
     average_seconds_per_post: float | None,
+    analysis_concurrency: int = 1,
 ) -> dict[str, Any]:
     """Build a serializable operational snapshot and queue ETA.
 
-    The ETA is omitted until a nonzero completion time window is available.
+    The ETA is omitted until a nonzero average duration is available. It excludes idle periods,
+    including operational maintenance windows, and assumes the configured number of worker slots.
 
     Args:
         generated_at: Snapshot creation time.
@@ -164,16 +166,15 @@ def build_summary(
         first_started_at: Start time of the first observed completed run.
         last_completed_at: Completion time of the last observed run.
         average_seconds_per_post: Mean duration of the observed completed runs.
+        analysis_concurrency: Number of concurrently processing worker jobs.
 
     Returns:
         JSON-compatible coverage, queue, throughput, and ETA metadata.
     """
-    elapsed_seconds = (
-        (last_completed_at - first_started_at).total_seconds()
-        if first_started_at is not None and last_completed_at is not None
-        else 0.0
+    del first_started_at, last_completed_at
+    observed_jobs_per_second = (
+        analysis_concurrency / average_seconds_per_post if average_seconds_per_post else None
     )
-    observed_jobs_per_second = completed_runs / elapsed_seconds if elapsed_seconds > 0 else None
     remaining_jobs = queue_statuses.get("pending", 0) + queue_statuses.get("leased", 0)
     eta_seconds = remaining_jobs / observed_jobs_per_second if observed_jobs_per_second else None
     estimated_completion_at = (
@@ -194,6 +195,7 @@ def build_summary(
         "throughput_since_repair": {
             "migration": REPAIR_MIGRATION,
             "completed_runs": completed_runs,
+            "analysis_concurrency": analysis_concurrency,
             "average_seconds_per_post": average_seconds_per_post,
             "observed_jobs_per_second": observed_jobs_per_second,
             "remaining_pending_or_leased_jobs": remaining_jobs,
@@ -289,6 +291,7 @@ async def generate(dsn: str, output: Path) -> dict[str, Any]:
             if throughput["average_seconds_per_post"] is not None
             else None
         ),
+        analysis_concurrency=int(os.environ.get("ANALYSIS_CONCURRENCY", "1")),
     )
     write_output(output, records, summary)
     return summary
