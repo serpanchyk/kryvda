@@ -104,6 +104,9 @@ data and are never included in analytical responses. Each analytical page owns i
 URL. Entity analytics excludes the technical `відсутнє` classification and reports only unique
 claim mentions with positive and negative counts.
 
+The production frontend nginx configuration falls back to `index.html` for unknown paths so
+browser refreshes and direct links to React Router routes such as `/entities/{id}` remain valid.
+
 The experimental annotation editor reads PostgreSQL Post Revisions in read-only transactions
 and provides a Ukrainian form or mutable-JSON import, evidence selection, local drafts, registry
 candidates, and validated golden_v0 exports. JSON import copies a frozen post and a constrained
