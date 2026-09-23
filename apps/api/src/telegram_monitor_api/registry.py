@@ -18,9 +18,19 @@ class RegistryRepository:
         rows = await self._pool.fetch(
             """SELECT entity.id, entity.canonical_name, entity.coarse_type, entity.monitored,
                       COALESCE(array_agg(alias.alias ORDER BY alias.id)
-                      FILTER (WHERE alias.id IS NOT NULL), '{}') AS aliases
+                      FILTER (WHERE alias.id IS NOT NULL), '{}') AS aliases,
+                      count(DISTINCT claim.id) AS claim_count,
+                      count(DISTINCT post.id) AS post_count,
+                      max(post.published_at) AS last_seen_at
                FROM registry_entities AS entity
                LEFT JOIN entity_aliases AS alias ON alias.entity_id = entity.id
+               LEFT JOIN post_entities AS post_entity ON post_entity.registry_entity_id = entity.id
+               LEFT JOIN analysis_runs AS run ON run.id = post_entity.run_id
+                   AND run.status = 'completed'
+               LEFT JOIN claims AS claim ON claim.run_id = run.id
+               LEFT JOIN post_revisions AS revision ON revision.id = run.post_revision_id
+               LEFT JOIN raw_posts AS post ON post.id = revision.raw_post_id
+                   AND post.deleted_at IS NULL AND post.inaccessible_at IS NULL
                WHERE ($1::boolean IS NULL OR entity.monitored = $1)
                GROUP BY entity.id ORDER BY entity.canonical_name""",
             monitored,

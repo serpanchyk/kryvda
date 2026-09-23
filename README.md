@@ -1,4 +1,4 @@
-# Telegram Monitor
+# Кривда
 
 Telegram target-monitoring service for a fixed ЦПК-agreed channel pool. It retains raw posts,
 filters them against a human registry, and runs three focused Mamay passes for actors, atomic

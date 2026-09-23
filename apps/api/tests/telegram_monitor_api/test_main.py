@@ -97,8 +97,11 @@ class FakeAnalytics:
     ) -> list[dict[str, object]]:
         return [{"claim_id": 3, "entity_id": entity_id, "stance": stance}]
 
-    async def channels(self, start: object, end: object) -> list[dict[str, object]]:
-        return [{"id": 2, "title": "Channel"}]
+    async def channels(self, start: object, end: object) -> dict[str, object]:
+        return {"items": [{"id": 2, "title": "Channel"}], "daily": []}
+
+    async def claims(self, *args: object) -> dict[str, object]:
+        return {"items": [], "total": 0}
 
     async def post(self, post_id: int) -> dict[str, object] | None:
         return {"id": post_id, "content": "Evidence"}
@@ -113,7 +116,8 @@ async def test_read_only_investigation_endpoints(monkeypatch: object) -> None:
         assert (await client.get("/entities/4/analytics")).json()["incomplete_posts"] == 1
         evidence = await client.get("/entities/4/evidence", params={"stance": "негативне"})
         assert evidence.json()[0]["claim_id"] == 3
-        assert (await client.get("/channels")).json()[0]["title"] == "Channel"
+        assert (await client.get("/channels")).json()["items"][0]["title"] == "Channel"
+        assert (await client.get("/claims")).json() == {"items": [], "total": 0}
         assert (await client.get("/posts/7")).json()["content"] == "Evidence"
 
 

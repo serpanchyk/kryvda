@@ -2,14 +2,15 @@
 
 ## Current State
 
-The Telegram collection foundation persists an agreed fixed channel pool, raw posts and
+Кривда persists an agreed fixed channel pool, raw posts and
 revisions, current channel avatars, a human-maintained monitored-entity registry, inference-v3.5.1
 jobs, pass diagnostics, candidates, claims and claim-target classifications. Production analysis
 uses deterministic target filtering followed by three focused Mamay passes. The API exposes
 service health, collection health, current-avatar URLs, unauthenticated registry/candidate
 administration, and read-only investigation aggregates. The product UI provides an operational
-dashboard, monitored-entity and channel comparisons, evidence drill-down, and source-post detail;
-registry mutations remain outside the UI.
+dashboard, a full entity registry, channel comparison, evidence drill-down, and source-post detail.
+The Ukrainian UI uses the Кривда brand, shared date ranges, searchable aliases, and read-only
+pipeline and claim analytics; registry mutations remain outside the UI.
 
 ## Service Map
 
@@ -19,7 +20,7 @@ registry mutations remain outside the UI.
 | Telegram scraper | Fixed channel/post/avatar collection and target-filtered job handoff | PostgreSQL, avatar volume |
 | AI worker | Three-pass target inference and deterministic persistence | PostgreSQL, LiteLLM proxy |
 | LiteLLM proxy | Internal OpenAI-compatible model gateway | Lapathoniia AI API |
-| Frontend | Read-only dashboard, entity/channel analysis and source-post evidence | API |
+| Frontend | Кривда dashboard, entity/channel analysis, claims and source-post evidence | API |
 | monitoring-common | Settings, JSON logging, contracts | None |
 
 ## Runtime Decisions

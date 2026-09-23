@@ -67,7 +67,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     """
     settings = settings or ApiSettings()
     logger = setup_logging(settings.service_name)
-    app = FastAPI(title="Telegram Monitor API", version="0.1.0")
+    app = FastAPI(title="Кривда API", version="0.2.0")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.frontend_allowed_origin],
@@ -218,11 +218,42 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     @app.get("/channels")
     async def channels(
         start: datetime | None = None, end: datetime | None = None
-    ) -> list[dict[str, object]]:
+    ) -> dict[str, object]:
         """Return comparable channel analysis profiles."""
         pool = await asyncpg.create_pool(settings.postgres_dsn)
         try:
             return await AnalyticsRepository(pool).channels(start, end)
+        finally:
+            await pool.close()
+
+    @app.get("/claims")
+    async def claims(
+        search: str | None = None,
+        entity_id: int | None = None,
+        channel_id: int | None = None,
+        stance: Literal["позитивне", "негативне", "відсутнє"] | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        sort: Literal["newest", "oldest"] = "newest",
+        limit: int = 20,
+        offset: int = 0,
+    ) -> dict[str, object]:
+        """Return a paginated, filterable list of completed analytical claims."""
+        safe_limit = min(max(limit, 1), 100)
+        safe_offset = max(offset, 0)
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            return await AnalyticsRepository(pool).claims(
+                search,
+                entity_id,
+                channel_id,
+                stance,
+                start,
+                end,
+                sort,
+                safe_limit,
+                safe_offset,
+            )
         finally:
             await pool.close()
 

@@ -1,6 +1,6 @@
 # Product Vision
 
-Telegram Monitor will continuously collect posts from a fixed pool of channels agreed with
+Кривда will continuously collect posts from a fixed pool of channels agreed with
 ЦПК. It will retain raw material, extract and resolve people and organisations, determine
 stance, produce attributed and modalized claims, and make structured results available for
 investigation and later aggregation.
