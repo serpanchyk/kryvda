@@ -6,18 +6,20 @@ The Telegram collection foundation persists an agreed fixed channel pool, raw po
 revisions, current channel avatars, a human-maintained monitored-entity registry, inference-v3.5.1
 jobs, pass diagnostics, candidates, claims and claim-target classifications. Production analysis
 uses deterministic target filtering followed by three focused Mamay passes. The API exposes
-service health, collection health, current-avatar URLs and unauthenticated registry/candidate
-administration; product UI remains a shell.
+service health, collection health, current-avatar URLs, unauthenticated registry/candidate
+administration, and read-only investigation aggregates. The product UI provides an operational
+dashboard, monitored-entity and channel comparisons, evidence drill-down, and source-post detail;
+registry mutations remain outside the UI.
 
 ## Service Map
 
 | Boundary | Responsibility | Dependencies |
 | --- | --- | --- |
-| API | Health, collection status, avatars, registry and candidate review | PostgreSQL, avatar volume |
+| API | Health, collection status, avatars, registry review and read-only investigation data | PostgreSQL, avatar volume |
 | Telegram scraper | Fixed channel/post/avatar collection and target-filtered job handoff | PostgreSQL, avatar volume |
 | AI worker | Three-pass target inference and deterministic persistence | PostgreSQL, LiteLLM proxy |
 | LiteLLM proxy | Internal OpenAI-compatible model gateway | Lapathoniia AI API |
-| Frontend | Future investigation and registry UI | API |
+| Frontend | Read-only dashboard, entity/channel analysis and source-post evidence | API |
 | monitoring-common | Settings, JSON logging, contracts | None |
 
 ## Runtime Decisions

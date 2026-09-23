@@ -73,6 +73,43 @@ async def test_analysis_health_endpoint(monkeypatch: object) -> None:
     }
 
 
+class FakeAnalytics:
+    """Return API-shaped analytical data without a PostgreSQL dependency."""
+
+    def __init__(self, pool: object) -> None:
+        self.pool = pool
+
+    async def dashboard(self, start: object, end: object) -> dict[str, object]:
+        return {"entities": [{"id": 1}], "channels": [{"id": 2}]}
+
+    async def entity(self, entity_id: int, start: object, end: object) -> dict[str, object] | None:
+        return {"entity": {"id": entity_id}, "channels": [], "incomplete_posts": 1}
+
+    async def evidence(
+        self, entity_id: int, channel_id: object, stance: object, start: object, end: object
+    ) -> list[dict[str, object]]:
+        return [{"claim_id": 3, "entity_id": entity_id, "stance": stance}]
+
+    async def channels(self, start: object, end: object) -> list[dict[str, object]]:
+        return [{"id": 2, "title": "Channel"}]
+
+    async def post(self, post_id: int) -> dict[str, object] | None:
+        return {"id": post_id, "content": "Evidence"}
+
+
+async def test_read_only_investigation_endpoints(monkeypatch: object) -> None:
+    monkeypatch.setattr(main.asyncpg, "create_pool", fake_create_pool)  # type: ignore[union-attr]
+    monkeypatch.setattr(main, "AnalyticsRepository", FakeAnalytics)
+    transport = ASGITransport(app=create_app())
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        assert (await client.get("/dashboard")).json()["entities"] == [{"id": 1}]
+        assert (await client.get("/entities/4/analytics")).json()["incomplete_posts"] == 1
+        evidence = await client.get("/entities/4/evidence", params={"stance": "негативне"})
+        assert evidence.json()[0]["claim_id"] == 3
+        assert (await client.get("/channels")).json()[0]["title"] == "Channel"
+        assert (await client.get("/posts/7")).json()["content"] == "Evidence"
+
+
 async def test_channel_image_serves_stored_avatar(tmp_path: Path, monkeypatch: object) -> None:
     (tmp_path / "1.avatar").write_bytes(b"\xff\xd8\xffavatar")
     monkeypatch.setattr(main.asyncpg, "create_pool", fake_create_pool)  # type: ignore[union-attr]

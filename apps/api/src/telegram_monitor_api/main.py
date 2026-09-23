@@ -1,5 +1,6 @@
 """Expose health, collection status, and current channel-avatar HTTP resources."""
 
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -11,6 +12,7 @@ from monitoring_common.config import BaseServiceSettings
 from monitoring_common.logging import setup_logging
 from pydantic import BaseModel, Field
 
+from telegram_monitor_api.analytics import AnalyticsRepository
 from telegram_monitor_api.registry import RegistryRepository
 
 CoarseType = Literal["person", "organization", "state_institution", "media"]
@@ -160,6 +162,71 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         pool = await asyncpg.create_pool(settings.postgres_dsn)
         try:
             return await RegistryRepository(pool).list_entities(monitored)
+        finally:
+            await pool.close()
+
+    @app.get("/dashboard")
+    async def dashboard(
+        start: datetime | None = None, end: datetime | None = None
+    ) -> dict[str, object]:
+        """Return completed-analysis aggregates for the operational dashboard."""
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            return await AnalyticsRepository(pool).dashboard(start, end)
+        finally:
+            await pool.close()
+
+    @app.get("/entities/{entity_id}/analytics")
+    async def entity_analytics(
+        entity_id: int, start: datetime | None = None, end: datetime | None = None
+    ) -> dict[str, object]:
+        """Return an entity profile and its auditable channel comparison."""
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            result = await AnalyticsRepository(pool).entity(entity_id, start, end)
+            if result is None:
+                raise HTTPException(status_code=404, detail="Monitored entity not found")
+            return result
+        finally:
+            await pool.close()
+
+    @app.get("/entities/{entity_id}/evidence")
+    async def entity_evidence(
+        entity_id: int,
+        channel_id: int | None = None,
+        stance: Literal["позитивне", "негативне", "відсутнє"] | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+    ) -> list[dict[str, object]]:
+        """Return claims that support a filtered entity aggregate."""
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            return await AnalyticsRepository(pool).evidence(
+                entity_id, channel_id, stance, start, end
+            )
+        finally:
+            await pool.close()
+
+    @app.get("/channels")
+    async def channels(
+        start: datetime | None = None, end: datetime | None = None
+    ) -> list[dict[str, object]]:
+        """Return comparable channel analysis profiles."""
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            return await AnalyticsRepository(pool).channels(start, end)
+        finally:
+            await pool.close()
+
+    @app.get("/posts/{post_id}")
+    async def post_detail(post_id: int) -> dict[str, object]:
+        """Return a source post and the completed claims extracted from it."""
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            result = await AnalyticsRepository(pool).post(post_id)
+            if result is None:
+                raise HTTPException(status_code=404, detail="Post not found")
+            return result
         finally:
             await pool.close()
 
