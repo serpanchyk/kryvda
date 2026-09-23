@@ -7,6 +7,10 @@ real `.env` files are ignored.
 
 All service logs are JSON and contain timestamp, logger, level, and message fields.
 
+The API permits browser requests only from `FRONTEND_ALLOWED_ORIGIN`, which defaults to the local
+Compose frontend at `http://localhost:5173`. Set it to the deployed frontend origin outside local
+development.
+
 The Telegram scraper requires `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`,
 `TELEGRAM_PHONE_NUMBER`, and `TELEGRAM_SESSION_STRING`. Local values belong in the ignored
 root `.env`; deployments inject the same values from GitHub Secrets. The session string is

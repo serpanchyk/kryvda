@@ -7,6 +7,7 @@ from typing import Literal
 import asyncpg
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from monitoring_common.config import BaseServiceSettings
 from monitoring_common.logging import setup_logging
@@ -52,6 +53,7 @@ class ApiSettings(BaseServiceSettings):
 
     service_name: str = "telegram-monitor-api"
     channel_image_storage_path: Path = Path("/var/lib/telegram-monitor/channel-images")
+    frontend_allowed_origin: str = "http://localhost:5173"
 
 
 def create_app(settings: ApiSettings | None = None) -> FastAPI:
@@ -66,6 +68,12 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     settings = settings or ApiSettings()
     logger = setup_logging(settings.service_name)
     app = FastAPI(title="Telegram Monitor API", version="0.1.0")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[settings.frontend_allowed_origin],
+        allow_methods=["GET", "POST", "PATCH"],
+        allow_headers=["Content-Type"],
+    )
 
     @app.get("/health")
     async def health() -> dict[str, str]:

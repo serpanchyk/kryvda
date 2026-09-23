@@ -14,6 +14,13 @@ async def test_health_endpoint() -> None:
     assert response.json() == {"status": "ok", "service": "telegram-monitor-api"}
 
 
+async def test_api_allows_local_frontend_origin() -> None:
+    """The browser frontend can read API responses from its Compose port."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/health", headers={"Origin": "http://localhost:5173"})
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
 class FakePool:
     async def fetchval(self, query: str, channel_id: int) -> str | None:
         return "image/jpeg" if channel_id == 1 else None
