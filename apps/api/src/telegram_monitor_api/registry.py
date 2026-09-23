@@ -35,7 +35,7 @@ class RegistryRepository:
         sql = _ENTITY_PAGE_SQL.format(order=order)
         args = (search, coarse_type, monitored, start, end, limit, offset)
         rows = await self._pool.fetch(sql, *args)
-        total = await self._pool.fetchval(_ENTITY_PAGE_COUNT_SQL, *args[:5])
+        total = await self._pool.fetchval(_ENTITY_PAGE_COUNT_SQL, *args[:3])
         return {
             "items": [dict(row) for row in rows],
             "total": int(total or 0),

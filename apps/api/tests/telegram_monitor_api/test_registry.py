@@ -104,8 +104,10 @@ async def test_registry_lists_updates_links_and_reviews_candidates() -> None:
     pool = FakePool()
     repository = RegistryRepository(pool)  # type: ignore[arg-type]
 
-    page = await repository.list_entities(None, None, None, None, None, "name", 25, 0)
+    page = await repository.list_entities("Шабунін", "person", True, None, None, "name", 25, 0)
     assert page["items"][0]["id"] == 4
+    count_calls = [args for query, args in pool.connection.executed if "SELECT count(*)" in query]
+    assert count_calls == [("Шабунін", "person", True)]
     assert (await repository.list_candidates("pending"))[0]["id"] == 8
     assert (await repository.list_alias_candidates(4))[0]["id"] == 9
     assert await repository.update_entity(4, None, None, True) == 1
