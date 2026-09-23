@@ -19,7 +19,10 @@ const typeLabel: Record<string, string> = { person: "Людина", organization
 const n = (value: number | undefined) => Number(value ?? 0).toLocaleString("uk-UA");
 const date = (value: string | null | undefined) => value ? new Intl.DateTimeFormat("uk-UA", { day: "2-digit", month: "short" }).format(new Date(value)) : "—";
 
-function rangeFrom(params: URLSearchParams) { const end = params.get("end") ?? new Date().toISOString(); const defaultStart = new Date(); defaultStart.setDate(defaultStart.getDate() - 30); return { start: params.get("start") ?? defaultStart.toISOString(), end }; }
+const defaultEnd = new Date().toISOString();
+const defaultStart = new Date(defaultEnd);
+defaultStart.setDate(defaultStart.getDate() - 30);
+function rangeFrom(params: URLSearchParams) { return { start: params.get("start") ?? defaultStart.toISOString(), end: params.get("end") ?? defaultEnd }; }
 function RangeSelect() { const [params, setParams] = useSearchParams(); const start = params.get("start"); const value = !start ? "30" : [7, 30, 90].find((days) => Math.abs(Date.now() - new Date(start).getTime() - days * 86400000) < 86400000)?.toString() ?? "custom"; const change = (next: string) => { if (next === "custom") return; const now = new Date(); const since = new Date(now); since.setDate(now.getDate() - Number(next)); params.set("start", since.toISOString()); params.set("end", now.toISOString()); setParams(params); }; return <Select value={value} onValueChange={change}><SelectTrigger className="w-40"><CalendarDays className="mr-2 size-4" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="7">Останні 7 днів</SelectItem><SelectItem value="30">Останні 30 днів</SelectItem><SelectItem value="90">Останні 90 днів</SelectItem></SelectContent></Select>; }
 
 function Brand() { return <Link to="/" className="flex items-center gap-2 px-2 font-semibold tracking-tight"><span className="grid size-7 place-items-center rounded-md bg-foreground text-sm font-black text-background">К</span><span>Кривда</span></Link>; }
