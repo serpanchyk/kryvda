@@ -29,18 +29,32 @@ class AnalyticsRepository:
         }
 
     async def entity(
-        self, entity_id: int, start: datetime | None, end: datetime | None
+        self, entity_id: int, start: datetime | None, end: datetime | None, limit: int, offset: int
     ) -> dict[str, Any] | None:
         """Return one registry entity with its evidence and temporal aggregates."""
         entity = await self._pool.fetchrow(_ENTITY_SQL, entity_id)
         if entity is None:
             return None
-        channels = await self._pool.fetch(_ENTITY_CHANNEL_SQL, entity_id, start, end)
+        channels = await self._pool.fetch(
+            _ENTITY_CHANNEL_PAGE_SQL, entity_id, start, end, limit, offset
+        )
+        channel_options = await self._pool.fetch(_ENTITY_CHANNEL_OPTIONS_SQL, entity_id, start, end)
+        channel_total = await self._pool.fetchval(_ENTITY_CHANNEL_COUNT_SQL, entity_id, start, end)
+        summary = await self._pool.fetchrow(_ENTITY_TOTAL_SQL, entity_id, start, end)
         daily = await self._pool.fetch(_ENTITY_DAILY_SQL, entity_id, start, end)
         incomplete = await self._pool.fetchval(_INCOMPLETE_SQL, entity_id, start, end)
         return {
             "entity": dict(entity),
-            "channels": [dict(row) for row in channels],
+            "summary": dict(summary)
+            if summary is not None
+            else {"mention_count": 0, "positive_count": 0, "negative_count": 0},
+            "channels": {
+                "items": [dict(row) for row in channels],
+                "total": int(channel_total or 0),
+                "limit": limit,
+                "offset": offset,
+            },
+            "channel_options": [dict(row) for row in channel_options],
             "daily": [dict(row) for row in daily],
             "incomplete_posts": int(incomplete or 0),
         }
@@ -52,15 +66,33 @@ class AnalyticsRepository:
         stance: str | None,
         start: datetime | None,
         end: datetime | None,
-    ) -> list[dict[str, Any]]:
-        rows = await self._pool.fetch(_EVIDENCE_SQL, entity_id, channel_id, stance, start, end)
-        return [dict(row) for row in rows]
+        limit: int,
+        offset: int,
+    ) -> dict[str, Any]:
+        args = (entity_id, channel_id, stance, start, end, limit, offset)
+        rows = await self._pool.fetch(_EVIDENCE_PAGE_SQL, *args)
+        total = await self._pool.fetchval(_EVIDENCE_COUNT_SQL, *args[:5])
+        return {
+            "items": [dict(row) for row in rows],
+            "total": int(total or 0),
+            "limit": limit,
+            "offset": offset,
+        }
 
-    async def channels(self, start: datetime | None, end: datetime | None) -> dict[str, Any]:
+    async def channels(
+        self, start: datetime | None, end: datetime | None, limit: int, offset: int
+    ) -> dict[str, Any]:
         """Return channel comparison rows and daily activity."""
-        rows = await self._pool.fetch(_CHANNEL_SUMMARY_SQL, start, end)
+        rows = await self._pool.fetch(_CHANNEL_PAGE_SQL, start, end, limit, offset)
+        total = await self._pool.fetchval(_CHANNEL_COUNT_SQL, start, end)
         daily = await self._pool.fetch(_DAILY_SQL, start, end)
-        return {"items": [dict(row) for row in rows], "daily": [dict(row) for row in daily]}
+        return {
+            "items": [dict(row) for row in rows],
+            "total": int(total or 0),
+            "limit": limit,
+            "offset": offset,
+            "daily": [dict(row) for row in daily],
+        }
 
     async def claims(
         self,
@@ -79,7 +111,12 @@ class AnalyticsRepository:
         args = (search, entity_id, channel_id, stance, start, end, limit, offset)
         rows = await self._pool.fetch(_CLAIMS_SQL.format(order=order), *args)
         total = await self._pool.fetchval(_CLAIMS_COUNT_SQL, *args[:6])
-        return {"items": [dict(row) for row in rows], "total": int(total or 0)}
+        return {
+            "items": [dict(row) for row in rows],
+            "total": int(total or 0),
+            "limit": limit,
+            "offset": offset,
+        }
 
     async def post(self, raw_post_id: int) -> dict[str, Any] | None:
         row = await self._pool.fetchrow(_POST_SQL, raw_post_id)
@@ -177,6 +214,8 @@ _CHANNEL_SUMMARY_SQL = (
     + _base("$1", "$2")
     + "GROUP BY channel.id, channel.title, channel.username, channel.avatar_url, channel.status ORDER BY claim_count DESC"
 )
+_CHANNEL_PAGE_SQL = _CHANNEL_SUMMARY_SQL + " LIMIT $3 OFFSET $4"
+_CHANNEL_COUNT_SQL = "SELECT count(DISTINCT channel.id) " + _base("$1", "$2")
 
 _PIPELINE_SQL = """SELECT count(*) FILTER (WHERE status = 'pending' AND priority = 'live') AS pending_live,
     count(*) FILTER (WHERE status = 'pending' AND priority = 'backfill') AS pending_backfill,
@@ -186,35 +225,58 @@ _PIPELINE_SQL = """SELECT count(*) FILTER (WHERE status = 'pending' AND priority
     (SELECT max(completed_at) FROM analysis_runs WHERE status = 'completed') AS last_completed_at
 FROM analysis_jobs"""
 
-_ENTITY_SQL = """SELECT entity.id, entity.canonical_name, entity.coarse_type, entity.monitored,
-    COALESCE(array_agg(alias.alias ORDER BY alias.id) FILTER (WHERE alias.id IS NOT NULL), '{}') AS aliases
-FROM registry_entities AS entity LEFT JOIN entity_aliases AS alias ON alias.entity_id = entity.id
-WHERE entity.id = $1 GROUP BY entity.id"""
+_ENTITY_SQL = """SELECT entity.id, entity.canonical_name, entity.coarse_type, entity.monitored
+FROM registry_entities AS entity WHERE entity.id = $1"""
 
 _ENTITY_CHANNEL_SQL = (
     """SELECT channel.id, channel.title, channel.username, channel.avatar_url,
     channel.status, max(post.published_at) AS last_published_at,
-    count(DISTINCT entity.id) AS entity_count, count(DISTINCT claim.id) AS claim_count,
+    count(DISTINCT entity.id) AS entity_count,
+    count(DISTINCT claim.id) FILTER (WHERE classification.stance IN ('позитивне', 'негативне'))
+        AS claim_count,
     count(DISTINCT post.id) AS post_count,
     count(*) FILTER (WHERE classification.stance = 'позитивне') AS positive_count,
     count(*) FILTER (WHERE classification.stance = 'негативне') AS negative_count,
-    count(*) FILTER (WHERE classification.stance = 'відсутнє') AS absent_count
+    0 AS absent_count
 """
     + _base("$2", "$3")
-    + """ AND entity.id = $1
+    + """ AND entity.id = $1 AND classification.stance IN ('позитивне', 'негативне')
 GROUP BY channel.id, channel.title, channel.username, channel.avatar_url, channel.status
 ORDER BY claim_count DESC"""
+)
+_ENTITY_CHANNEL_PAGE_SQL = _ENTITY_CHANNEL_SQL + " LIMIT $4 OFFSET $5"
+_ENTITY_CHANNEL_COUNT_SQL = (
+    "SELECT count(DISTINCT channel.id) "
+    + _base("$2", "$3")
+    + " AND entity.id = $1 AND classification.stance IN ('позитивне', 'негативне')"
+)
+_ENTITY_CHANNEL_OPTIONS_SQL = (
+    "SELECT DISTINCT channel.id, channel.title "
+    + _base("$2", "$3")
+    + " AND entity.id = $1 AND classification.stance IN ('позитивне', 'негативне') "
+    + "ORDER BY channel.title"
 )
 
 _ENTITY_DAILY_SQL = (
     """SELECT date_trunc('day', post.published_at)::date AS date,
-    count(DISTINCT post.id) AS post_count, count(DISTINCT claim.id) AS claim_count,
+    count(DISTINCT post.id) AS post_count,
+    count(DISTINCT claim.id) FILTER (WHERE classification.stance IN ('позитивне', 'негативне'))
+        AS claim_count,
     count(*) FILTER (WHERE classification.stance = 'позитивне') AS positive_count,
     count(*) FILTER (WHERE classification.stance = 'негативне') AS negative_count,
-    count(*) FILTER (WHERE classification.stance = 'відсутнє') AS absent_count
+    0 AS absent_count
 """
     + _base("$2", "$3")
     + " AND entity.id = $1 GROUP BY 1 ORDER BY 1"
+)
+
+_ENTITY_TOTAL_SQL = (
+    """SELECT count(DISTINCT claim.id) AS mention_count,
+    count(*) FILTER (WHERE classification.stance = 'позитивне') AS positive_count,
+    count(*) FILTER (WHERE classification.stance = 'негативне') AS negative_count
+"""
+    + _base("$2", "$3")
+    + " AND entity.id = $1 AND classification.stance IN ('позитивне', 'негативне')"
 )
 
 _INCOMPLETE_SQL = """SELECT count(DISTINCT post.id) FROM raw_posts AS post
@@ -232,8 +294,16 @@ _EVIDENCE_SQL = (
     post.published_at, channel.id AS channel_id, channel.title AS channel_title
 """
     + _base("$4", "$5")
-    + """ AND entity.id = $1 AND ($2::bigint IS NULL OR channel.id = $2)
+    + """ AND entity.id = $1 AND classification.stance IN ('позитивне', 'негативне')
+  AND ($2::bigint IS NULL OR channel.id = $2)
   AND ($3::text IS NULL OR classification.stance = $3) ORDER BY post.published_at DESC, claim.id DESC"""
+)
+_EVIDENCE_PAGE_SQL = _EVIDENCE_SQL + " LIMIT $6 OFFSET $7"
+_EVIDENCE_COUNT_SQL = (
+    "SELECT count(*) "
+    + _base("$4", "$5")
+    + """ AND entity.id = $1 AND classification.stance IN ('позитивне', 'негативне')
+  AND ($2::bigint IS NULL OR channel.id = $2) AND ($3::text IS NULL OR classification.stance = $3)"""
 )
 
 _CLAIMS_BASE = (

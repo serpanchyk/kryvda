@@ -166,10 +166,21 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         )
 
     @app.get("/entities")
-    async def list_entities(monitored: bool | None = None) -> list[dict[str, object]]:
+    async def list_entities(
+        q: str | None = None,
+        coarse_type: CoarseType | None = None,
+        monitored: bool | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        sort: Literal["name", "mentions", "positive", "negative"] = "name",
+        limit: int = 25,
+        offset: int = 0,
+    ) -> dict[str, object]:
         pool = await asyncpg.create_pool(settings.postgres_dsn)
         try:
-            return await RegistryRepository(pool).list_entities(monitored)
+            return await RegistryRepository(pool).list_entities(
+                q, coarse_type, monitored, start, end, sort, min(max(limit, 1), 100), max(offset, 0)
+            )
         finally:
             await pool.close()
 
@@ -186,12 +197,22 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
 
     @app.get("/entities/{entity_id}/analytics")
     async def entity_analytics(
-        entity_id: int, start: datetime | None = None, end: datetime | None = None
+        entity_id: int,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        limit: int = 25,
+        offset: int = 0,
     ) -> dict[str, object]:
         """Return an entity profile and its auditable channel comparison."""
         pool = await asyncpg.create_pool(settings.postgres_dsn)
         try:
-            result = await AnalyticsRepository(pool).entity(entity_id, start, end)
+            result = await AnalyticsRepository(pool).entity(
+                entity_id,
+                start,
+                end,
+                min(max(limit, 1), 100),
+                max(offset, 0),
+            )
             if result is None:
                 raise HTTPException(status_code=404, detail="Monitored entity not found")
             return result
@@ -202,27 +223,40 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     async def entity_evidence(
         entity_id: int,
         channel_id: int | None = None,
-        stance: Literal["позитивне", "негативне", "відсутнє"] | None = None,
+        stance: Literal["позитивне", "негативне"] | None = None,
         start: datetime | None = None,
         end: datetime | None = None,
-    ) -> list[dict[str, object]]:
+        limit: int = 25,
+        offset: int = 0,
+    ) -> dict[str, object]:
         """Return claims that support a filtered entity aggregate."""
         pool = await asyncpg.create_pool(settings.postgres_dsn)
         try:
             return await AnalyticsRepository(pool).evidence(
-                entity_id, channel_id, stance, start, end
+                entity_id,
+                channel_id,
+                stance,
+                start,
+                end,
+                min(max(limit, 1), 100),
+                max(offset, 0),
             )
         finally:
             await pool.close()
 
     @app.get("/channels")
     async def channels(
-        start: datetime | None = None, end: datetime | None = None
+        start: datetime | None = None,
+        end: datetime | None = None,
+        limit: int = 25,
+        offset: int = 0,
     ) -> dict[str, object]:
         """Return comparable channel analysis profiles."""
         pool = await asyncpg.create_pool(settings.postgres_dsn)
         try:
-            return await AnalyticsRepository(pool).channels(start, end)
+            return await AnalyticsRepository(pool).channels(
+                start, end, min(max(limit, 1), 100), max(offset, 0)
+            )
         finally:
             await pool.close()
 
@@ -235,7 +269,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         start: datetime | None = None,
         end: datetime | None = None,
         sort: Literal["newest", "oldest"] = "newest",
-        limit: int = 20,
+        limit: int = 25,
         offset: int = 0,
     ) -> dict[str, object]:
         """Return a paginated, filterable list of completed analytical claims."""

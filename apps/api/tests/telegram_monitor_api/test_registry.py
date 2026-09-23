@@ -74,8 +74,8 @@ class FakePool:
         yield self.connection
 
     async def fetch(self, query: str, *args: object) -> list[dict[str, Any]]:
-        if "array_agg" in query:
-            return [{"id": 4, "canonical_name": "Шабунін", "aliases": ["Шабунін"]}]
+        if "mention_count" in query:
+            return [{"id": 4, "canonical_name": "Шабунін", "mention_count": 1}]
         if "candidate_entities" in query:
             return [{"id": 8, "status": args[0]}]
         return [{"id": 9, "surface_form": "Шабунін"}]
@@ -104,7 +104,8 @@ async def test_registry_lists_updates_links_and_reviews_candidates() -> None:
     pool = FakePool()
     repository = RegistryRepository(pool)  # type: ignore[arg-type]
 
-    assert (await repository.list_entities())[0]["id"] == 4
+    page = await repository.list_entities(None, None, None, None, None, "name", 25, 0)
+    assert page["items"][0]["id"] == 4
     assert (await repository.list_candidates("pending"))[0]["id"] == 8
     assert (await repository.list_alias_candidates(4))[0]["id"] == 9
     assert await repository.update_entity(4, None, None, True) == 1

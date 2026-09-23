@@ -97,6 +97,13 @@ pipeline and claim analytics; registry mutations remain outside the UI.
 
 ## Documentation
 
+The Kryvda investigation UI uses server-side offset pagination (25 records by default) for
+entity, channel, claim, and entity-evidence lists. Registry aliases remain search-only internal
+data and are never included in analytical responses. Each analytical page owns its date range:
+7, 30, and 90-day presets, all time, and a custom inclusive calendar range are encoded in the
+URL. Entity analytics excludes the technical `відсутнє` classification and reports only unique
+claim mentions with positive and negative counts.
+
 The experimental annotation editor reads PostgreSQL Post Revisions in read-only transactions
 and provides a Ukrainian form or mutable-JSON import, evidence selection, local drafts, registry
 candidates, and validated golden_v0 exports. JSON import copies a frozen post and a constrained

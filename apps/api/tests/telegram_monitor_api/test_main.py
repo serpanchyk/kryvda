@@ -89,19 +89,60 @@ class FakeAnalytics:
     async def dashboard(self, start: object, end: object) -> dict[str, object]:
         return {"entities": [{"id": 1}], "channels": [{"id": 2}]}
 
-    async def entity(self, entity_id: int, start: object, end: object) -> dict[str, object] | None:
-        return {"entity": {"id": entity_id}, "channels": [], "incomplete_posts": 1}
+    async def entity(
+        self,
+        entity_id: int,
+        start: object,
+        end: object,
+        limit: int,
+        offset: int,
+    ) -> dict[str, object] | None:
+        return {
+            "entity": {"id": entity_id},
+            "summary": {},
+            "channels": {
+                "items": [],
+                "total": 0,
+                "limit": limit,
+                "offset": offset,
+            },
+            "incomplete_posts": 1,
+        }
 
     async def evidence(
-        self, entity_id: int, channel_id: object, stance: object, start: object, end: object
-    ) -> list[dict[str, object]]:
-        return [{"claim_id": 3, "entity_id": entity_id, "stance": stance}]
+        self,
+        entity_id: int,
+        channel_id: object,
+        stance: object,
+        start: object,
+        end: object,
+        limit: int,
+        offset: int,
+    ) -> dict[str, object]:
+        return {
+            "items": [{"claim_id": 3, "entity_id": entity_id, "stance": stance}],
+            "total": 1,
+            "limit": limit,
+            "offset": offset,
+        }
 
-    async def channels(self, start: object, end: object) -> dict[str, object]:
-        return {"items": [{"id": 2, "title": "Channel"}], "daily": []}
+    async def channels(
+        self,
+        start: object,
+        end: object,
+        limit: int,
+        offset: int,
+    ) -> dict[str, object]:
+        return {
+            "items": [{"id": 2, "title": "Channel"}],
+            "daily": [],
+            "total": 1,
+            "limit": limit,
+            "offset": offset,
+        }
 
     async def claims(self, *args: object) -> dict[str, object]:
-        return {"items": [], "total": 0}
+        return {"items": [], "total": 0, "limit": 25, "offset": 0}
 
     async def post(self, post_id: int) -> dict[str, object] | None:
         return {"id": post_id, "content": "Evidence"}
@@ -115,9 +156,14 @@ async def test_read_only_investigation_endpoints(monkeypatch: object) -> None:
         assert (await client.get("/dashboard")).json()["entities"] == [{"id": 1}]
         assert (await client.get("/entities/4/analytics")).json()["incomplete_posts"] == 1
         evidence = await client.get("/entities/4/evidence", params={"stance": "негативне"})
-        assert evidence.json()[0]["claim_id"] == 3
+        assert evidence.json()["items"][0]["claim_id"] == 3
         assert (await client.get("/channels")).json()["items"][0]["title"] == "Channel"
-        assert (await client.get("/claims")).json() == {"items": [], "total": 0}
+        assert (await client.get("/claims")).json() == {
+            "items": [],
+            "total": 0,
+            "limit": 25,
+            "offset": 0,
+        }
         assert (await client.get("/posts/7")).json()["content"] == "Evidence"
 
 
@@ -149,8 +195,8 @@ class FakeRegistry:
     def __init__(self, pool: object) -> None:
         self.pool = pool
 
-    async def list_entities(self, monitored: bool | None) -> list[dict[str, object]]:
-        return [{"id": 1, "monitored": monitored}]
+    async def list_entities(self, *args: object) -> dict[str, object]:
+        return {"items": [{"id": 1}], "total": 1, "limit": 25, "offset": 0}
 
     async def create_entity(
         self, name: str, kind: str, aliases: list[str], monitored: bool
@@ -193,7 +239,7 @@ async def test_registry_and_candidate_admin_endpoints(monkeypatch: object) -> No
     }
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        assert (await client.get("/entities?monitored=true")).json()[0]["id"] == 1
+        assert (await client.get("/entities?monitored=true")).json()["items"][0]["id"] == 1
         assert (await client.post("/entities", json=entity)).json()["backfill_jobs_enqueued"] == 2
         assert (await client.patch("/entities/4", json={"monitored": True})).json()[
             "backfill_jobs_enqueued"

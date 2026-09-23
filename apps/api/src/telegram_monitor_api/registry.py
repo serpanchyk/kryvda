@@ -1,6 +1,7 @@
 """Registry, candidate review, and deterministic backfill persistence."""
 
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Any
 
 import asyncpg
@@ -13,29 +14,34 @@ class RegistryRepository:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
 
-    async def list_entities(self, monitored: bool | None = None) -> list[dict[str, Any]]:
-        """Return registry entities with approved aliases."""
-        rows = await self._pool.fetch(
-            """SELECT entity.id, entity.canonical_name, entity.coarse_type, entity.monitored,
-                      COALESCE(array_agg(alias.alias ORDER BY alias.id)
-                      FILTER (WHERE alias.id IS NOT NULL), '{}') AS aliases,
-                      count(DISTINCT claim.id) AS claim_count,
-                      count(DISTINCT post.id) AS post_count,
-                      max(post.published_at) AS last_seen_at
-               FROM registry_entities AS entity
-               LEFT JOIN entity_aliases AS alias ON alias.entity_id = entity.id
-               LEFT JOIN post_entities AS post_entity ON post_entity.registry_entity_id = entity.id
-               LEFT JOIN analysis_runs AS run ON run.id = post_entity.run_id
-                   AND run.status = 'completed'
-               LEFT JOIN claims AS claim ON claim.run_id = run.id
-               LEFT JOIN post_revisions AS revision ON revision.id = run.post_revision_id
-               LEFT JOIN raw_posts AS post ON post.id = revision.raw_post_id
-                   AND post.deleted_at IS NULL AND post.inaccessible_at IS NULL
-               WHERE ($1::boolean IS NULL OR entity.monitored = $1)
-               GROUP BY entity.id ORDER BY entity.canonical_name""",
-            monitored,
-        )
-        return [dict(row) for row in rows]
+    async def list_entities(
+        self,
+        search: str | None,
+        coarse_type: str | None,
+        monitored: bool | None,
+        start: datetime | None,
+        end: datetime | None,
+        sort: str,
+        limit: int,
+        offset: int,
+    ) -> dict[str, Any]:
+        """Return one registry page while keeping aliases internal to search."""
+        order = {
+            "name": "canonical_name ASC",
+            "mentions": "mention_count DESC, canonical_name ASC",
+            "positive": "positive_count DESC, canonical_name ASC",
+            "negative": "negative_count DESC, canonical_name ASC",
+        }.get(sort, "canonical_name ASC")
+        sql = _ENTITY_PAGE_SQL.format(order=order)
+        args = (search, coarse_type, monitored, start, end, limit, offset)
+        rows = await self._pool.fetch(sql, *args)
+        total = await self._pool.fetchval(_ENTITY_PAGE_COUNT_SQL, *args[:5])
+        return {
+            "items": [dict(row) for row in rows],
+            "total": int(total or 0),
+            "limit": limit,
+            "offset": offset,
+        }
 
     async def create_entity(
         self,
@@ -270,3 +276,47 @@ def _unique_aliases(canonical_name: str, aliases: Sequence[str]) -> list[str]:
             result.append(stripped)
             seen.add(normalized)
     return result
+
+
+_ENTITY_PAGE_FILTER = """
+WHERE ($1::text IS NULL OR entity.canonical_name ILIKE '%' || $1 || '%'
+       OR EXISTS (SELECT 1 FROM entity_aliases AS alias
+                  WHERE alias.entity_id = entity.id AND alias.alias ILIKE '%' || $1 || '%'))
+  AND ($2::text IS NULL OR entity.coarse_type = $2)
+  AND ($3::boolean IS NULL OR entity.monitored = $3)
+"""
+
+_ENTITY_PAGE_SQL = (
+    """
+SELECT entity.id, entity.canonical_name, entity.coarse_type, entity.monitored,
+       count(DISTINCT claim.id) FILTER (
+           WHERE post.id IS NOT NULL
+             AND classification.stance IN ('позитивне', 'негативне')
+       ) AS mention_count,
+       count(*) FILTER (WHERE post.id IS NOT NULL AND classification.stance = 'позитивне')
+           AS positive_count,
+       count(*) FILTER (WHERE post.id IS NOT NULL AND classification.stance = 'негативне')
+           AS negative_count
+"""
+    + """
+FROM registry_entities AS entity
+LEFT JOIN post_entities AS post_entity ON post_entity.registry_entity_id = entity.id
+LEFT JOIN analysis_runs AS run ON run.id = post_entity.run_id AND run.status = 'completed'
+LEFT JOIN claims AS claim ON claim.run_id = run.id
+LEFT JOIN claim_target_classifications AS classification
+    ON classification.claim_id = claim.id AND classification.post_entity_id = post_entity.id
+LEFT JOIN post_revisions AS revision ON revision.id = run.post_revision_id
+LEFT JOIN raw_posts AS post ON post.id = revision.raw_post_id
+    AND post.deleted_at IS NULL AND post.inaccessible_at IS NULL
+    AND ($4::timestamptz IS NULL OR post.published_at >= $4)
+    AND ($5::timestamptz IS NULL OR post.published_at < $5)
+"""
+    + _ENTITY_PAGE_FILTER
+    + """
+GROUP BY entity.id
+ORDER BY {order}
+LIMIT $6 OFFSET $7
+"""
+)
+
+_ENTITY_PAGE_COUNT_SQL = "SELECT count(*) FROM registry_entities AS entity " + _ENTITY_PAGE_FILTER
