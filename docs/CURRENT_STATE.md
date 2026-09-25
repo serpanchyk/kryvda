@@ -102,7 +102,10 @@ entity, channel, claim, and entity-evidence lists. Registry aliases remain searc
 data and are never included in analytical responses. Each analytical page owns its date range:
 7, 30, and 90-day presets, all time, and a custom inclusive calendar range are encoded in the
 URL. Entity analytics excludes the technical `відсутнє` classification and reports only unique
-claim mentions with positive and negative counts.
+claim mentions with positive and negative counts. Its entity page also shows six fixed attack-rhetoric
+categories. Their shares are calculated from all assigned rhetoric labels (rather than unique claims),
+and a selected category filters the paginated evidence drill-down; the shared channel filter affects
+both that chart and evidence list.
 
 The production frontend nginx configuration falls back to `index.html` for unknown paths so
 browser refreshes and direct links to React Router routes such as `/entities/{id}` remain valid.

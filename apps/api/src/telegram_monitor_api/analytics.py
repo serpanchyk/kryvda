@@ -29,7 +29,13 @@ class AnalyticsRepository:
         }
 
     async def entity(
-        self, entity_id: int, start: datetime | None, end: datetime | None, limit: int, offset: int
+        self,
+        entity_id: int,
+        channel_id: int | None,
+        start: datetime | None,
+        end: datetime | None,
+        limit: int,
+        offset: int,
     ) -> dict[str, Any] | None:
         """Return one registry entity with its evidence and temporal aggregates."""
         entity = await self._pool.fetchrow(_ENTITY_SQL, entity_id)
@@ -43,6 +49,7 @@ class AnalyticsRepository:
         summary = await self._pool.fetchrow(_ENTITY_TOTAL_SQL, entity_id, start, end)
         daily = await self._pool.fetch(_ENTITY_DAILY_SQL, entity_id, start, end)
         incomplete = await self._pool.fetchval(_INCOMPLETE_SQL, entity_id, start, end)
+        rhetoric = await self._pool.fetch(_ENTITY_RHETORIC_SQL, entity_id, channel_id, start, end)
         return {
             "entity": dict(entity),
             "summary": dict(summary)
@@ -55,6 +62,10 @@ class AnalyticsRepository:
                 "offset": offset,
             },
             "channel_options": [dict(row) for row in channel_options],
+            "rhetoric": [
+                {"key": str(row["key"]), "count": int(row["count"]), "share": float(row["share"])}
+                for row in rhetoric
+            ],
             "daily": [dict(row) for row in daily],
             "incomplete_posts": int(incomplete or 0),
         }
@@ -64,12 +75,13 @@ class AnalyticsRepository:
         entity_id: int,
         channel_id: int | None,
         stance: str | None,
+        rhetoric: str | None,
         start: datetime | None,
         end: datetime | None,
         limit: int,
         offset: int,
     ) -> dict[str, Any]:
-        args = (entity_id, channel_id, stance, start, end, limit, offset)
+        args = (entity_id, channel_id, stance, rhetoric, start, end, limit, offset)
         rows = await self._pool.fetch(_EVIDENCE_PAGE_SQL, *args)
         total = await self._pool.fetchval(_EVIDENCE_COUNT_SQL, *args[:5])
         return {
@@ -279,6 +291,43 @@ _ENTITY_TOTAL_SQL = (
     + " AND entity.id = $1 AND classification.stance IN ('позитивне', 'негативне')"
 )
 
+_ENTITY_RHETORIC_SQL = """WITH labels(key, ordinal) AS (
+    VALUES
+        ('корупція_або_особиста_вигода', 1),
+        ('злочинна_або_незаконна_поведінка', 2),
+        ('делегітимізація', 3),
+        ('лицемірство_або_подвійні_стандарти', 4),
+        ('висміювання_або_особиста_образа', 5),
+        ('зовнішній_контроль_або_нелояльність', 6)
+), counts AS (
+    SELECT feature.key, count(*) AS count
+    FROM claim_target_classifications AS classification
+    JOIN claims AS claim ON claim.id = classification.claim_id
+    JOIN post_entities AS post_entity ON post_entity.id = classification.post_entity_id
+    JOIN analysis_runs AS run ON run.id = claim.run_id AND run.status = 'completed'
+    JOIN post_revisions AS revision ON revision.id = run.post_revision_id
+    JOIN raw_posts AS post ON post.id = revision.raw_post_id
+    JOIN monitored_channels AS channel ON channel.id = post.channel_id
+    JOIN registry_entities AS entity ON entity.id = post_entity.registry_entity_id
+    CROSS JOIN LATERAL jsonb_array_elements_text(classification.rhetoric) AS feature(key)
+    WHERE post.deleted_at IS NULL AND post.inaccessible_at IS NULL
+      AND revision.id = (SELECT latest.id FROM post_revisions AS latest
+                         WHERE latest.raw_post_id = post.id
+                         ORDER BY latest.revision_number DESC LIMIT 1)
+      AND entity.id = $1
+      AND ($2::bigint IS NULL OR channel.id = $2)
+      AND ($3::timestamptz IS NULL OR post.published_at >= $3)
+      AND ($4::timestamptz IS NULL OR post.published_at < $4)
+    GROUP BY feature.key
+)
+SELECT labels.key, COALESCE(counts.count, 0)::bigint AS count,
+       CASE WHEN sum(COALESCE(counts.count, 0)) OVER () = 0 THEN 0::double precision
+            ELSE COALESCE(counts.count, 0)::double precision
+                 / sum(COALESCE(counts.count, 0)) OVER () END AS share
+FROM labels
+LEFT JOIN counts ON counts.key = labels.key
+ORDER BY labels.ordinal"""
+
 _INCOMPLETE_SQL = """SELECT count(DISTINCT post.id) FROM raw_posts AS post
 JOIN post_revisions AS revision ON revision.raw_post_id = post.id
 JOIN analysis_runs AS run ON run.post_revision_id = revision.id
@@ -293,17 +342,21 @@ _EVIDENCE_SQL = (
     claim.epistemic_status, classification.stance, classification.rhetoric, post.id AS post_id,
     post.published_at, channel.id AS channel_id, channel.title AS channel_title
 """
-    + _base("$4", "$5")
+    + _base("$5", "$6")
     + """ AND entity.id = $1 AND classification.stance IN ('позитивне', 'негативне')
   AND ($2::bigint IS NULL OR channel.id = $2)
-  AND ($3::text IS NULL OR classification.stance = $3) ORDER BY post.published_at DESC, claim.id DESC"""
+  AND ($3::text IS NULL OR classification.stance = $3)
+  AND ($4::text IS NULL OR classification.rhetoric ? $4)
+  ORDER BY post.published_at DESC, claim.id DESC"""
 )
-_EVIDENCE_PAGE_SQL = _EVIDENCE_SQL + " LIMIT $6 OFFSET $7"
+_EVIDENCE_PAGE_SQL = _EVIDENCE_SQL + " LIMIT $7 OFFSET $8"
 _EVIDENCE_COUNT_SQL = (
     "SELECT count(*) "
-    + _base("$4", "$5")
+    + _base("$5", "$6")
     + """ AND entity.id = $1 AND classification.stance IN ('позитивне', 'негативне')
-  AND ($2::bigint IS NULL OR channel.id = $2) AND ($3::text IS NULL OR classification.stance = $3)"""
+  AND ($2::bigint IS NULL OR channel.id = $2)
+  AND ($3::text IS NULL OR classification.stance = $3)
+  AND ($4::text IS NULL OR classification.rhetoric ? $4)"""
 )
 
 _CLAIMS_BASE = (

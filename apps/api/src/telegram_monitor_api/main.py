@@ -17,6 +17,14 @@ from telegram_monitor_api.analytics import AnalyticsRepository
 from telegram_monitor_api.registry import RegistryRepository
 
 CoarseType = Literal["person", "organization", "state_institution", "media"]
+RhetoricLabel = Literal[
+    "корупція_або_особиста_вигода",
+    "злочинна_або_незаконна_поведінка",
+    "делегітимізація",
+    "лицемірство_або_подвійні_стандарти",
+    "висміювання_або_особиста_образа",
+    "зовнішній_контроль_або_нелояльність",
+]
 
 
 class EntityCreate(BaseModel):
@@ -198,6 +206,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     @app.get("/entities/{entity_id}/analytics")
     async def entity_analytics(
         entity_id: int,
+        channel_id: int | None = None,
         start: datetime | None = None,
         end: datetime | None = None,
         limit: int = 25,
@@ -208,6 +217,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         try:
             result = await AnalyticsRepository(pool).entity(
                 entity_id,
+                channel_id,
                 start,
                 end,
                 min(max(limit, 1), 100),
@@ -224,6 +234,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         entity_id: int,
         channel_id: int | None = None,
         stance: Literal["позитивне", "негативне"] | None = None,
+        rhetoric: RhetoricLabel | None = None,
         start: datetime | None = None,
         end: datetime | None = None,
         limit: int = 25,
@@ -236,6 +247,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
                 entity_id,
                 channel_id,
                 stance,
+                rhetoric,
                 start,
                 end,
                 min(max(limit, 1), 100),

@@ -83,6 +83,9 @@ async def test_analysis_health_endpoint(monkeypatch: object) -> None:
 class FakeAnalytics:
     """Return API-shaped analytical data without a PostgreSQL dependency."""
 
+    last_entity_args: tuple[object, ...] | None = None
+    last_evidence_args: tuple[object, ...] | None = None
+
     def __init__(self, pool: object) -> None:
         self.pool = pool
 
@@ -92,11 +95,13 @@ class FakeAnalytics:
     async def entity(
         self,
         entity_id: int,
+        channel_id: object,
         start: object,
         end: object,
         limit: int,
         offset: int,
     ) -> dict[str, object] | None:
+        type(self).last_entity_args = (entity_id, channel_id, start, end, limit, offset)
         return {
             "entity": {"id": entity_id},
             "summary": {},
@@ -107,6 +112,7 @@ class FakeAnalytics:
                 "offset": offset,
             },
             "incomplete_posts": 1,
+            "rhetoric": [],
         }
 
     async def evidence(
@@ -114,11 +120,22 @@ class FakeAnalytics:
         entity_id: int,
         channel_id: object,
         stance: object,
+        rhetoric: object,
         start: object,
         end: object,
         limit: int,
         offset: int,
     ) -> dict[str, object]:
+        type(self).last_evidence_args = (
+            entity_id,
+            channel_id,
+            stance,
+            rhetoric,
+            start,
+            end,
+            limit,
+            offset,
+        )
         return {
             "items": [{"claim_id": 3, "entity_id": entity_id, "stance": stance}],
             "total": 1,
@@ -154,9 +171,29 @@ async def test_read_only_investigation_endpoints(monkeypatch: object) -> None:
     transport = ASGITransport(app=create_app())
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         assert (await client.get("/dashboard")).json()["entities"] == [{"id": 1}]
-        assert (await client.get("/entities/4/analytics")).json()["incomplete_posts"] == 1
-        evidence = await client.get("/entities/4/evidence", params={"stance": "негативне"})
+        assert (
+            await client.get(
+                "/entities/4/analytics", params={"channel_id": 7, "limit": 0, "offset": -1}
+            )
+        ).json()["incomplete_posts"] == 1
+        assert FakeAnalytics.last_entity_args == (4, 7, None, None, 1, 0)
+        evidence = await client.get(
+            "/entities/4/evidence",
+            params={"stance": "негативне", "rhetoric": "делегітимізація", "limit": 0, "offset": -1},
+        )
+        assert FakeAnalytics.last_evidence_args == (
+            4,
+            None,
+            "негативне",
+            "делегітимізація",
+            None,
+            None,
+            1,
+            0,
+        )
         assert evidence.json()["items"][0]["claim_id"] == 3
+        invalid_rhetoric = await client.get("/entities/4/evidence", params={"rhetoric": "invalid"})
+        assert invalid_rhetoric.status_code == 422
         assert (await client.get("/channels")).json()["items"][0]["title"] == "Channel"
         assert (await client.get("/claims")).json() == {
             "items": [],
