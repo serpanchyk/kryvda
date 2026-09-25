@@ -121,6 +121,8 @@ class FakeAnalytics:
         channel_id: object,
         stance: object,
         rhetoric: object,
+        epistemic_status: object,
+        source_kind: object,
         start: object,
         end: object,
         limit: int,
@@ -131,6 +133,8 @@ class FakeAnalytics:
             channel_id,
             stance,
             rhetoric,
+            epistemic_status,
+            source_kind,
             start,
             end,
             limit,
@@ -158,7 +162,19 @@ class FakeAnalytics:
             "offset": offset,
         }
 
+    async def channel(
+        self,
+        channel_id: int,
+        start: object,
+        end: object,
+        limit: int,
+        offset: int,
+    ) -> dict[str, object] | None:
+        type(self).last_channel_args = (channel_id, start, end, limit, offset)
+        return None if channel_id == 404 else {"channel": {"id": channel_id}}
+
     async def claims(self, *args: object) -> dict[str, object]:
+        type(self).last_claim_args = args
         return {"items": [], "total": 0, "limit": 25, "offset": 0}
 
     async def post(self, post_id: int) -> dict[str, object] | None:
@@ -179,13 +195,22 @@ async def test_read_only_investigation_endpoints(monkeypatch: object) -> None:
         assert FakeAnalytics.last_entity_args == (4, 7, None, None, 1, 0)
         evidence = await client.get(
             "/entities/4/evidence",
-            params={"stance": "негативне", "rhetoric": "делегітимізація", "limit": 0, "offset": -1},
+            params={
+                "stance": "негативне",
+                "rhetoric": "делегітимізація",
+                "epistemic_status": "питання",
+                "source_kind": "named_entity",
+                "limit": 0,
+                "offset": -1,
+            },
         )
         assert FakeAnalytics.last_evidence_args == (
             4,
             None,
             "негативне",
             "делегітимізація",
+            "питання",
+            "named_entity",
             None,
             None,
             1,
@@ -195,12 +220,26 @@ async def test_read_only_investigation_endpoints(monkeypatch: object) -> None:
         invalid_rhetoric = await client.get("/entities/4/evidence", params={"rhetoric": "invalid"})
         assert invalid_rhetoric.status_code == 422
         assert (await client.get("/channels")).json()["items"][0]["title"] == "Channel"
-        assert (await client.get("/claims")).json() == {
-            "items": [],
-            "total": 0,
-            "limit": 25,
-            "offset": 0,
-        }
+        assert (await client.get("/channels/3/analytics", params={"limit": 0})).json()["channel"][
+            "id"
+        ] == 3
+        assert FakeAnalytics.last_channel_args == (3, None, None, 1, 0)
+        assert (await client.get("/channels/404/analytics")).status_code == 404
+        assert (
+            await client.get(
+                "/claims",
+                params={
+                    "rhetoric": "делегітимізація",
+                    "epistemic_status": "питання",
+                    "source_kind": "named_entity",
+                },
+            )
+        ).json() == {"items": [], "total": 0, "limit": 25, "offset": 0}
+        assert FakeAnalytics.last_claim_args[4:7] == (
+            "делегітимізація",
+            "питання",
+            "named_entity",
+        )
         assert (await client.get("/posts/7")).json()["content"] == "Evidence"
 
 

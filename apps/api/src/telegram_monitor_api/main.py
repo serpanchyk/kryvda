@@ -17,6 +17,8 @@ from telegram_monitor_api.analytics import AnalyticsRepository
 from telegram_monitor_api.registry import RegistryRepository
 
 CoarseType = Literal["person", "organization", "state_institution", "media"]
+EpistemicStatus = Literal["ствердження", "невпевнене", "питання"]
+SourceKind = Literal["channel_editorial", "named_entity", "external_unnamed"]
 RhetoricLabel = Literal[
     "корупція_або_особиста_вигода",
     "злочинна_або_незаконна_поведінка",
@@ -235,6 +237,8 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         channel_id: int | None = None,
         stance: Literal["позитивне", "негативне"] | None = None,
         rhetoric: RhetoricLabel | None = None,
+        epistemic_status: EpistemicStatus | None = None,
+        source_kind: SourceKind | None = None,
         start: datetime | None = None,
         end: datetime | None = None,
         limit: int = 25,
@@ -248,6 +252,8 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
                 channel_id,
                 stance,
                 rhetoric,
+                epistemic_status,
+                source_kind,
                 start,
                 end,
                 min(max(limit, 1), 100),
@@ -272,12 +278,39 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         finally:
             await pool.close()
 
+    @app.get("/channels/{channel_id}/analytics")
+    async def channel_analytics(
+        channel_id: int,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> dict[str, object]:
+        """Return one channel analytics profile."""
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            result = await AnalyticsRepository(pool).channel(
+                channel_id,
+                start,
+                end,
+                min(max(limit, 1), 100),
+                max(offset, 0),
+            )
+            if result is None:
+                raise HTTPException(status_code=404, detail="Channel not found")
+            return result
+        finally:
+            await pool.close()
+
     @app.get("/claims")
     async def claims(
         search: str | None = None,
         entity_id: int | None = None,
         channel_id: int | None = None,
         stance: Literal["позитивне", "негативне", "відсутнє"] | None = None,
+        rhetoric: RhetoricLabel | None = None,
+        epistemic_status: EpistemicStatus | None = None,
+        source_kind: SourceKind | None = None,
         start: datetime | None = None,
         end: datetime | None = None,
         sort: Literal["newest", "oldest"] = "newest",
@@ -294,6 +327,9 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
                 entity_id,
                 channel_id,
                 stance,
+                rhetoric,
+                epistemic_status,
+                source_kind,
                 start,
                 end,
                 sort,

@@ -97,15 +97,22 @@ pipeline and claim analytics; registry mutations remain outside the UI.
 
 ## Documentation
 
-The Kryvda investigation UI uses server-side offset pagination (25 records by default) for
-entity, channel, claim, and entity-evidence lists. Registry aliases remain search-only internal
-data and are never included in analytical responses. Each analytical page owns its date range:
-7, 30, and 90-day presets, all time, and a custom inclusive calendar range are encoded in the
-URL. Entity analytics excludes the technical `відсутнє` classification and reports only unique
-claim mentions with positive and negative counts. Its entity page also shows six fixed attack-rhetoric
-categories. Their shares are calculated from all assigned rhetoric labels (rather than unique claims),
-and a selected category filters the paginated evidence drill-down; the shared channel filter affects
-both that chart and evidence list.
+The Kryvda investigation UI uses an editorial newsroom layout with a responsive top masthead,
+self-contained visualization sections, Source Serif 4 headlines, and Manrope data typography.
+The overview leads with negative classifications, temporal activity, attacked-entity rankings,
+channel comparisons, and auditable claims. Entity profiles add stance-over-time, epistemic-status,
+and attribution distributions. Channel rows now open `/channels/{id}` profiles with activity,
+stance, entity, rhetoric, epistemic, attribution, and recent-claim analysis. Post detail uses a
+source/analysis split view and exposes evidence, target, stance, rhetoric, epistemic status, and
+attribution for every extracted claim.
+
+Analytical lists use server-side offset pagination (25 records by default). Registry aliases remain
+search-only internal data and are never included in analytical responses. The shared 7, 30, and
+90-day presets, all-time option, and custom inclusive calendar range are encoded in the URL and
+preserved across top-level navigation. Entity and channel chart selections are also URL-backed and
+filter their evidence or claims. Entity analytics excludes the technical `відсутнє` classification
+from its evaluative totals. Rhetoric shares count assigned labels, while epistemic and attribution
+shares count distinct claims; the interface labels these denominators explicitly.
 
 The production frontend nginx configuration falls back to `index.html` for unknown paths so
 browser refreshes and direct links to React Router routes such as `/entities/{id}` remain valid.
