@@ -11,10 +11,15 @@ test("builds editorial profile and evidence filter URLs", () => {
   const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
   vi.stubGlobal("fetch", fetchMock);
 
-  void apiClient.entity("4", dates, 0, "7");
-  void apiClient.evidence(
-    "4", dates, "7", undefined, "делегітимізація", 25, "питання", "named_entity",
-  );
+  void apiClient.entity("4", dates, {
+    channel_id: "7", stance: "негативне", source_entity_id: "12",
+    attribution_mode: "quoted_sources", offset: 0,
+  });
+  void apiClient.evidence("4", dates, {
+    channel_id: "7", rhetoric: "делегітимізація", epistemic_status: "питання",
+    source_kind: "named_entity", source_entity_id: "12", attribution_mode: "quoted_sources",
+    offset: 25,
+  });
   void apiClient.channel("7", dates, 25);
   void apiClient.claims(dates, { channel_id: "7", source_kind: "channel_editorial" });
 
@@ -26,7 +31,10 @@ test("builds editorial profile and evidence filter URLs", () => {
   expect(fetchMock.mock.calls[1][0]).toContain(
     "epistemic_status=%D0%BF%D0%B8%D1%82%D0%B0%D0%BD%D0%BD%D1%8F",
   );
+  expect(fetchMock.mock.calls[0][0]).toContain("source_entity_id=12");
+  expect(fetchMock.mock.calls[0][0]).toContain("attribution_mode=quoted_sources");
   expect(fetchMock.mock.calls[1][0]).toContain("source_kind=named_entity");
+  expect(fetchMock.mock.calls[1][0]).toContain("source_entity_id=12");
   expect(fetchMock.mock.calls[2][0]).toContain("/channels/7/analytics");
   expect(fetchMock.mock.calls[2][0]).toContain("offset=25");
   expect(fetchMock.mock.calls[3][0]).toContain("source_kind=channel_editorial");

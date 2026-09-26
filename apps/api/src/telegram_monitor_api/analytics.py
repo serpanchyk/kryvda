@@ -2,10 +2,35 @@
 # ruff: noqa: E501
 
 import json
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
 
 import asyncpg
+
+
+@dataclass(frozen=True)
+class EntityAnalyticsFilters:
+    """One consistent claim-attribution scope for an entity profile."""
+
+    channel_id: int | None = None
+    stance: str | None = None
+    rhetoric: str | None = None
+    epistemic_status: str | None = None
+    source_kind: str | None = None
+    source_entity_id: int | None = None
+    attribution_mode: str | None = None
+
+    def values(self) -> tuple[object, ...]:
+        return (
+            self.channel_id,
+            self.stance,
+            self.rhetoric,
+            self.epistemic_status,
+            self.source_kind,
+            self.source_entity_id,
+            self.attribution_mode,
+        )
 
 
 class AnalyticsRepository:
@@ -37,29 +62,31 @@ class AnalyticsRepository:
     async def entity(
         self,
         entity_id: int,
-        channel_id: int | None,
+        filters: EntityAnalyticsFilters,
         start: datetime | None,
         end: datetime | None,
         limit: int,
         offset: int,
     ) -> dict[str, Any] | None:
-        """Return one registry entity with its evidence and temporal aggregates."""
+        """Return one registry entity with consistently filtered aggregates."""
         entity = await self._pool.fetchrow(_ENTITY_SQL, entity_id)
         if entity is None:
             return None
-        channels = await self._pool.fetch(
-            _ENTITY_CHANNEL_PAGE_SQL, entity_id, start, end, limit, offset
+        args = (entity_id, *filters.values(), start, end)
+        channels = await self._pool.fetch(_ENTITY_CHANNEL_PAGE_SQL, *args, limit, offset)
+        channel_options = await self._pool.fetch(_ENTITY_CHANNEL_OPTIONS_SQL, *args)
+        channel_total = await self._pool.fetchval(_ENTITY_CHANNEL_COUNT_SQL, *args)
+        source_entity = (
+            await self._pool.fetchrow(_ENTITY_SQL, filters.source_entity_id)
+            if filters.source_entity_id is not None
+            else None
         )
-        channel_options = await self._pool.fetch(_ENTITY_CHANNEL_OPTIONS_SQL, entity_id, start, end)
-        channel_total = await self._pool.fetchval(_ENTITY_CHANNEL_COUNT_SQL, entity_id, start, end)
-        summary = await self._pool.fetchrow(_ENTITY_TOTAL_SQL, entity_id, start, end)
-        daily = await self._pool.fetch(_ENTITY_DAILY_SQL, entity_id, start, end)
+        summary = await self._pool.fetchrow(_ENTITY_TOTAL_SQL, *args)
+        daily = await self._pool.fetch(_ENTITY_DAILY_SQL, *args)
         incomplete = await self._pool.fetchval(_INCOMPLETE_SQL, entity_id, start, end)
-        rhetoric = await self._pool.fetch(_ENTITY_RHETORIC_SQL, entity_id, channel_id, start, end)
-        epistemic = await self._pool.fetch(_ENTITY_EPISTEMIC_SQL, entity_id, channel_id, start, end)
-        attribution = await self._pool.fetch(
-            _ENTITY_ATTRIBUTION_SQL, entity_id, channel_id, start, end
-        )
+        rhetoric = await self._pool.fetch(_ENTITY_RHETORIC_SQL, *args)
+        epistemic = await self._pool.fetch(_ENTITY_EPISTEMIC_SQL, *args)
+        attribution = await self._pool.fetch(_ENTITY_ATTRIBUTION_SQL, *args)
         return {
             "entity": dict(entity),
             "summary": dict(summary)
@@ -72,6 +99,7 @@ class AnalyticsRepository:
                 "offset": offset,
             },
             "channel_options": [dict(row) for row in channel_options],
+            "source_entity": dict(source_entity) if source_entity is not None else None,
             "rhetoric": [
                 {"key": str(row["key"]), "count": int(row["count"]), "share": float(row["share"])}
                 for row in rhetoric
@@ -122,30 +150,16 @@ class AnalyticsRepository:
     async def evidence(
         self,
         entity_id: int,
-        channel_id: int | None,
-        stance: str | None,
-        rhetoric: str | None,
-        epistemic_status: str | None,
-        source_kind: str | None,
+        filters: EntityAnalyticsFilters,
         start: datetime | None,
         end: datetime | None,
         limit: int,
         offset: int,
     ) -> dict[str, Any]:
-        args = (
-            entity_id,
-            channel_id,
-            stance,
-            rhetoric,
-            epistemic_status,
-            source_kind,
-            start,
-            end,
-            limit,
-            offset,
-        )
+        """Return claims that support one filtered entity profile."""
+        args = (entity_id, *filters.values(), start, end, limit, offset)
         rows = await self._pool.fetch(_EVIDENCE_PAGE_SQL, *args)
-        total = await self._pool.fetchval(_EVIDENCE_COUNT_SQL, *args[:8])
+        total = await self._pool.fetchval(_EVIDENCE_COUNT_SQL, *args[:10])
         return {
             "items": [_analytical_row(row) for row in rows],
             "total": int(total or 0),
@@ -368,7 +382,109 @@ GROUP BY last_error_kind ORDER BY count DESC, error_kind"""
 _ENTITY_SQL = """SELECT entity.id, entity.canonical_name, entity.coarse_type, entity.monitored
 FROM registry_entities AS entity WHERE entity.id = $1"""
 
+_ENTITY_FILTERS = """ AND entity.id = $1
+  AND classification.stance IN ('позитивне', 'негативне')
+  AND ($2::bigint IS NULL OR channel.id = $2)
+  AND ($3::text IS NULL OR classification.stance = $3)
+  AND ($4::text IS NULL OR classification.rhetoric ? $4)
+  AND ($5::text IS NULL OR claim.epistemic_status = $5)
+  AND ($6::text IS NULL OR claim.source_kind = $6)
+  AND ($7::bigint IS NULL OR source_registry.id = $7)
+  AND ($8::text IS NULL OR $8 = 'all_claims'
+       OR ($8 = 'channel_position' AND claim.source_kind = 'channel_editorial')
+       OR ($8 = 'quoted_sources' AND claim.source_kind IN ('named_entity', 'external_unnamed')))"""
+
+_ENTITY_BASE = _base("$9", "$10") + _ENTITY_FILTERS
+
 _ENTITY_CHANNEL_SQL = (
+    """SELECT channel.id, channel.title, channel.username, channel.avatar_url,
+    channel.status, max(post.published_at) AS last_published_at,
+    count(DISTINCT entity.id) AS entity_count,
+    count(DISTINCT claim.id) AS claim_count,
+    count(DISTINCT post.id) AS post_count,
+    count(*) FILTER (WHERE classification.stance = 'позитивне') AS positive_count,
+    count(*) FILTER (WHERE classification.stance = 'негативне') AS negative_count,
+    0 AS absent_count
+"""
+    + _ENTITY_BASE
+    + """ GROUP BY channel.id, channel.title, channel.username, channel.avatar_url, channel.status
+ORDER BY claim_count DESC"""
+)
+_ENTITY_CHANNEL_PAGE_SQL = _ENTITY_CHANNEL_SQL + " LIMIT $11 OFFSET $12"
+_ENTITY_CHANNEL_COUNT_SQL = "SELECT count(DISTINCT channel.id) " + _ENTITY_BASE
+_ENTITY_CHANNEL_OPTIONS_SQL = (
+    "SELECT DISTINCT channel.id, channel.title " + _ENTITY_BASE + " ORDER BY channel.title"
+)
+
+_ENTITY_DAILY_SQL = (
+    """SELECT date_trunc('day', post.published_at)::date AS date,
+    count(DISTINCT post.id) AS post_count, count(DISTINCT claim.id) AS claim_count,
+    count(*) FILTER (WHERE classification.stance = 'позитивне') AS positive_count,
+    count(*) FILTER (WHERE classification.stance = 'негативне') AS negative_count,
+    0 AS absent_count
+"""
+    + _ENTITY_BASE
+    + " GROUP BY 1 ORDER BY 1"
+)
+
+_ENTITY_TOTAL_SQL = (
+    """SELECT count(DISTINCT claim.id) AS mention_count,
+    count(*) FILTER (WHERE classification.stance = 'позитивне') AS positive_count,
+    count(*) FILTER (WHERE classification.stance = 'негативне') AS negative_count
+"""
+    + _ENTITY_BASE
+)
+
+_DISTRIBUTION_SELECT = """SELECT labels.key, COALESCE(counts.count, 0)::bigint AS count,
+       CASE WHEN sum(COALESCE(counts.count, 0)) OVER () = 0 THEN 0::double precision
+            ELSE COALESCE(counts.count, 0)::double precision
+                 / sum(COALESCE(counts.count, 0)) OVER () END AS share
+FROM labels LEFT JOIN counts ON counts.key = labels.key ORDER BY labels.ordinal"""
+
+_ENTITY_RHETORIC_SQL = (
+    """WITH labels(key, ordinal) AS (
+    VALUES
+        ('корупція_або_особиста_вигода', 1),
+        ('злочинна_або_незаконна_поведінка', 2),
+        ('делегітимізація', 3),
+        ('лицемірство_або_подвійні_стандарти', 4),
+        ('висміювання_або_особиста_образа', 5),
+        ('зовнішній_контроль_або_нелояльність', 6)
+), counts AS (
+    SELECT feature.key, count(*) AS count
+    FROM (SELECT classification.rhetoric """
+    + _ENTITY_BASE
+    + """) AS filtered
+    CROSS JOIN LATERAL jsonb_array_elements_text(filtered.rhetoric) AS feature(key)
+    GROUP BY feature.key
+)
+"""
+    + _DISTRIBUTION_SELECT
+)
+
+_ENTITY_EPISTEMIC_SQL = (
+    """WITH labels(key, ordinal) AS (
+    VALUES ('ствердження', 1), ('невпевнене', 2), ('питання', 3)
+), counts AS (
+    SELECT claim.epistemic_status AS key, count(DISTINCT claim.id) AS count
+"""
+    + _ENTITY_BASE
+    + " GROUP BY claim.epistemic_status\n)\n"
+    + _DISTRIBUTION_SELECT
+)
+
+_ENTITY_ATTRIBUTION_SQL = (
+    """WITH labels(key, ordinal) AS (
+    VALUES ('channel_editorial', 1), ('named_entity', 2), ('external_unnamed', 3)
+), counts AS (
+    SELECT claim.source_kind AS key, count(DISTINCT claim.id) AS count
+"""
+    + _ENTITY_BASE
+    + " GROUP BY claim.source_kind\n)\n"
+    + _DISTRIBUTION_SELECT
+)
+
+_CHANNEL_SQL = (
     """SELECT channel.id, channel.title, channel.username, channel.avatar_url,
     channel.status, max(post.published_at) AS last_published_at,
     count(DISTINCT entity.id) AS entity_count,
@@ -613,32 +729,17 @@ WHERE post_entity.registry_entity_id = $1 AND post.deleted_at IS NULL AND post.i
 
 _EVIDENCE_SQL = (
     """SELECT claim.id AS claim_id, claim.normalized_text, claim.evidence_text,
-    claim.epistemic_status, claim.source_kind, classification.stance,
-    classification.rhetoric, post.id AS post_id, post.published_at,
+    claim.epistemic_status, claim.source_kind, source_registry.id AS source_entity_id,
+    classification.stance, classification.rhetoric, post.id AS post_id, post.published_at,
     channel.id AS channel_id, channel.title AS channel_title,
     COALESCE(source_registry.canonical_name, source_candidate.representative_mention)
         AS source_entity_name
 """
-    + _base("$7", "$8")
-    + """ AND entity.id = $1 AND classification.stance IN ('позитивне', 'негативне')
-  AND ($2::bigint IS NULL OR channel.id = $2)
-  AND ($3::text IS NULL OR classification.stance = $3)
-  AND ($4::text IS NULL OR classification.rhetoric ? $4)
-  AND ($5::text IS NULL OR claim.epistemic_status = $5)
-  AND ($6::text IS NULL OR claim.source_kind = $6)
-  ORDER BY post.published_at DESC, claim.id DESC"""
+    + _ENTITY_BASE
+    + " ORDER BY post.published_at DESC, claim.id DESC"
 )
-_EVIDENCE_PAGE_SQL = _EVIDENCE_SQL + " LIMIT $9 OFFSET $10"
-_EVIDENCE_COUNT_SQL = (
-    "SELECT count(*) "
-    + _base("$7", "$8")
-    + """ AND entity.id = $1 AND classification.stance IN ('позитивне', 'негативне')
-  AND ($2::bigint IS NULL OR channel.id = $2)
-  AND ($3::text IS NULL OR classification.stance = $3)
-  AND ($4::text IS NULL OR classification.rhetoric ? $4)
-  AND ($5::text IS NULL OR claim.epistemic_status = $5)
-  AND ($6::text IS NULL OR claim.source_kind = $6)"""
-)
+_EVIDENCE_PAGE_SQL = _EVIDENCE_SQL + " LIMIT $11 OFFSET $12"
+_EVIDENCE_COUNT_SQL = "SELECT count(*) " + _ENTITY_BASE
 
 _CLAIMS_BASE = (
     _base("$8", "$9")

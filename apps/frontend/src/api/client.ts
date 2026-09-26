@@ -3,6 +3,7 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 export type Stance = "позитивне" | "негативне" | "відсутнє";
 export type EpistemicStatus = "ствердження" | "невпевнене" | "питання";
 export type SourceKind = "channel_editorial" | "named_entity" | "external_unnamed";
+export type AttributionMode = "all_claims" | "channel_position" | "quoted_sources";
 export type RhetoricLabel =
   | "корупція_або_особиста_вигода"
   | "злочинна_або_незаконна_поведінка"
@@ -56,6 +57,9 @@ export interface Evidence {
   published_at: string;
   channel_id: number;
   channel_title: string;
+  source_kind: SourceKind;
+  source_entity_id: number | null;
+  source_entity_name: string | null;
 }
 export interface Claim extends Evidence {
   entity_id: number;
@@ -112,11 +116,22 @@ export interface Dashboard {
     last_completed_at: string | null;
   };
 }
+export interface EntityAnalyticsFilters {
+  channel_id?: string;
+  stance?: Exclude<Stance, "відсутнє">;
+  rhetoric?: RhetoricLabel;
+  epistemic_status?: EpistemicStatus;
+  source_kind?: SourceKind;
+  source_entity_id?: string;
+  attribution_mode?: AttributionMode;
+  offset?: number;
+}
 export interface EntityProfile {
   entity: Entity;
   summary: { mention_count: number; positive_count: number; negative_count: number };
   channels: Page<Summary>;
   channel_options: Array<Pick<Summary, "id" | "title">>;
+  source_entity: Pick<Entity, "id" | "canonical_name"> | null;
   rhetoric: Distribution<RhetoricLabel>[];
   epistemic: Distribution<EpistemicStatus>[];
   attribution: Distribution<SourceKind>[];
@@ -159,31 +174,16 @@ export const apiClient = {
   entity: (
     id: string,
     dates: DateRange,
-    offset = 0,
-    channelId?: string,
+    filters: EntityAnalyticsFilters = {},
   ): Promise<EntityProfile> => get(
-    `/entities/${id}/analytics${query({ ...range(dates), channel_id: channelId, limit: 25, offset })}`,
+    `/entities/${id}/analytics${query({ ...range(dates), ...filters, limit: 25, offset: filters.offset })}`,
   ),
   evidence: (
     id: string,
     dates: DateRange,
-    channelId?: string,
-    stance?: Stance,
-    rhetoric?: RhetoricLabel,
-    offset = 0,
-    epistemicStatus?: EpistemicStatus,
-    sourceKind?: SourceKind,
+    filters: EntityAnalyticsFilters = {},
   ): Promise<Page<Evidence>> => get(
-    `/entities/${id}/evidence${query({
-      ...range(dates),
-      channel_id: channelId,
-      stance,
-      rhetoric,
-      epistemic_status: epistemicStatus,
-      source_kind: sourceKind,
-      limit: 25,
-      offset,
-    })}`,
+    `/entities/${id}/evidence${query({ ...range(dates), ...filters, limit: 25, offset: filters.offset })}`,
   ),
   channels: (dates: DateRange, offset = 0): Promise<Page<Summary> & { daily: Daily[] }> => get(
     `/channels${query({ ...range(dates), limit: 25, offset })}`,

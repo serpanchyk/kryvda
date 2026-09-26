@@ -13,12 +13,13 @@ from monitoring_common.config import BaseServiceSettings
 from monitoring_common.logging import setup_logging
 from pydantic import BaseModel, Field
 
-from telegram_monitor_api.analytics import AnalyticsRepository
+from telegram_monitor_api.analytics import AnalyticsRepository, EntityAnalyticsFilters
 from telegram_monitor_api.registry import RegistryRepository
 
 CoarseType = Literal["person", "organization", "state_institution", "media"]
 EpistemicStatus = Literal["ствердження", "невпевнене", "питання"]
 SourceKind = Literal["channel_editorial", "named_entity", "external_unnamed"]
+AttributionMode = Literal["all_claims", "channel_position", "quoted_sources"]
 RhetoricLabel = Literal[
     "корупція_або_особиста_вигода",
     "злочинна_або_незаконна_поведінка",
@@ -222,6 +223,12 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     async def entity_analytics(
         entity_id: int,
         channel_id: int | None = None,
+        stance: Literal["позитивне", "негативне"] | None = None,
+        rhetoric: RhetoricLabel | None = None,
+        epistemic_status: EpistemicStatus | None = None,
+        source_kind: SourceKind | None = None,
+        source_entity_id: int | None = None,
+        attribution_mode: AttributionMode | None = None,
         start: datetime | None = None,
         end: datetime | None = None,
         limit: int = 25,
@@ -230,13 +237,17 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         """Return an entity profile and its auditable channel comparison."""
         pool = await asyncpg.create_pool(settings.postgres_dsn)
         try:
-            result = await AnalyticsRepository(pool).entity(
-                entity_id,
+            filters = EntityAnalyticsFilters(
                 channel_id,
-                start,
-                end,
-                min(max(limit, 1), 100),
-                max(offset, 0),
+                stance,
+                rhetoric,
+                epistemic_status,
+                source_kind,
+                source_entity_id,
+                attribution_mode,
+            )
+            result = await AnalyticsRepository(pool).entity(
+                entity_id, filters, start, end, min(max(limit, 1), 100), max(offset, 0)
             )
             if result is None:
                 raise HTTPException(status_code=404, detail="Monitored entity not found")
@@ -252,6 +263,8 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         rhetoric: RhetoricLabel | None = None,
         epistemic_status: EpistemicStatus | None = None,
         source_kind: SourceKind | None = None,
+        source_entity_id: int | None = None,
+        attribution_mode: AttributionMode | None = None,
         start: datetime | None = None,
         end: datetime | None = None,
         limit: int = 25,
@@ -260,17 +273,17 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         """Return claims that support a filtered entity aggregate."""
         pool = await asyncpg.create_pool(settings.postgres_dsn)
         try:
-            return await AnalyticsRepository(pool).evidence(
-                entity_id,
+            filters = EntityAnalyticsFilters(
                 channel_id,
                 stance,
                 rhetoric,
                 epistemic_status,
                 source_kind,
-                start,
-                end,
-                min(max(limit, 1), 100),
-                max(offset, 0),
+                source_entity_id,
+                attribution_mode,
+            )
+            return await AnalyticsRepository(pool).evidence(
+                entity_id, filters, start, end, min(max(limit, 1), 100), max(offset, 0)
             )
         finally:
             await pool.close()

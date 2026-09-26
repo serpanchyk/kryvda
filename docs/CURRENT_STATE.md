@@ -104,7 +104,9 @@ The Kryvda investigation UI uses an editorial newsroom layout with a responsive 
 self-contained visualization sections, Kyiv Type Serif headlines, and Fixel Text data typography.
 The overview leads with negative classifications, temporal activity, attacked-entity rankings,
 channel comparisons, and auditable claims. Entity profiles add stance-over-time, epistemic-status,
-and attribution distributions. Channel rows now open `/channels/{id}` profiles with activity,
+and attribution distributions. Their URL-backed global filters distinguish publication channel from
+claim attribution, including channel position, quoted-source, source-kind, and stable named-source
+registry identity filters; every Entity aggregate and its evidence feed shares that scope. Channel rows now open `/channels/{id}` profiles with activity,
 stance, entity, rhetoric, epistemic, attribution, and recent-claim analysis. Post detail uses a
 source/analysis split view and exposes evidence, target, stance, rhetoric, epistemic status, and
 attribution for every extracted claim.

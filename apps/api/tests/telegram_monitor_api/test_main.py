@@ -108,15 +108,9 @@ class FakeAnalytics:
         return {"entities": [{"id": 1}], "channels": [{"id": 2}]}
 
     async def entity(
-        self,
-        entity_id: int,
-        channel_id: object,
-        start: object,
-        end: object,
-        limit: int,
-        offset: int,
+        self, entity_id: int, filters: object, start: object, end: object, limit: int, offset: int
     ) -> dict[str, object] | None:
-        type(self).last_entity_args = (entity_id, channel_id, start, end, limit, offset)
+        type(self).last_entity_args = (entity_id, filters, start, end, limit, offset)
         return {
             "entity": {"id": entity_id},
             "summary": {},
@@ -131,32 +125,11 @@ class FakeAnalytics:
         }
 
     async def evidence(
-        self,
-        entity_id: int,
-        channel_id: object,
-        stance: object,
-        rhetoric: object,
-        epistemic_status: object,
-        source_kind: object,
-        start: object,
-        end: object,
-        limit: int,
-        offset: int,
+        self, entity_id: int, filters: object, start: object, end: object, limit: int, offset: int
     ) -> dict[str, object]:
-        type(self).last_evidence_args = (
-            entity_id,
-            channel_id,
-            stance,
-            rhetoric,
-            epistemic_status,
-            source_kind,
-            start,
-            end,
-            limit,
-            offset,
-        )
+        type(self).last_evidence_args = (entity_id, filters, start, end, limit, offset)
         return {
-            "items": [{"claim_id": 3, "entity_id": entity_id, "stance": stance}],
+            "items": [{"claim_id": 3, "entity_id": entity_id}],
             "total": 1,
             "limit": limit,
             "offset": offset,
@@ -204,10 +177,25 @@ async def test_read_only_investigation_endpoints(monkeypatch: object) -> None:
         assert (await client.get("/dashboard")).json()["entities"] == [{"id": 1}]
         assert (
             await client.get(
-                "/entities/4/analytics", params={"channel_id": 7, "limit": 0, "offset": -1}
+                "/entities/4/analytics",
+                params={
+                    "channel_id": 7,
+                    "stance": "негативне",
+                    "source_kind": "named_entity",
+                    "source_entity_id": 12,
+                    "attribution_mode": "quoted_sources",
+                    "limit": 0,
+                    "offset": -1,
+                },
             )
         ).json()["incomplete_posts"] == 1
-        assert FakeAnalytics.last_entity_args == (4, 7, None, None, 1, 0)
+        assert FakeAnalytics.last_entity_args is not None
+        assert FakeAnalytics.last_entity_args[0] == 4
+        entity_filters = FakeAnalytics.last_entity_args[1]
+        assert entity_filters.channel_id == 7
+        assert entity_filters.source_entity_id == 12
+        assert entity_filters.attribution_mode == "quoted_sources"
+        assert FakeAnalytics.last_entity_args[-2:] == (1, 0)
         evidence = await client.get(
             "/entities/4/evidence",
             params={
@@ -215,22 +203,18 @@ async def test_read_only_investigation_endpoints(monkeypatch: object) -> None:
                 "rhetoric": "делегітимізація",
                 "epistemic_status": "питання",
                 "source_kind": "named_entity",
+                "source_entity_id": 12,
+                "attribution_mode": "quoted_sources",
                 "limit": 0,
                 "offset": -1,
             },
         )
-        assert FakeAnalytics.last_evidence_args == (
-            4,
-            None,
-            "негативне",
-            "делегітимізація",
-            "питання",
-            "named_entity",
-            None,
-            None,
-            1,
-            0,
-        )
+        assert FakeAnalytics.last_evidence_args is not None
+        assert FakeAnalytics.last_evidence_args[0] == 4
+        evidence_filters = FakeAnalytics.last_evidence_args[1]
+        assert evidence_filters.source_entity_id == 12
+        assert evidence_filters.attribution_mode == "quoted_sources"
+        assert FakeAnalytics.last_evidence_args[-2:] == (1, 0)
         assert evidence.json()["items"][0]["claim_id"] == 3
         invalid_rhetoric = await client.get("/entities/4/evidence", params={"rhetoric": "invalid"})
         assert invalid_rhetoric.status_code == 422
