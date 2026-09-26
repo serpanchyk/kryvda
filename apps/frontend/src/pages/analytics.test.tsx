@@ -52,12 +52,14 @@ describe("editorial analytics pages", () => {
       daily: [{ date: "2026-09-01", post_count: 2, claim_count: 4, positive_count: 1, negative_count: 2, absent_count: 1 }],
       entities: [{ id: 4, canonical_name: "Віталій Шабунін", claim_count: 8, post_count: 6, positive_count: 1, negative_count: 7, absent_count: 0 }],
       channels: [{ id: 2, title: "Канал", claim_count: 20, post_count: 10, positive_count: 3, negative_count: 7, absent_count: 10 }],
-      pipeline: { pending_live: 0, pending_backfill: 0, leased: 0, failed: 0, completed_last_hour: 0, failed_last_hour: 0, last_completed_at: null },
+      pipeline: { pending_live: 0, pending_backfill: 0, leased: 0, retry_scheduled: 7, next_retry_at: "2026-09-20T10:05:00Z", retry_by_error_kind: { provider_transient: 7 }, failed: 0, completed_last_hour: 0, failed_last_hour: 0, last_completed_at: null },
     });
     vi.mocked(apiClient.claims).mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 });
     renderRoute("/?period=all", "/", <DashboardPage />);
     expect(await screen.findByText("Хто і як стає мішенню негативних тверджень")).toBeInTheDocument();
     expect((await screen.findAllByText("7")).length).toBeGreaterThan(0);
+    expect(screen.getByText("Черга AI-воркера")).toBeInTheDocument();
+    expect(screen.getByText("Фонові повтори")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Сутності" })).toHaveAttribute("href", "/entities?period=all");
     expect(screen.getByRole("link", { name: /Віталій Шабунін/ })).toHaveAttribute("href", "/entities/4?period=all");
   });

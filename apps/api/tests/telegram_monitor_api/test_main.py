@@ -39,6 +39,8 @@ class AnalysisHealthPool(FakePool):
                 "pending_backfill": 5,
                 "leased": 1,
                 "failed": 3,
+                "retry_scheduled": 7,
+                "next_retry_at": "2026-09-20T10:05:00Z",
                 "oldest_pending_seconds": 12.0,
             }
         return {
@@ -47,6 +49,13 @@ class AnalysisHealthPool(FakePool):
             "failed_last_hour": 1,
             "partial_last_hour": 2,
         }
+
+    async def fetch(self, query: str) -> list[dict[str, object]]:
+        assert "GROUP BY last_error_kind" in query
+        return [
+            {"error_kind": "provider_transient", "count": 6},
+            {"error_kind": "schema_failure", "count": 1},
+        ]
 
 
 async def fake_create_pool(_: str) -> FakePool:
@@ -68,6 +77,12 @@ async def test_analysis_health_endpoint(monkeypatch: object) -> None:
             "pending_live": 2,
             "pending_backfill": 5,
             "leased": 1,
+            "retry_scheduled": 7,
+            "next_retry_at": "2026-09-20T10:05:00Z",
+            "retry_by_error_kind": {
+                "provider_transient": 6,
+                "schema_failure": 1,
+            },
             "failed": 3,
             "oldest_pending_seconds": 12.0,
         },

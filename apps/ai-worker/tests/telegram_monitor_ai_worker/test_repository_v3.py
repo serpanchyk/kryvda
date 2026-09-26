@@ -5,7 +5,22 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from telegram_monitor_ai_worker.models import ClaimedAnalysisJob
-from telegram_monitor_ai_worker.repository import AnalysisJobRepository
+from telegram_monitor_ai_worker.repository import AnalysisJobRepository, retry_delay
+
+
+def test_retry_delay_uses_fast_attempts_then_capped_background_schedule() -> None:
+    assert retry_delay(job_id=3, attempts=1, retry_round=0, fast_attempts=3).total_seconds() == 5
+    assert retry_delay(job_id=3, attempts=2, retry_round=0, fast_attempts=3).total_seconds() == 10
+
+    scheduled = [
+        retry_delay(job_id=3, attempts=3 + retry_round, retry_round=retry_round, fast_attempts=3)
+        for retry_round in range(6)
+    ]
+    bases = [300, 1_800, 7_200, 21_600, 86_400, 86_400]
+
+    for delay, base in zip(scheduled, bases, strict=True):
+        assert base <= delay.total_seconds() <= base * 1.1
+    assert scheduled[-1] == scheduled[-2]
 
 
 class FakeConnection:
@@ -19,6 +34,7 @@ class FakeConnection:
             "content": "Шабунін",
             "priority": "live",
             "attempts": 1,
+            "retry_round": 0,
         }
         self.post_entities_exist = False
 
@@ -92,7 +108,7 @@ async def test_repository_leases_job_and_creates_durable_run() -> None:
 
     job = await repository.lease_next_job(300, 3, "model")
 
-    assert job == ClaimedAnalysisJob(3, 7, "Шабунін", "live", 1, 9)
+    assert job == ClaimedAnalysisJob(3, 7, "Шабунін", "live", 1, 9, 0)
     assert "FOR UPDATE SKIP LOCKED" in pool.connection.executed[1][0]
     assert "INSERT INTO analysis_runs" in pool.connection.executed[2][0]
 
@@ -115,7 +131,7 @@ async def test_repository_reads_aliases_cached_pass_and_renews_lease() -> None:
 
     aliases = await repository.registry_aliases()
     cached = await repository.completed_pass_payload(9, "entities")
-    await repository.renew_lease(3, 300)
+    await repository.renew_lease(3, 1, 300)
     await repository.set_matches(9, [10])
 
     assert aliases[0]["normalized_alias"] == "шабунін"
@@ -216,10 +232,16 @@ async def test_repository_records_attempt_skip_retry_and_failure() -> None:
         final_parsed_payload={},
     )
     await repository.skip(job)
-    assert await repository.retry_or_fail(job, "provider_transient", "down", 3) is True
-    await repository.fail(job, "schema_failure", "bad")
+    retry_job = ClaimedAnalysisJob(3, 7, "Шабунін", "live", 3, 9, 0)
+    assert await repository.retry_or_fail(retry_job, "provider_transient", "down", 3) is True
 
     assert any("inference_pass_attempts" in query for query, _ in pool.executed)
     assert any("inference_pass_diagnostics" in query for query, _ in pool.executed)
     assert any("status = 'skipped'" in query for query, _ in pool.connection.executed)
-    assert any("failure_detail" in query for query, _ in pool.executed)
+    retry_query, retry_args = pool.executed[-2]
+    assert "status = $2" in retry_query
+    assert retry_args[1] == "retry_scheduled"
+    assert retry_args[2] == retry_delay(job_id=3, attempts=3, retry_round=0, fast_attempts=3)
+    run_query, run_args = pool.executed[-1]
+    assert "status = 'retry_scheduled'" in run_query
+    assert run_args == (9, "provider_transient", "down")

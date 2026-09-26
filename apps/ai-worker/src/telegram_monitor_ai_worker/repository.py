@@ -9,6 +9,17 @@ from monitoring_common.contracts import normalize_match_text
 
 from telegram_monitor_ai_worker.models import ClaimedAnalysisJob, JobLeaseLostError
 
+_BACKGROUND_RETRY_SECONDS = (300, 1_800, 7_200, 21_600, 86_400)
+
+
+def retry_delay(*, job_id: int, attempts: int, retry_round: int, fast_attempts: int) -> timedelta:
+    """Return the deterministic delay before another analysis attempt."""
+    if attempts < fast_attempts:
+        return timedelta(seconds=5 * (2 ** (attempts - 1)))
+    base = _BACKGROUND_RETRY_SECONDS[min(retry_round, len(_BACKGROUND_RETRY_SECONDS) - 1)]
+    jitter_percent = (job_id * 2_654_435_761) % 11
+    return timedelta(seconds=base + (base * jitter_percent // 100))
+
 
 class AnalysisJobRepository:
     """Own durable v3 jobs, pass diagnostics, candidates, and final results."""
@@ -24,40 +35,47 @@ class AnalysisJobRepository:
             await connection.execute(
                 """WITH expired_jobs AS (
                        UPDATE analysis_jobs
-                       SET status = 'failed', leased_until = NULL,
+                       SET status = 'retry_scheduled', leased_until = NULL,
+                           available_at = now() + (
+                               CASE LEAST(retry_round, 4)
+                                   WHEN 0 THEN 300
+                                   WHEN 1 THEN 1800
+                                   WHEN 2 THEN 7200
+                                   WHEN 3 THEN 21600
+                                   ELSE 86400
+                               END * (100 + ((id * 2654435761) % 11)) / 100
+                               * interval '1 second'
+                           ), retry_round = retry_round + 1,
                            last_error_kind = 'lease_expired',
-                           last_error = 'Lease expired after the final allowed attempt',
+                           last_error = 'Lease expired before the worker completed the job',
                            updated_at = now()
-                       WHERE status = 'leased' AND leased_until <= now() AND attempts >= $1
+                       WHERE status = 'leased' AND leased_until <= now()
                        RETURNING id
                    )
                    UPDATE analysis_runs AS run
-                   SET status = 'failed', failure_kind = 'lease_expired',
+                   SET status = 'retry_scheduled', failure_kind = 'lease_expired',
                        failure_detail = jsonb_build_object(
-                           'message', 'Lease expired after the final allowed attempt'
-                       ),
-                       completed_at = now()
+                           'message', 'Lease expired before the worker completed the job'
+                       ), completed_at = NULL
                    FROM expired_jobs
-                   WHERE run.job_id = expired_jobs.id AND run.status = 'running'""",
-                max_attempts,
+                   WHERE run.job_id = expired_jobs.id AND run.status = 'running'"""
             )
             row = await connection.fetchrow(
                 """WITH next_job AS (
                        SELECT id FROM analysis_jobs
-                       WHERE attempts < $1
-                         AND ((status = 'pending' AND available_at <= now())
-                           OR (status = 'leased' AND leased_until <= now()))
-                       ORDER BY CASE priority WHEN 'live' THEN 0 ELSE 1 END, available_at, id
+                       WHERE status IN ('pending', 'retry_scheduled') AND available_at <= now()
+                       ORDER BY CASE
+                           WHEN status = 'pending' AND priority = 'live' THEN 0 ELSE 1
+                       END, available_at, id
                        FOR UPDATE SKIP LOCKED LIMIT 1
                    )
                    UPDATE analysis_jobs AS job
                    SET status = 'leased', attempts = job.attempts + 1,
-                       leased_until = now() + ($2 * interval '1 second'), updated_at = now()
+                       leased_until = now() + ($1 * interval '1 second'), updated_at = now()
                    FROM next_job, post_revisions AS revision
                    WHERE job.id = next_job.id AND revision.id = job.post_revision_id
                    RETURNING job.id, job.post_revision_id, revision.content, job.priority,
-                             job.attempts""",
-                max_attempts,
+                             job.attempts, job.retry_round""",
                 lease_seconds,
             )
             if row is None:
@@ -67,7 +85,8 @@ class AnalysisJobRepository:
                    (job_id, post_revision_id, model_name, pipeline_version)
                    VALUES ($1, $2, $3, 'inference_v3_5_2')
                    ON CONFLICT (job_id) DO UPDATE
-                   SET status = 'running', pipeline_version = 'inference_v3_5_2'
+                   SET status = 'running', pipeline_version = 'inference_v3_5_2',
+                       failure_kind = NULL, failure_detail = NULL, completed_at = NULL
                    RETURNING id""",
                 row["id"],
                 row["post_revision_id"],
@@ -80,6 +99,7 @@ class AnalysisJobRepository:
             priority=str(row["priority"]),
             attempts=int(row["attempts"]),
             run_id=int(run_id),
+            retry_round=int(row["retry_round"]),
         )
 
     async def registry_aliases(self) -> list[dict[str, Any]]:
@@ -94,13 +114,14 @@ class AnalysisJobRepository:
         )
         return [dict(row) for row in rows]
 
-    async def renew_lease(self, job_id: int, lease_seconds: int) -> None:
+    async def renew_lease(self, job_id: int, attempts: int, lease_seconds: int) -> None:
         """Extend a lease before a potentially slow model request."""
         updated = await self._pool.fetchval(
             """UPDATE analysis_jobs
-               SET leased_until = now() + ($2 * interval '1 second'), updated_at = now()
-               WHERE id = $1 AND status = 'leased' RETURNING id""",
+               SET leased_until = now() + ($3 * interval '1 second'), updated_at = now()
+               WHERE id = $1 AND attempts = $2 AND status = 'leased' RETURNING id""",
             job_id,
+            attempts,
             lease_seconds,
         )
         if updated is None:
@@ -117,11 +138,13 @@ class AnalysisJobRepository:
     async def skip(self, job: ClaimedAnalysisJob) -> None:
         """Finish a stale job whose text no longer matches a monitored alias."""
         async with self._pool.acquire() as connection, connection.transaction():
-            await self._require_lease(connection, job.id)
+            await self._require_lease(connection, job.id, job.attempts)
             await connection.execute(
                 """UPDATE analysis_jobs SET status = 'skipped', leased_until = NULL,
-                          completed_at = now(), updated_at = now() WHERE id = $1""",
+                          completed_at = now(), updated_at = now()
+                          WHERE id = $1 AND attempts = $2""",
                 job.id,
+                job.attempts,
             )
             await connection.execute(
                 """UPDATE analysis_runs
@@ -329,7 +352,7 @@ class AnalysisJobRepository:
     ) -> None:
         """Atomically persist claims/classifications and complete the leased job."""
         async with self._pool.acquire() as connection, connection.transaction():
-            await self._require_lease(connection, job.id)
+            await self._require_lease(connection, job.id, job.attempts)
             entity_rows = await connection.fetch(
                 "SELECT id, local_id FROM post_entities WHERE run_id = $1", job.run_id
             )
@@ -382,57 +405,53 @@ class AnalysisJobRepository:
             await connection.execute(
                 """UPDATE analysis_jobs SET status = 'completed', leased_until = NULL,
                           completed_at = now(), last_error_kind = NULL, last_error = NULL,
-                          updated_at = now() WHERE id = $1""",
+                          updated_at = now() WHERE id = $1 AND attempts = $2""",
                 job.id,
+                job.attempts,
             )
 
     async def retry_or_fail(
         self, job: ClaimedAnalysisJob, error_kind: str, message: str, max_attempts: int
     ) -> bool:
-        """Schedule a transient retry or mark the final attempt failed."""
-        retry = job.attempts < max_attempts
-        delay = min(5 * (2 ** (job.attempts - 1)), 60)
-        status = "pending" if retry else "failed"
-        await self._pool.execute(
+        """Schedule another attempt while retaining the latest failure details."""
+        status = "pending" if job.attempts < max_attempts else "retry_scheduled"
+        delay = retry_delay(
+            job_id=job.id,
+            attempts=job.attempts,
+            retry_round=job.retry_round,
+            fast_attempts=max_attempts,
+        )
+        updated = await self._pool.fetchval(
             """UPDATE analysis_jobs
                SET status = $2, leased_until = NULL, available_at = now() + $3,
+                   retry_round = retry_round + CASE WHEN $2 = 'retry_scheduled' THEN 1 ELSE 0 END,
                    last_error_kind = $4, last_error = $5, updated_at = now()
-               WHERE id = $1 AND status = 'leased'""",
+               WHERE id = $1 AND attempts = $6 AND status = 'leased' RETURNING id""",
             job.id,
             status,
-            timedelta(seconds=delay if retry else 0),
+            delay,
+            error_kind,
+            message[:1000],
+            job.attempts,
+        )
+        if updated is None:
+            return False
+        await self._pool.execute(
+            """UPDATE analysis_runs SET status = 'retry_scheduled', failure_kind = $2,
+                      failure_detail = jsonb_build_object('message', $3::text),
+                      completed_at = NULL WHERE id = $1""",
+            job.run_id,
             error_kind,
             message[:1000],
         )
-        if not retry:
-            await self._fail_run(job.run_id, error_kind, message)
-        return retry
-
-    async def fail(self, job: ClaimedAnalysisJob, error_kind: str, message: str) -> None:
-        """Mark a non-retriable leased job and its run as failed."""
-        await self._pool.execute(
-            """UPDATE analysis_jobs SET status = 'failed', leased_until = NULL,
-                      last_error_kind = $2, last_error = $3, updated_at = now()
-               WHERE id = $1 AND status = 'leased'""",
-            job.id,
-            error_kind,
-            message[:1000],
-        )
-        await self._fail_run(job.run_id, error_kind, message)
-
-    async def _fail_run(self, run_id: int, error_kind: str, message: str) -> None:
-        await self._pool.execute(
-            """UPDATE analysis_runs SET status = 'failed', failure_kind = $2,
-                      failure_detail = $3::jsonb, completed_at = now() WHERE id = $1""",
-            run_id,
-            error_kind,
-            json.dumps({"message": message[:1000]}),
-        )
+        return True
 
     @staticmethod
-    async def _require_lease(connection: asyncpg.Connection, job_id: int) -> None:
+    async def _require_lease(connection: asyncpg.Connection, job_id: int, attempts: int) -> None:
         leased = await connection.fetchval(
-            "SELECT id FROM analysis_jobs WHERE id = $1 AND status = 'leased'", job_id
+            "SELECT id FROM analysis_jobs WHERE id = $1 AND attempts = $2 AND status = 'leased'",
+            job_id,
+            attempts,
         )
         if leased is None:
             raise JobLeaseLostError(f"analysis job {job_id} is no longer leased")

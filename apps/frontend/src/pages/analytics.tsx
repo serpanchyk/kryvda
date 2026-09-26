@@ -139,6 +139,14 @@ export function DashboardPage() {
           <div><p className="eyebrow text-negative">Ключовий показник</p><p className="mt-2 font-sans text-7xl font-black leading-none text-negative md:text-8xl">{formatNumber(query.data.summary.negative_count)}</p><p className="mt-3 font-heading text-2xl font-bold">негативних класифікацій</p></div>
           <MetricStrip items={[{ label: "Дописи", value: query.data.summary.post_count }, { label: "Твердження", value: query.data.summary.claim_count }, { label: "Сутності", value: query.data.summary.entity_count }, { label: "Канали", value: query.data.summary.channel_count }]} />
         </div>
+        <Graphic eyebrow="Стан аналізу" title="Черга AI-воркера" dek="Нові live-дописи мають пріоритет; помилки автоматично повертаються у фонову обробку.">
+          <div className="grid border-y border-rule sm:grid-cols-2 xl:grid-cols-5">
+            {[{ label: "Live", value: query.data.pipeline.pending_live }, { label: "Backfill", value: query.data.pipeline.pending_backfill }, { label: "У роботі", value: query.data.pipeline.leased }, { label: "Фонові повтори", value: query.data.pipeline.retry_scheduled }, { label: "Термінальні", value: query.data.pipeline.failed }].map((item) => <div key={item.label} className="border-b border-rule py-5 sm:odd:border-r xl:border-b-0 xl:border-r xl:last:border-r-0 xl:px-6 xl:first:pl-0"><p className="eyebrow text-muted-foreground">{item.label}</p><strong className="mt-2 block text-3xl tabular-nums">{formatNumber(item.value)}</strong></div>)}
+          </div>
+          <p className="mt-4 text-sm text-muted-foreground">
+            {query.data.pipeline.next_retry_at ? `Наступна спроба: ${formatDateTime(query.data.pipeline.next_retry_at)}` : "Відкладених повторів немає"}
+          </p>
+        </Graphic>
         <Graphic eyebrow="Динаміка атак" period={periodLabel(params)} title="Коли зростала кількість негативних тверджень" dek="Натисніть на дату, щоб звузити всю сторінку до одного дня."><DailyChart data={query.data.daily} mode="negative" onDate={chooseDate} /></Graphic>
         <div className="grid gap-12 xl:grid-cols-2">
           <Graphic eyebrow="Рейтинг сутностей" title="Найчастіші мішені негативного висвітлення" dek="Кількість негативних класифікацій щодо кожної сутності."><RankedBars items={[...query.data.entities].sort((a, b) => b.negative_count - a.negative_count).slice(0, 8)} value={(item) => item.negative_count} label={(item) => item.canonical_name ?? "—"} href={(item) => `/entities/${item.id}?${new URLSearchParams(params).toString()}`} /></Graphic>

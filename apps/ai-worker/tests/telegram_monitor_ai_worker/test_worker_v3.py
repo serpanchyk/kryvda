@@ -58,6 +58,7 @@ class FakeRepository:
         self.diagnostics: list[dict[str, Any]] = []
         self.completed: dict[str, Any] | None = None
         self.failures: list[tuple[str, str]] = []
+        self.retries: list[tuple[str, str]] = []
         self.skipped = False
         self.cached: dict[str, dict[str, Any]] = {}
 
@@ -78,8 +79,8 @@ class FakeRepository:
     async def completed_pass_payload(self, run_id: int, name: str) -> dict[str, Any] | None:
         return self.cached.get(name)
 
-    async def renew_lease(self, job_id: int, seconds: int) -> None:
-        assert (job_id, seconds) == (3, 300)
+    async def renew_lease(self, job_id: int, attempts: int, seconds: int) -> None:
+        assert (job_id, attempts, seconds) == (3, 1, 300)
 
     async def record_attempt(self, *args: Any) -> None:
         self.attempts.append((str(args[1]), str(args[2]), str(args[9]), args[8]))
@@ -105,7 +106,8 @@ class FakeRepository:
         self.completed = final_payload
 
     async def retry_or_fail(self, *args: Any) -> bool:
-        return False
+        self.retries.append((str(args[1]), str(args[2])))
+        return True
 
     async def fail(self, job: ClaimedAnalysisJob, kind: str, message: str) -> None:
         self.failures.append((kind, message))
@@ -295,6 +297,29 @@ async def test_worker_skips_stale_prefilter_job_without_model_calls() -> None:
 
 def test_generation_error_has_distinct_terminal_category() -> None:
     assert _classify_error(ModelOutputError("empty")) == ("generation_failure", False)
+
+
+async def test_worker_schedules_retry_for_previously_terminal_generation_error() -> None:
+    class FailingClient:
+        async def infer(self, name: str, request: dict[str, Any]) -> ModelResponse:
+            raise ModelOutputError(f"{name} returned empty output")
+
+        async def repair(
+            self, name: str, original: str, errors: list[dict[str, str]]
+        ) -> ModelResponse:
+            raise AssertionError("repair is not reached for empty output")
+
+    repository = FakeRepository()
+    worker = AnalysisWorker(
+        repository,  # type: ignore[arg-type]
+        FailingClient(),  # type: ignore[arg-type]
+        AiWorkerSettings(litellm_api_key="key"),
+        logging.getLogger("test"),
+    )
+
+    assert await worker.process_next() is True
+    assert repository.retries == [("generation_failure", "claims returned empty output")]
+    assert repository.failures == []
 
 
 async def test_client_sends_pass_schema_and_separate_source_message() -> None:

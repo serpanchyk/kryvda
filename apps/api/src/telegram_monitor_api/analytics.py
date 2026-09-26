@@ -21,12 +21,17 @@ class AnalyticsRepository:
         entities = await self._pool.fetch(_ENTITY_SUMMARY_SQL, start, end)
         channels = await self._pool.fetch(_CHANNEL_SUMMARY_SQL, start, end)
         pipeline = await self._pool.fetchrow(_PIPELINE_SQL)
+        retry_rows = await self._pool.fetch(_RETRY_ERROR_SQL)
+        pipeline_value = dict(pipeline) if pipeline is not None else _empty_pipeline()
+        pipeline_value["retry_by_error_kind"] = {
+            str(row["error_kind"]): int(row["count"]) for row in retry_rows
+        }
         return {
             "summary": dict(summary) if summary is not None else _empty_summary(),
             "daily": [dict(row) for row in daily],
             "entities": [dict(row) for row in entities],
             "channels": [dict(row) for row in channels],
-            "pipeline": dict(pipeline) if pipeline is not None else _empty_pipeline(),
+            "pipeline": pipeline_value,
         }
 
     async def entity(
@@ -225,11 +230,14 @@ def _empty_summary() -> dict[str, int]:
     }
 
 
-def _empty_pipeline() -> dict[str, int | None]:
+def _empty_pipeline() -> dict[str, object]:
     return {
         "pending_live": 0,
         "pending_backfill": 0,
         "leased": 0,
+        "retry_scheduled": 0,
+        "next_retry_at": None,
+        "retry_by_error_kind": {},
         "failed": 0,
         "completed_last_hour": 0,
         "failed_last_hour": 0,
@@ -344,11 +352,18 @@ _CHANNEL_COUNT_SQL = "SELECT count(DISTINCT channel.id) " + _base("$1", "$2")
 
 _PIPELINE_SQL = """SELECT count(*) FILTER (WHERE status = 'pending' AND priority = 'live') AS pending_live,
     count(*) FILTER (WHERE status = 'pending' AND priority = 'backfill') AS pending_backfill,
-    count(*) FILTER (WHERE status = 'leased') AS leased, count(*) FILTER (WHERE status = 'failed') AS failed,
+    count(*) FILTER (WHERE status = 'leased') AS leased,
+    count(*) FILTER (WHERE status = 'retry_scheduled') AS retry_scheduled,
+    min(available_at) FILTER (WHERE status = 'retry_scheduled') AS next_retry_at,
+    count(*) FILTER (WHERE status = 'failed') AS failed,
     (SELECT count(*) FROM analysis_runs WHERE status = 'completed' AND completed_at >= now() - interval '1 hour') AS completed_last_hour,
     (SELECT count(*) FROM analysis_runs WHERE status = 'failed' AND completed_at >= now() - interval '1 hour') AS failed_last_hour,
     (SELECT max(completed_at) FROM analysis_runs WHERE status = 'completed') AS last_completed_at
 FROM analysis_jobs"""
+_RETRY_ERROR_SQL = """SELECT COALESCE(last_error_kind, 'unknown') AS error_kind, count(*) AS count
+FROM analysis_jobs WHERE status = 'retry_scheduled'
+GROUP BY last_error_kind ORDER BY count DESC, error_kind"""
+
 
 _ENTITY_SQL = """SELECT entity.id, entity.canonical_name, entity.coarse_type, entity.monitored
 FROM registry_entities AS entity WHERE entity.id = $1"""

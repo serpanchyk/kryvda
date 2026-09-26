@@ -116,6 +116,10 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
                        count(*) FILTER (WHERE status = 'pending' AND priority = 'backfill')
                            AS pending_backfill,
                        count(*) FILTER (WHERE status = 'leased') AS leased,
+                       count(*) FILTER (WHERE status = 'retry_scheduled')
+                           AS retry_scheduled,
+                       min(available_at) FILTER (WHERE status = 'retry_scheduled')
+                           AS next_retry_at,
                        count(*) FILTER (WHERE status = 'failed') AS failed,
                        EXTRACT(EPOCH FROM now() - min(available_at) FILTER (
                            WHERE status = 'pending' AND available_at <= now()
@@ -135,10 +139,19 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
                            AND completed_at >= now() - interval '1 hour') AS partial_last_hour
                    FROM analysis_runs"""
             )
+            retry_rows = await pool.fetch(
+                """SELECT COALESCE(last_error_kind, 'unknown') AS error_kind, count(*) AS count
+                   FROM analysis_jobs WHERE status = 'retry_scheduled'
+                   GROUP BY last_error_kind ORDER BY count DESC, error_kind"""
+            )
             assert row is not None
             assert runs is not None
+            jobs = dict(row)
+            jobs["retry_by_error_kind"] = {
+                str(retry_row["error_kind"]): int(retry_row["count"]) for retry_row in retry_rows
+            }
             return {
-                "jobs": dict(row),
+                "jobs": jobs,
                 "runs": dict(runs),
             }
         finally:

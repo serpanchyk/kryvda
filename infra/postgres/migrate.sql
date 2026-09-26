@@ -89,4 +89,12 @@ SELECT NOT EXISTS (
 INSERT INTO schema_migrations (version) VALUES ('011_repair_inference_pass_attempts_unique.sql');
 \endif
 
+SELECT NOT EXISTS (
+    SELECT 1 FROM schema_migrations WHERE version = '012_scheduled_analysis_retries.sql'
+) AS apply_012 \gset
+\if :apply_012
+\i /database/migrations/012_scheduled_analysis_retries.sql
+INSERT INTO schema_migrations (version) VALUES ('012_scheduled_analysis_retries.sql');
+\endif
+
 COMMIT;

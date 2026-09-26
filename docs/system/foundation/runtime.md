@@ -16,14 +16,18 @@ a time with `FOR UPDATE SKIP LOCKED`, prioritizes live collection over backfill,
 strict JSON-Schema passes. Default output budgets are 1,024 tokens for entities, 4,096 for claims,
 and a classification budget capped at 1,024 tokens that scales with batch size. The worker renews
 its five-minute lease before each two-minute
-request. Transient gateway failures retry up to three job attempts and reuse validated passes;
-contract failures receive one repair inference and then become terminal. Raw attempts, sanitized
-payloads, validation errors, provider finish metadata and final per-pass outcomes are durable.
+request. Every execution error, including provider, JSON/schema, and internal errors, retains
+validated passes and is retried indefinitely. The first rapid retries wait 5 and 10 seconds;
+subsequent attempts use 5 minutes, 30 minutes, 2 hours, 6 hours, then a 24-hour cap with
+deterministic 0–10% jitter. Expired leases follow the same scheduled-retry lifecycle. New live
+jobs always lease before due backfill and scheduled retries. Raw attempts, sanitized payloads,
+validation errors, provider finish metadata and final per-pass outcomes are durable.
 
 The default worker has one job task and one PostgreSQL advisory-lock provider slot. Settings can
 raise bounded job, provider, and Pass 3 batch concurrency after measurement; advisory slots apply
-across Compose-scaled worker containers without introducing another runtime dependency. The API
-exposes queue and recent-run state at `/analysis/health`.
+across Compose-scaled worker containers without introducing another runtime dependency. The API exposes queue and recent-run state at `/analysis/health`, including scheduled-retry count,
+the nearest retry time, and retry counts by error kind. Terminal `failed` records are retained
+only as historical audit records or superseded work.
 
 To retry a corrected terminal v3 job, reset only the selected rows:
 

@@ -29,8 +29,11 @@ pipeline and claim analytics; registry mutations remain outside the UI.
 - PostgreSQL migration state is stored in `schema_migrations`; fresh initialization records the
   v3.5.2 baseline and the v3 pass-attempt uniqueness repair, while a legacy schema is upgraded
   through the v3 transition automatically.
-- PostgreSQL is the lightweight queue through a leased-job table. Live collection jobs take
-  priority over throttled historical backfill jobs.
+- PostgreSQL is the lightweight queue through a leased-job table. New live collection jobs take
+  priority over throttled historical backfill and due scheduled retries. Every analysis error and
+  expired lease becomes a durable retry: after the rapid 5- and 10-second retries, the worker uses
+  5 minutes, 30 minutes, 2 hours, 6 hours, then a jittered 24-hour cadence indefinitely. Terminal
+  failures are retained only as historical or superseded audit records.
 - Public Telegram sources resolve through their configured handles; stored peer IDs are durable
   source identity, not standalone Telethon lookup values. Private sources restore their Telegram
   access metadata from the dedicated account's dialogs and are collected only while that account

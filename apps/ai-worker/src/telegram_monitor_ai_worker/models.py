@@ -13,6 +13,7 @@ class ClaimedAnalysisJob:
     priority: str
     attempts: int
     run_id: int
+    retry_round: int = 0
 
 
 @dataclass(frozen=True)

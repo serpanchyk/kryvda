@@ -32,7 +32,9 @@ The AI worker receives that same secret as `LITELLM_API_KEY`. Its configurable r
 `LITELLM_BASE_URL`, `ANALYSIS_MODEL`, `ANALYSIS_POLL_INTERVAL_SECONDS`,
 `ANALYSIS_LEASE_SECONDS`, `ANALYSIS_REQUEST_TIMEOUT_SECONDS`, `ANALYSIS_MAX_OUTPUT_TOKENS`, and
 `ANALYSIS_MAX_ATTEMPTS`. Defaults are the internal proxy, MamayLM-Gemma-3-27B-IT, 5 seconds,
-300 seconds, 120 seconds, 4,096 tokens, and 3 respectively.
+300 seconds, 120 seconds, 4,096 tokens, and 3 respectively. `ANALYSIS_MAX_ATTEMPTS` controls
+only rapid attempts: the initial lease followed by 5- and 10-second retries. Every later error is
+scheduled for durable background recovery and is not terminal because it exceeded this setting.
 
 An internal client uses the standard OpenAI SDK interface:
 

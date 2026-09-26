@@ -289,7 +289,7 @@ class AnalysisWorker:
                 try:
                     async with semaphore:
                         await self._repository.renew_lease(
-                            job.id, self._settings.analysis_lease_seconds
+                            job.id, job.attempts, self._settings.analysis_lease_seconds
                         )
                         response = await self._client.infer("classification", {"items": batch})
                     try:
@@ -429,7 +429,9 @@ class AnalysisWorker:
             if post_validate is not None:
                 post_validate(completed)
             return completed
-        await self._repository.renew_lease(job.id, self._settings.analysis_lease_seconds)
+        await self._repository.renew_lease(
+            job.id, job.attempts, self._settings.analysis_lease_seconds
+        )
         try:
             response = await self._client.infer(pass_name, request)
         except ModelOutputError as error:
@@ -476,7 +478,9 @@ class AnalysisWorker:
                 errors,
                 primary_actions,
             )
-            await self._repository.renew_lease(job.id, self._settings.analysis_lease_seconds)
+            await self._repository.renew_lease(
+                job.id, job.attempts, self._settings.analysis_lease_seconds
+            )
             try:
                 repaired = await self._client.repair(pass_name, response.raw_output, errors)
             except ModelOutputError as repair_error:
@@ -649,18 +653,14 @@ class AnalysisWorker:
         )
 
     async def _handle_execution_error(self, job: ClaimedAnalysisJob, error: Exception) -> None:
-        error_kind, retryable = _classify_error(error)
+        error_kind, _ = _classify_error(error)
         fields = self._job_log_fields(job) | {"error_kind": error_kind}
-        if retryable:
-            retry = await self._repository.retry_or_fail(
-                job, error_kind, str(error), self._settings.analysis_max_attempts
-            )
-            self._logger.warning(
-                "analysis job retry scheduled" if retry else "analysis job failed", extra=fields
-            )
-            return
-        await self._repository.fail(job, error_kind, str(error))
-        self._logger.warning("analysis job failed", extra=fields)
+        scheduled = await self._repository.retry_or_fail(
+            job, error_kind, str(error), self._settings.analysis_max_attempts
+        )
+        self._logger.warning(
+            "analysis job retry scheduled" if scheduled else "analysis job lease lost", extra=fields
+        )
 
     @staticmethod
     def _job_log_fields(job: ClaimedAnalysisJob) -> dict[str, int | str]:

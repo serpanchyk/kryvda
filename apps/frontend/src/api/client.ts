@@ -103,6 +103,9 @@ export interface Dashboard {
     pending_live: number;
     pending_backfill: number;
     leased: number;
+    retry_scheduled: number;
+    next_retry_at: string | null;
+    retry_by_error_kind: Record<string, number>;
     failed: number;
     completed_last_hour: number;
     failed_last_hour: number;
