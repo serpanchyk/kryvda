@@ -98,7 +98,7 @@ pipeline and claim analytics; registry mutations remain outside the UI.
 ## Documentation
 
 The Kryvda investigation UI uses an editorial newsroom layout with a responsive top masthead,
-self-contained visualization sections, Source Serif 4 headlines, and Manrope data typography.
+self-contained visualization sections, Kyiv Type Serif headlines, and Fixel Text data typography.
 The overview leads with negative classifications, temporal activity, attacked-entity rankings,
 channel comparisons, and auditable claims. Entity profiles add stance-over-time, epistemic-status,
 and attribution distributions. Channel rows now open `/channels/{id}` profiles with activity,
