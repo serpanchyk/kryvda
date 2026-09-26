@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Кривда — розсічена К</title>
+  <rect width="64" height="64" rx="14" fill="#171714" />
+  <path fill="#F4F1E9" d="M15 12h10v16.5L40.5 12H53L33 31.5 53 52H40L25 36.5V52H15V12Z" />
+  <path fill="#C72C32" d="m40.5 19 5.5 4.5-18 22-5.5-4.5 18-22Z" />
+</svg>
