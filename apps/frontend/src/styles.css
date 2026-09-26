@@ -177,6 +177,7 @@
 }
 
 @layer components {
+  .font-heading { letter-spacing: 0.015em; }
   .eyebrow { @apply text-[11px] font-extrabold uppercase tracking-[0.14em]; }
   .editorial-nav-link { @apply relative font-bold text-muted-foreground transition-colors hover:text-foreground; }
   .editorial-nav-link::after { content: ""; @apply absolute inset-x-0 bottom-0 h-0.5 origin-left scale-x-0 bg-negative transition-transform; }

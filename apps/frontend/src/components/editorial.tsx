@@ -53,7 +53,7 @@ export function Shell() {
   return <div className="min-h-dvh bg-background text-foreground">
     <header className="sticky top-0 z-40 border-b border-rule bg-background/95 backdrop-blur-sm">
       <div className="mx-auto flex h-16 max-w-[1480px] items-center gap-8 px-4 md:px-8">
-        <NavLink to="/" className="font-heading text-2xl font-black tracking-[-0.04em]">КРИВДА<span className="text-negative">.</span></NavLink>
+        <NavLink to="/" className="font-heading text-2xl font-black tracking-[0.04em]">КРИВДА<span className="text-negative">.</span></NavLink>
         <EditorialNav />
         <div className="ml-auto hidden md:block"><DateRangeControl /></div>
         <Sheet>
@@ -121,7 +121,7 @@ export function PageHeader({ eyebrow, title, dek, aside }: { eyebrow: string; ti
   return <header className="grid gap-6 border-b-2 border-ink pb-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
     <div className="max-w-4xl">
       <p className="eyebrow">{eyebrow}</p>
-      <h1 className="mt-3 font-heading text-4xl font-black leading-[0.98] tracking-[-0.035em] sm:text-5xl lg:text-6xl">{title}</h1>
+      <h1 className="mt-3 font-heading text-4xl font-black leading-[0.98] tracking-[0.015em] sm:text-5xl lg:text-6xl">{title}</h1>
       <p className="mt-4 max-w-3xl text-base leading-7 text-muted-foreground md:text-lg">{dek}</p>
     </div>
     {aside}
@@ -146,7 +146,7 @@ export function Graphic({ eyebrow, title, dek, period, children, footer = true, 
     <div className="flex items-start justify-between gap-5">
       <div className="max-w-3xl">
         <p className="eyebrow">{eyebrow}{period ? ` · ${period}` : ""}</p>
-        <h2 className="mt-2 font-heading text-3xl font-bold leading-tight tracking-[-0.025em] md:text-4xl">{title}</h2>
+        <h2 className="mt-2 font-heading text-3xl font-bold leading-tight tracking-[0.015em] md:text-4xl">{title}</h2>
         {dek && <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">{dek}</p>}
       </div>
       {action}
