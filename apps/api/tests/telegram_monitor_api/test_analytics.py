@@ -13,6 +13,7 @@ from telegram_monitor_api.analytics import (
     _CHANNEL_SQL,
     _CHANNEL_TOTAL_SQL,
     _CLAIMS_COUNT_SQL,
+    _ENTITY_CHANNEL_PAGE_SQL,
     AnalyticsRepository,
 )
 
@@ -115,3 +116,8 @@ async def test_jsonb_claim_fields_are_normalized_for_http_clients() -> None:
     assert post is not None
     assert post["claims"] == [{"id": 1, "rhetoric": ["делегітимізація"]}]
     assert claims["items"][0]["rhetoric"] == ["делегітимізація"]
+
+
+def test_entity_channel_page_uses_new_filter_pagination_arguments() -> None:
+    """Regression: date parameters must not be reused as pagination offsets."""
+    assert "LIMIT $11 OFFSET $12" in _ENTITY_CHANNEL_PAGE_SQL
