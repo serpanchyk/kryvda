@@ -214,7 +214,7 @@ export function DailyChart({ data, mode = "negative", onDate }: { data: Daily[];
   </div>;
 }
 
-export function RankedBars({ items, value, label, href, selected, onSelect, tone = "red" }: {
+export function RankedBars({ items, value, label, href, selected, onSelect, tone = "red", showBalance = false }: {
   items: Summary[];
   value: (item: Summary) => number;
   label: (item: Summary) => string;
@@ -222,6 +222,7 @@ export function RankedBars({ items, value, label, href, selected, onSelect, tone
   selected?: string;
   onSelect?: (item: Summary) => void;
   tone?: "red" | "ink";
+  showBalance?: boolean;
 }) {
   const max = Math.max(...items.map(value), 1);
   return <div className="border-t border-rule">
@@ -231,6 +232,7 @@ export function RankedBars({ items, value, label, href, selected, onSelect, tone
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline justify-between gap-4"><span className="truncate font-semibold">{label(item)}</span><strong className="text-lg tabular-nums">{formatNumber(value(item))}</strong></span>
           <span className="mt-2 block h-1.5 bg-neutral/25"><span className={`block h-full ${tone === "red" ? "bg-negative" : "bg-ink"}`} style={{ width: `${(value(item) / max) * 100}%` }} /></span>
+          {showBalance ? <span className="mt-3 block"><EvaluativeBalanceStrip item={item} /></span> : null}
         </span>
       </>;
       const className = `flex w-full items-center gap-4 border-b border-rule py-4 text-left transition-colors hover:bg-ink/[0.035] ${selected === String(item.id) ? "bg-negative/[0.06]" : ""}`;
@@ -264,21 +266,25 @@ export function DistributionBars<K extends string>({ items, labels, selected, on
   </div>;
 }
 
-export function StanceStrip({ item }: { item: Pick<Summary, "positive_count" | "negative_count" | "absent_count"> }) {
-  const total = item.positive_count + item.negative_count + item.absent_count || 1;
+export function EvaluativeBalanceStrip({ item }: { item: Pick<Summary, "positive_count" | "negative_count" | "absent_count" | "evaluative_count" | "negative_share"> }) {
+  const evaluative = item.evaluative_count ?? item.positive_count + item.negative_count;
+  const negativeShare = item.negative_share ?? (evaluative ? item.negative_count / evaluative : 0);
+  const positiveShare = evaluative ? item.positive_count / evaluative : 0;
   return <div>
-    <div className="flex h-2 overflow-hidden bg-neutral/20" aria-label="Розподіл тональності">
-      <span className="bg-positive" style={{ width: `${(item.positive_count / total) * 100}%` }} />
-      <span className="bg-negative" style={{ width: `${(item.negative_count / total) * 100}%` }} />
-      <span className="bg-neutral" style={{ width: `${(item.absent_count / total) * 100}%` }} />
+    <div className="flex h-2 overflow-hidden bg-neutral/20" aria-label="Порівняння позитивних і негативних оцінок">
+      <span className="bg-negative" style={{ width: `${negativeShare * 100}%` }} />
+      <span className="bg-positive" style={{ width: `${positiveShare * 100}%` }} />
     </div>
-    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-      <span><i className="mr-1 inline-block size-2 bg-positive" />{formatNumber(item.positive_count)} позитивних</span>
-      <span><i className="mr-1 inline-block size-2 bg-negative" />{formatNumber(item.negative_count)} негативних</span>
-      <span><i className="mr-1 inline-block size-2 bg-neutral" />{formatNumber(item.absent_count)} без оцінки</span>
+    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+      <span className="text-negative">Негативні {formatPercent(negativeShare)}</span>
+      <span className="text-positive">Позитивні {formatPercent(positiveShare)}</span>
+      <span>n = {formatNumber(evaluative)}</span>
+      {item.absent_count ? <span>{formatNumber(item.absent_count)} без оцінки</span> : null}
     </div>
   </div>;
 }
+
+export const StanceStrip = EvaluativeBalanceStrip;
 
 export function Pager({ page, param = "offset" }: { page: Page<unknown>; param?: string }) {
   const [params, setParams] = useSearchParams();

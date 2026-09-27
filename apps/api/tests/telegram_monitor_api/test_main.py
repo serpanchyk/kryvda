@@ -108,9 +108,16 @@ class FakeAnalytics:
         return {"entities": [{"id": 1}], "channels": [{"id": 2}]}
 
     async def entity(
-        self, entity_id: int, filters: object, start: object, end: object, limit: int, offset: int
+        self,
+        entity_id: int,
+        filters: object,
+        start: object,
+        end: object,
+        limit: int,
+        offset: int,
+        sort: object,
     ) -> dict[str, object] | None:
-        type(self).last_entity_args = (entity_id, filters, start, end, limit, offset)
+        type(self).last_entity_args = (entity_id, filters, start, end, limit, offset, sort)
         return {
             "entity": {"id": entity_id},
             "summary": {},
@@ -159,6 +166,7 @@ class FakeAnalytics:
         end: object,
         limit: int,
         offset: int,
+        sort: object,
     ) -> dict[str, object]:
         return {
             "items": [{"id": 2, "title": "Channel"}],
@@ -175,8 +183,9 @@ class FakeAnalytics:
         end: object,
         limit: int,
         offset: int,
+        sort: object,
     ) -> dict[str, object] | None:
-        type(self).last_channel_args = (channel_id, start, end, limit, offset)
+        type(self).last_channel_args = (channel_id, start, end, limit, offset, sort)
         return None if channel_id == 404 else {"channel": {"id": channel_id}}
 
     async def claims(self, *args: object) -> dict[str, object]:
@@ -213,7 +222,7 @@ async def test_read_only_investigation_endpoints(monkeypatch: object) -> None:
         assert entity_filters.channel_id == 7
         assert entity_filters.source_entity_id == 12
         assert entity_filters.attribution_mode == "quoted_sources"
-        assert FakeAnalytics.last_entity_args[-2:] == (1, 0)
+        assert FakeAnalytics.last_entity_args[-3:] == (1, 0, "evaluative_volume")
         actors = await client.get(
             "/entities/4/source-actors",
             params={
@@ -260,7 +269,7 @@ async def test_read_only_investigation_endpoints(monkeypatch: object) -> None:
         assert (await client.get("/channels/3/analytics", params={"limit": 0})).json()["channel"][
             "id"
         ] == 3
-        assert FakeAnalytics.last_channel_args == (3, None, None, 1, 0)
+        assert FakeAnalytics.last_channel_args == (3, None, None, 1, 0, "negative_volume")
         assert (await client.get("/channels/404/analytics")).status_code == 404
         assert (
             await client.get(

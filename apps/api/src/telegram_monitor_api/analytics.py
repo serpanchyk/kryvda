@@ -2,6 +2,7 @@
 # ruff: noqa: E501
 
 import json
+import math
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
@@ -31,6 +32,45 @@ class EntityAnalyticsFilters:
             self.source_entity_id,
             self.attribution_mode,
         )
+
+
+RankingSort = Literal["negative_volume", "negative_balance", "positive_volume", "evaluative_volume"]
+
+
+def negative_balance_metrics(positive_count: int, negative_count: int) -> dict[str, float | int]:
+    """Return evaluative balance metrics without treating absent stance as evaluative."""
+    evaluative_count = positive_count + negative_count
+    if evaluative_count == 0:
+        return {
+            "evaluative_count": 0,
+            "negative_share": 0.0,
+            "negative_balance_score": 0.0,
+        }
+    total = float(evaluative_count)
+    negative_share = negative_count / total
+    z = 1.96
+    z_squared = z**2
+    score = (
+        negative_share
+        - z_squared / (2 * total)
+        - z * math.sqrt((negative_share * (1 - negative_share) + z_squared / (4 * total)) / total)
+    ) / (1 + z_squared / total)
+    return {
+        "evaluative_count": evaluative_count,
+        "negative_share": negative_share,
+        "negative_balance_score": score,
+    }
+
+
+def _ranking_order(sort: RankingSort, name: str) -> str:
+    """Return safe, deterministic ordering for aggregate ranking rows."""
+    primary = {
+        "negative_volume": "negative_count DESC",
+        "negative_balance": "negative_balance_score DESC",
+        "positive_volume": "positive_count DESC",
+        "evaluative_volume": "evaluative_count DESC",
+    }[sort]
+    return f"{primary}, evaluative_count DESC, negative_count DESC, {name} ASC"
 
 
 class AnalyticsRepository:
@@ -67,13 +107,19 @@ class AnalyticsRepository:
         end: datetime | None,
         limit: int,
         offset: int,
+        sort: RankingSort = "evaluative_volume",
     ) -> dict[str, Any] | None:
         """Return one registry entity with consistently filtered aggregates."""
         entity = await self._pool.fetchrow(_ENTITY_SQL, entity_id)
         if entity is None:
             return None
         args = (entity_id, *filters.values(), start, end)
-        channels = await self._pool.fetch(_ENTITY_CHANNEL_PAGE_SQL, *args, limit, offset)
+        channels = await self._pool.fetch(
+            _ENTITY_CHANNEL_PAGE_SQL.format(order=_ranking_order(sort, "channel.title")),
+            *args,
+            limit,
+            offset,
+        )
         channel_options = await self._pool.fetch(_ENTITY_CHANNEL_OPTIONS_SQL, *args)
         channel_total = await self._pool.fetchval(_ENTITY_CHANNEL_COUNT_SQL, *args)
         source_entity = (
@@ -91,7 +137,12 @@ class AnalyticsRepository:
             "entity": dict(entity),
             "summary": dict(summary)
             if summary is not None
-            else {"mention_count": 0, "positive_count": 0, "negative_count": 0},
+            else {
+                "mention_count": 0,
+                **negative_balance_metrics(0, 0),
+                "positive_count": 0,
+                "negative_count": 0,
+            },
             "channels": {
                 "items": [dict(row) for row in channels],
                 "total": int(channel_total or 0),
@@ -117,6 +168,7 @@ class AnalyticsRepository:
         end: datetime | None,
         limit: int,
         offset: int,
+        sort: RankingSort = "negative_volume",
     ) -> dict[str, Any] | None:
         """Return one channel with editorial aggregate sections."""
         channel = await self._pool.fetchrow(_CHANNEL_SQL, channel_id)
@@ -125,7 +177,12 @@ class AnalyticsRepository:
         args = (channel_id, start, end)
         summary = await self._pool.fetchrow(_CHANNEL_TOTAL_SQL, *args)
         daily = await self._pool.fetch(_CHANNEL_DAILY_SQL, *args)
-        entities = await self._pool.fetch(_CHANNEL_ENTITY_PAGE_SQL, *args, limit, offset)
+        entities = await self._pool.fetch(
+            _CHANNEL_ENTITY_PAGE_SQL.format(order=_ranking_order(sort, "entity.canonical_name")),
+            *args,
+            limit,
+            offset,
+        )
         entity_total = await self._pool.fetchval(_CHANNEL_ENTITY_COUNT_SQL, *args)
         rhetoric = await self._pool.fetch(_CHANNEL_RHETORIC_SQL, *args)
         epistemic = await self._pool.fetch(_CHANNEL_EPISTEMIC_SQL, *args)
@@ -198,10 +255,17 @@ class AnalyticsRepository:
         }
 
     async def channels(
-        self, start: datetime | None, end: datetime | None, limit: int, offset: int
+        self,
+        start: datetime | None,
+        end: datetime | None,
+        limit: int,
+        offset: int,
+        sort: RankingSort = "evaluative_volume",
     ) -> dict[str, Any]:
         """Return channel comparison rows and daily activity."""
-        rows = await self._pool.fetch(_CHANNEL_PAGE_SQL, start, end, limit, offset)
+        rows = await self._pool.fetch(
+            _CHANNEL_PAGE_SQL.format(order=_ranking_order(sort, "title")), start, end, limit, offset
+        )
         total = await self._pool.fetchval(_CHANNEL_COUNT_SQL, start, end)
         daily = await self._pool.fetch(_DAILY_SQL, start, end)
         return {
@@ -260,7 +324,7 @@ class AnalyticsRepository:
         return value
 
 
-def _empty_summary() -> dict[str, int]:
+def _empty_summary() -> dict[str, int | float]:
     return {
         "post_count": 0,
         "claim_count": 0,
@@ -268,6 +332,9 @@ def _empty_summary() -> dict[str, int]:
         "channel_count": 0,
         "positive_count": 0,
         "negative_count": 0,
+        "evaluative_count": 0,
+        "negative_share": 0.0,
+        "negative_balance_score": 0.0,
         "absent_count": 0,
         "today_post_count": 0,
         "today_claim_count": 0,
@@ -310,15 +377,41 @@ def _distribution(row: asyncpg.Record) -> dict[str, object]:
     }
 
 
-def _empty_channel_summary() -> dict[str, int]:
+def _empty_channel_summary() -> dict[str, int | float]:
     return {
         "post_count": 0,
         "claim_count": 0,
         "entity_count": 0,
         "positive_count": 0,
         "negative_count": 0,
+        "evaluative_count": 0,
+        "negative_share": 0.0,
+        "negative_balance_score": 0.0,
         "absent_count": 0,
     }
+
+
+_POSITIVE_COUNT_SQL = "count(*) FILTER (WHERE classification.stance = 'позитивне')"
+_NEGATIVE_COUNT_SQL = "count(*) FILTER (WHERE classification.stance = 'негативне')"
+
+
+def _aggregate_metrics_sql() -> str:
+    positive = _POSITIVE_COUNT_SQL
+    negative = _NEGATIVE_COUNT_SQL
+    total = f"({positive} + {negative})"
+    share = f"CASE WHEN {total} = 0 THEN 0::double precision ELSE {negative}::double precision / {total} END"
+    score = (
+        f"CASE WHEN {total} = 0 THEN 0::double precision ELSE (({share}) - 3.8416 / (2 * {total}) "
+        f"- 1.96 * sqrt((({share}) * (1 - ({share})) + 3.8416 / (4 * {total})) / {total})) "
+        f"/ (1 + 3.8416 / {total}) END"
+    )
+    return (
+        f"{positive} AS positive_count, {negative} AS negative_count, {total} AS evaluative_count, "
+        f"{share} AS negative_share, {score} AS negative_balance_score"
+    )
+
+
+_AGGREGATE_METRICS_SQL = _aggregate_metrics_sql()
 
 
 def _base(start_arg: str, end_arg: str) -> str:
@@ -345,23 +438,28 @@ WHERE post.deleted_at IS NULL AND post.inaccessible_at IS NULL
 """
 
 
-_DASHBOARD_SUMMARY_SQL = """SELECT count(DISTINCT post.id) AS post_count,
+_DASHBOARD_SUMMARY_SQL = (
+    """SELECT count(DISTINCT post.id) AS post_count,
     count(DISTINCT claim.id) AS claim_count, count(DISTINCT entity.id) AS entity_count,
     count(DISTINCT channel.id) AS channel_count,
-    count(*) FILTER (WHERE classification.stance = 'позитивне') AS positive_count,
-    count(*) FILTER (WHERE classification.stance = 'негативне') AS negative_count,
+    """
+    + _AGGREGATE_METRICS_SQL
+    + """,
     count(*) FILTER (WHERE classification.stance = 'відсутнє') AS absent_count,
     count(DISTINCT post.id) FILTER (WHERE post.published_at >= date_trunc('day', now()))
         AS today_post_count,
     count(DISTINCT claim.id) FILTER (WHERE post.published_at >= date_trunc('day', now()))
         AS today_claim_count
-""" + _base("$1", "$2")
+"""
+    + _base("$1", "$2")
+)
 
 _DAILY_SQL = (
     """SELECT date_trunc('day', post.published_at)::date AS date,
     count(DISTINCT post.id) AS post_count, count(DISTINCT claim.id) AS claim_count,
-    count(*) FILTER (WHERE classification.stance = 'позитивне') AS positive_count,
-    count(*) FILTER (WHERE classification.stance = 'негативне') AS negative_count,
+    """
+    + _AGGREGATE_METRICS_SQL
+    + """,
     count(*) FILTER (WHERE classification.stance = 'відсутнє') AS absent_count
 """
     + _base("$1", "$2")
@@ -371,12 +469,13 @@ _DAILY_SQL = (
 _ENTITY_SUMMARY_SQL = (
     """SELECT entity.id, entity.canonical_name,
     count(DISTINCT claim.id) AS claim_count, count(DISTINCT post.id) AS post_count,
-    count(*) FILTER (WHERE classification.stance = 'позитивне') AS positive_count,
-    count(*) FILTER (WHERE classification.stance = 'негативне') AS negative_count,
+    """
+    + _AGGREGATE_METRICS_SQL
+    + """,
     count(*) FILTER (WHERE classification.stance = 'відсутнє') AS absent_count
 """
     + _base("$1", "$2")
-    + "GROUP BY entity.id, entity.canonical_name ORDER BY claim_count DESC, entity.canonical_name"
+    + "GROUP BY entity.id, entity.canonical_name ORDER BY negative_count DESC, entity.canonical_name"
 )
 
 _CHANNEL_SUMMARY_SQL = (
@@ -384,12 +483,13 @@ _CHANNEL_SUMMARY_SQL = (
     channel.status, max(post.published_at) AS last_published_at,
     count(DISTINCT entity.id) AS entity_count, count(DISTINCT claim.id) AS claim_count,
     count(DISTINCT post.id) AS post_count,
-    count(*) FILTER (WHERE classification.stance = 'позитивне') AS positive_count,
-    count(*) FILTER (WHERE classification.stance = 'негативне') AS negative_count,
+    """
+    + _AGGREGATE_METRICS_SQL
+    + """,
     count(*) FILTER (WHERE classification.stance = 'відсутнє') AS absent_count
 """
     + _base("$1", "$2")
-    + "GROUP BY channel.id, channel.title, channel.username, channel.avatar_url, channel.status ORDER BY claim_count DESC"
+    + "GROUP BY channel.id, channel.title, channel.username, channel.avatar_url, channel.status ORDER BY {order}"
 )
 _CHANNEL_PAGE_SQL = _CHANNEL_SUMMARY_SQL + " LIMIT $3 OFFSET $4"
 _CHANNEL_COUNT_SQL = "SELECT count(DISTINCT channel.id) " + _base("$1", "$2")
@@ -432,13 +532,14 @@ _ENTITY_CHANNEL_SQL = (
     count(DISTINCT entity.id) AS entity_count,
     count(DISTINCT claim.id) AS claim_count,
     count(DISTINCT post.id) AS post_count,
-    count(*) FILTER (WHERE classification.stance = 'позитивне') AS positive_count,
-    count(*) FILTER (WHERE classification.stance = 'негативне') AS negative_count,
+    """
+    + _AGGREGATE_METRICS_SQL
+    + """,
     0 AS absent_count
 """
     + _ENTITY_BASE
     + """ GROUP BY channel.id, channel.title, channel.username, channel.avatar_url, channel.status
-ORDER BY claim_count DESC"""
+ORDER BY {order}"""
 )
 _ENTITY_CHANNEL_PAGE_SQL = _ENTITY_CHANNEL_SQL + " LIMIT $11 OFFSET $12"
 _ENTITY_CHANNEL_COUNT_SQL = "SELECT count(DISTINCT channel.id) " + _ENTITY_BASE
@@ -449,8 +550,9 @@ _ENTITY_CHANNEL_OPTIONS_SQL = (
 _ENTITY_DAILY_SQL = (
     """SELECT date_trunc('day', post.published_at)::date AS date,
     count(DISTINCT post.id) AS post_count, count(DISTINCT claim.id) AS claim_count,
-    count(*) FILTER (WHERE classification.stance = 'позитивне') AS positive_count,
-    count(*) FILTER (WHERE classification.stance = 'негативне') AS negative_count,
+    """
+    + _AGGREGATE_METRICS_SQL
+    + """,
     0 AS absent_count
 """
     + _ENTITY_BASE
@@ -459,8 +561,9 @@ _ENTITY_DAILY_SQL = (
 
 _ENTITY_TOTAL_SQL = (
     """SELECT count(DISTINCT claim.id) AS mention_count,
-    count(*) FILTER (WHERE classification.stance = 'позитивне') AS positive_count,
-    count(*) FILTER (WHERE classification.stance = 'негативне') AS negative_count
+    """
+    + _AGGREGATE_METRICS_SQL
+    + """
 """
     + _ENTITY_BASE
 )
@@ -540,8 +643,9 @@ GROUP BY channel.id, channel.title, channel.username, channel.avatar_url, channe
 _CHANNEL_TOTAL_SQL = (
     """SELECT count(DISTINCT post.id) AS post_count,
     count(DISTINCT claim.id) AS claim_count, count(DISTINCT entity.id) AS entity_count,
-    count(*) FILTER (WHERE classification.stance = 'позитивне') AS positive_count,
-    count(*) FILTER (WHERE classification.stance = 'негативне') AS negative_count,
+    """
+    + _AGGREGATE_METRICS_SQL
+    + """,
     count(*) FILTER (WHERE classification.stance = 'відсутнє') AS absent_count
 """
     + _base("$2", "$3")
@@ -551,8 +655,9 @@ _CHANNEL_TOTAL_SQL = (
 _CHANNEL_DAILY_SQL = (
     """SELECT date_trunc('day', post.published_at)::date AS date,
     count(DISTINCT post.id) AS post_count, count(DISTINCT claim.id) AS claim_count,
-    count(*) FILTER (WHERE classification.stance = 'позитивне') AS positive_count,
-    count(*) FILTER (WHERE classification.stance = 'негативне') AS negative_count,
+    """
+    + _AGGREGATE_METRICS_SQL
+    + """,
     count(*) FILTER (WHERE classification.stance = 'відсутнє') AS absent_count
 """
     + _base("$2", "$3")
@@ -562,13 +667,14 @@ _CHANNEL_DAILY_SQL = (
 _CHANNEL_ENTITY_SQL = (
     """SELECT entity.id, entity.canonical_name,
     count(DISTINCT claim.id) AS claim_count, count(DISTINCT post.id) AS post_count,
-    count(*) FILTER (WHERE classification.stance = 'позитивне') AS positive_count,
-    count(*) FILTER (WHERE classification.stance = 'негативне') AS negative_count,
+    """
+    + _AGGREGATE_METRICS_SQL
+    + """,
     count(*) FILTER (WHERE classification.stance = 'відсутнє') AS absent_count
 """
     + _base("$2", "$3")
     + """ AND channel.id = $1 GROUP BY entity.id, entity.canonical_name
-ORDER BY negative_count DESC, claim_count DESC, entity.canonical_name"""
+ORDER BY {order}"""
 )
 _CHANNEL_ENTITY_PAGE_SQL = _CHANNEL_ENTITY_SQL + " LIMIT $4 OFFSET $5"
 _CHANNEL_ENTITY_COUNT_SQL = (

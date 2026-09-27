@@ -18,6 +18,7 @@ from telegram_monitor_api.analytics import (
     _SOURCE_ACTOR_PAGE_SQL,
     AnalyticsRepository,
     EntityAnalyticsFilters,
+    negative_balance_metrics,
 )
 
 
@@ -48,7 +49,12 @@ class EditorialPool:
         self.calls.append((query, args))
         if query == _CHANNEL_DAILY_SQL:
             return [{"date": "2026-09-01", "negative_count": 3}]
-        if query == _CHANNEL_ENTITY_PAGE_SQL:
+        if query == _CHANNEL_ENTITY_PAGE_SQL.format(
+            order=(
+                "negative_count DESC, evaluative_count DESC, negative_count DESC, "
+                "entity.canonical_name ASC"
+            )
+        ):
             return [{"id": 4, "canonical_name": "Сутність", "negative_count": 3}]
         if query in {_CHANNEL_RHETORIC_SQL, _CHANNEL_EPISTEMIC_SQL, _CHANNEL_ATTRIBUTION_SQL}:
             return [{"key": "category", "count": 3, "share": 1.0}]
@@ -162,3 +168,23 @@ async def test_source_actors_force_named_attribution_and_forward_global_filters(
     )
     assert page_call[10:] == ("Автор", 25, 0)
     assert count_call[5:7] == ("named_entity", None)
+
+
+def test_negative_balance_metrics_penalize_small_samples() -> None:
+    assert negative_balance_metrics(0, 0) == {
+        "evaluative_count": 0,
+        "negative_share": 0.0,
+        "negative_balance_score": 0.0,
+    }
+    one_negative = negative_balance_metrics(0, 1)
+    assert one_negative["negative_share"] == 1.0
+    assert (
+        one_negative["negative_balance_score"]
+        < negative_balance_metrics(0, 100)["negative_balance_score"]
+    )
+    assert negative_balance_metrics(5, 5)["negative_share"] == 0.5
+    assert negative_balance_metrics(9, 1)["negative_balance_score"] < 0.1
+    assert (
+        negative_balance_metrics(1, 9)["negative_balance_score"]
+        > negative_balance_metrics(5, 5)["negative_balance_score"]
+    )

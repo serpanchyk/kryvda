@@ -12,6 +12,7 @@ export type RhetoricLabel =
   | "висміювання_або_особиста_образа"
   | "зовнішній_контроль_або_нелояльність";
 export type DateRange = { start?: string; end?: string };
+export type RankingSort = "negative_volume" | "negative_balance" | "positive_volume" | "evaluative_volume";
 export interface Distribution<K extends string = string> { key: K; count: number; share: number; }
 export interface Entity {
   id: number;
@@ -21,6 +22,9 @@ export interface Entity {
   mention_count: number;
   positive_count: number;
   negative_count: number;
+  evaluative_count?: number;
+  negative_share?: number;
+  negative_balance_score?: number;
 }
 export interface Page<T> { items: T[]; total: number; limit: number; offset: number; }
 export interface Summary {
@@ -36,6 +40,9 @@ export interface Summary {
   post_count: number;
   positive_count: number;
   negative_count: number;
+  evaluative_count?: number;
+  negative_share?: number;
+  negative_balance_score?: number;
   absent_count: number;
 }
 export interface Daily {
@@ -124,6 +131,7 @@ export interface EntityAnalyticsFilters {
   source_kind?: SourceKind;
   source_entity_id?: string;
   attribution_mode?: AttributionMode;
+  sort?: RankingSort;
   offset?: number;
 }
 export interface SourceActorOption {
@@ -200,11 +208,11 @@ export const apiClient = {
   ): Promise<Page<SourceActorOption>> => get(
     `/entities/${id}/source-actors${query({ ...range(dates), ...filters, limit: 25, offset: filters.offset })}`,
   ),
-  channels: (dates: DateRange, offset = 0): Promise<Page<Summary> & { daily: Daily[] }> => get(
-    `/channels${query({ ...range(dates), limit: 25, offset })}`,
+  channels: (dates: DateRange, offset = 0, sort: RankingSort = "evaluative_volume"): Promise<Page<Summary> & { daily: Daily[] }> => get(
+    `/channels${query({ ...range(dates), limit: 25, offset, sort })}`,
   ),
-  channel: (id: string, dates: DateRange, offset = 0): Promise<ChannelProfile> => get(
-    `/channels/${id}/analytics${query({ ...range(dates), limit: 25, offset })}`,
+  channel: (id: string, dates: DateRange, offset = 0, sort: RankingSort = "negative_volume"): Promise<ChannelProfile> => get(
+    `/channels/${id}/analytics${query({ ...range(dates), limit: 25, offset, sort })}`,
   ),
   claims: (
     dates: DateRange,

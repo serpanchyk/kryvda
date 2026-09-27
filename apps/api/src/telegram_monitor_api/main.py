@@ -196,7 +196,16 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         monitored: bool | None = None,
         start: datetime | None = None,
         end: datetime | None = None,
-        sort: Literal["name", "mentions", "positive", "negative"] = "name",
+        sort: Literal[
+            "name",
+            "mentions",
+            "positive",
+            "negative",
+            "negative_volume",
+            "negative_balance",
+            "positive_volume",
+            "evaluative_volume",
+        ] = "name",
         limit: int = 25,
         offset: int = 0,
     ) -> dict[str, object]:
@@ -233,6 +242,9 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         end: datetime | None = None,
         limit: int = 25,
         offset: int = 0,
+        sort: Literal[
+            "negative_volume", "negative_balance", "positive_volume", "evaluative_volume"
+        ] = "evaluative_volume",
     ) -> dict[str, object]:
         """Return an entity profile and its auditable channel comparison."""
         pool = await asyncpg.create_pool(settings.postgres_dsn)
@@ -247,7 +259,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
                 attribution_mode,
             )
             result = await AnalyticsRepository(pool).entity(
-                entity_id, filters, start, end, min(max(limit, 1), 100), max(offset, 0)
+                entity_id, filters, start, end, min(max(limit, 1), 100), max(offset, 0), sort
             )
             if result is None:
                 raise HTTPException(status_code=404, detail="Monitored entity not found")
@@ -324,12 +336,15 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         end: datetime | None = None,
         limit: int = 25,
         offset: int = 0,
+        sort: Literal[
+            "negative_volume", "negative_balance", "positive_volume", "evaluative_volume"
+        ] = "evaluative_volume",
     ) -> dict[str, object]:
         """Return comparable channel analysis profiles."""
         pool = await asyncpg.create_pool(settings.postgres_dsn)
         try:
             return await AnalyticsRepository(pool).channels(
-                start, end, min(max(limit, 1), 100), max(offset, 0)
+                start, end, min(max(limit, 1), 100), max(offset, 0), sort
             )
         finally:
             await pool.close()
@@ -341,6 +356,9 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         end: datetime | None = None,
         limit: int = 25,
         offset: int = 0,
+        sort: Literal[
+            "negative_volume", "negative_balance", "positive_volume", "evaluative_volume"
+        ] = "negative_volume",
     ) -> dict[str, object]:
         """Return one channel analytics profile."""
         pool = await asyncpg.create_pool(settings.postgres_dsn)
@@ -351,6 +369,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
                 end,
                 min(max(limit, 1), 100),
                 max(offset, 0),
+                sort,
             )
             if result is None:
                 raise HTTPException(status_code=404, detail="Channel not found")

@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { beforeAll, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 import { apiClient } from "@/api/client";
 import { PostPage, Shell } from "@/App";
@@ -13,6 +14,8 @@ vi.mock("@/api/client", async () => {
   const actual = await vi.importActual<typeof import("@/api/client")>("@/api/client");
   return { ...actual, apiClient: { ...actual.apiClient, dashboard: vi.fn(), claims: vi.fn(), entity: vi.fn(), evidence: vi.fn(), sourceActors: vi.fn(), entities: vi.fn(), post: vi.fn() } };
 });
+
+afterEach(() => cleanup());
 
 beforeAll(() => {
   class ResizeObserver {
@@ -62,6 +65,28 @@ describe("editorial analytics pages", () => {
     expect(screen.getByText("Фонові повтори")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Сутності" })).toHaveAttribute("href", "/entities?period=all");
     expect(screen.getByRole("link", { name: /Віталій Шабунін/ })).toHaveAttribute("href", "/entities/4?period=all");
+  });
+
+  test("switches dashboard rankings and shows evaluative sample sizes", async () => {
+    vi.mocked(apiClient.dashboard).mockResolvedValue({
+      summary: { post_count: 10, claim_count: 20, entity_count: 2, channel_count: 2, positive_count: 6, negative_count: 14, absent_count: 4, today_post_count: 0, today_claim_count: 0 },
+      daily: [],
+      entities: [
+        { id: 1, canonical_name: "Великий обсяг", claim_count: 20, post_count: 5, positive_count: 20, negative_count: 30, evaluative_count: 50, negative_share: 0.6, negative_balance_score: 0.46, absent_count: 3 },
+        { id: 2, canonical_name: "Стабільний негатив", claim_count: 20, post_count: 5, positive_count: 1, negative_count: 9, evaluative_count: 10, negative_share: 0.9, negative_balance_score: 0.6, absent_count: 0 },
+      ],
+      channels: [],
+      pipeline: { pending_live: 0, pending_backfill: 0, leased: 0, retry_scheduled: 0, next_retry_at: null, retry_by_error_kind: {}, failed: 0, completed_last_hour: 0, failed_last_hour: 0, last_completed_at: null },
+    });
+    vi.mocked(apiClient.claims).mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 });
+    renderRoute("/", "/", <DashboardPage />);
+    expect(await screen.findByText("Великий обсяг")).toBeInTheDocument();
+    expect(screen.getByText("n = 50")).toBeInTheDocument();
+    expect(screen.getByText("3 без оцінки")).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("button", { name: "За негативним балансом" })[0]);
+    const entityLinks = screen.getAllByRole("link", { name: /Великий обсяг|Стабільний негатив/ });
+    expect(entityLinks[0]).toHaveAccessibleName(/Стабільний негатив/);
+    expect(screen.queryByText("0.6")).not.toBeInTheDocument();
   });
 
   test("applies URL-backed entity filters to profile and evidence", async () => {

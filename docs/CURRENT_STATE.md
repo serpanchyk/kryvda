@@ -116,8 +116,14 @@ stance, entity, rhetoric, epistemic, attribution, and recent-claim analysis. Pos
 source/analysis split view and exposes evidence, target, stance, rhetoric, epistemic status, and
 attribution for every extracted claim.
 
-Analytical lists use server-side offset pagination (25 records by default). Registry aliases remain
-search-only internal data and are never included in analytical responses. The shared 7, 30, and
+Analytical lists use server-side offset pagination (25 records by default). Entity and channel
+rankings distinguish absolute negative volume from negative evaluative balance: the latter ranks the
+Wilson lower bound (z = 1.96) of negative classifications among positive and negative evaluations.
+Rows show positive and negative shares, their evaluative sample size, and separately report the
+technical `відсутнє` classification, which never enters that denominator. Full analytical lists offer
+negative volume, negative balance, positive volume, and total evaluative-volume ordering; the
+dashboard exposes volume and balance as separate quick views. Registry aliases remain search-only
+internal data and are never included in analytical responses. The shared 7, 30, and
 90-day presets, all-time option, and custom inclusive calendar range are encoded in the URL and
 preserved across top-level navigation. Entity and channel chart selections are also URL-backed and
 filter their evidence or claims. Entity analytics excludes the technical `відсутнє` classification

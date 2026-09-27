@@ -15,6 +15,7 @@ import {
   type Evidence,
   type PostClaim,
   type RhetoricLabel,
+  type RankingSort,
   type SourceKind,
   type Stance,
   type Summary,
@@ -24,6 +25,7 @@ import {
   DailyChart,
   DistributionBars,
   EmptyState,
+  EvaluativeBalanceStrip,
   ErrorState,
   FilterField,
   Graphic,
@@ -67,6 +69,24 @@ function QueryBoundary({ loading, error, children }: { loading: boolean; error: 
   if (loading) return <LoadState />;
   if (error) return <ErrorState />;
   return children;
+}
+
+const rankingLabels: Record<RankingSort, string> = {
+  negative_volume: "За обсягом негативу",
+  negative_balance: "За негативним балансом",
+  positive_volume: "За обсягом позитиву",
+  evaluative_volume: "За обсягом оцінок",
+};
+
+function rankingValue(item: Summary, sort: RankingSort): number {
+  if (sort === "negative_balance") return item.negative_balance_score ?? 0;
+  if (sort === "positive_volume") return item.positive_count;
+  if (sort === "evaluative_volume") return item.evaluative_count ?? item.positive_count + item.negative_count;
+  return item.negative_count;
+}
+
+function RankingSelect({ value, onChange }: { value: RankingSort; onChange: (value: RankingSort) => void }) {
+  return <FilterField label="Сортування"><Select value={value} onValueChange={(next) => onChange(next as RankingSort)}><SelectTrigger aria-label="Сортування рейтингу"><SelectValue>{rankingLabels[value]}</SelectValue></SelectTrigger><SelectContent>{Object.entries(rankingLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>;
 }
 
 function stanceClass(stance: Stance): string {
@@ -135,6 +155,8 @@ export function DashboardPage() {
   const dates = datesFromParams(params);
   const query = useQuery({ queryKey: ["dashboard", dates], queryFn: () => apiClient.dashboard(dates) });
   const chooseDate = useExactDate();
+  const [entityRanking, setEntityRanking] = useState<RankingSort>("negative_volume");
+  const [channelRanking, setChannelRanking] = useState<RankingSort>("negative_volume");
   return <PageLayout>
     <PageHeader eyebrow={`Моніторинг інформаційного простору · ${periodLabel(params)}`} title="Хто і як стає мішенню негативних тверджень" dek="Оперативна картина публікацій, атак і позицій у погодженому пулі Telegram-каналів." />
     <QueryBoundary loading={query.isLoading} error={query.isError}>
@@ -153,8 +175,8 @@ export function DashboardPage() {
         </Graphic>
         <Graphic eyebrow="Динаміка атак" period={periodLabel(params)} title="Коли зростала кількість негативних тверджень" dek="Натисніть на дату, щоб звузити всю сторінку до одного дня."><DailyChart data={query.data.daily} mode="negative" onDate={chooseDate} /></Graphic>
         <div className="grid gap-12 xl:grid-cols-2">
-          <Graphic eyebrow="Рейтинг сутностей" title="Найчастіші мішені негативного висвітлення" dek="Кількість негативних класифікацій щодо кожної сутності."><RankedBars items={[...query.data.entities].sort((a, b) => b.negative_count - a.negative_count).slice(0, 8)} value={(item) => item.negative_count} label={(item) => item.canonical_name ?? "—"} href={(item) => `/entities/${item.id}?${new URLSearchParams(params).toString()}`} /></Graphic>
-          <Graphic eyebrow="Порівняння джерел" title="Канали з найбільшим обсягом негативних оцінок" dek="Абсолютна кількість; рядок відкриває профіль джерела."><RankedBars items={[...query.data.channels].sort((a, b) => b.negative_count - a.negative_count)} value={(item) => item.negative_count} label={(item) => item.title ?? "—"} href={(item) => `/channels/${item.id}?${new URLSearchParams(params).toString()}`} /></Graphic>
+          <Graphic eyebrow="Рейтинг сутностей" title={entityRanking === "negative_balance" ? "Негативний баланс оцінок" : "Найбільший обсяг негативних оцінок"} dek={entityRanking === "negative_balance" ? "Рейтинг стабільно негативної оцінки з поправкою на малу вибірку." : "Абсолютна кількість негативних класифікацій щодо кожної сутності."} action={<div className="flex gap-2"><button type="button" className={entityRanking === "negative_volume" ? "border-b-2 border-negative text-sm font-bold" : "text-sm"} onClick={() => setEntityRanking("negative_volume")}>За обсягом негативу</button><button type="button" className={entityRanking === "negative_balance" ? "border-b-2 border-negative text-sm font-bold" : "text-sm"} onClick={() => setEntityRanking("negative_balance")}>За негативним балансом</button></div>}><RankedBars items={[...query.data.entities].sort((a, b) => rankingValue(b, entityRanking) - rankingValue(a, entityRanking)).slice(0, 8)} value={(item) => rankingValue(item, entityRanking)} label={(item) => item.canonical_name ?? "—"} href={(item) => `/entities/${item.id}?${new URLSearchParams(params).toString()}`} showBalance /></Graphic>
+          <Graphic eyebrow="Порівняння джерел" title={channelRanking === "negative_balance" ? "Канали за негативним балансом" : "Найбільший обсяг негативних оцінок"} dek={channelRanking === "negative_balance" ? "Рейтинг стабільно негативної оцінки з поправкою на малу вибірку." : "Абсолютна кількість; рядок відкриває профіль джерела."} action={<div className="flex gap-2"><button type="button" className={channelRanking === "negative_volume" ? "border-b-2 border-negative text-sm font-bold" : "text-sm"} onClick={() => setChannelRanking("negative_volume")}>За обсягом негативу</button><button type="button" className={channelRanking === "negative_balance" ? "border-b-2 border-negative text-sm font-bold" : "text-sm"} onClick={() => setChannelRanking("negative_balance")}>За негативним балансом</button></div>}><RankedBars items={[...query.data.channels].sort((a, b) => rankingValue(b, channelRanking) - rankingValue(a, channelRanking))} value={(item) => rankingValue(item, channelRanking)} label={(item) => item.title ?? "—"} href={(item) => `/channels/${item.id}?${new URLSearchParams(params).toString()}`} showBalance /></Graphic>
         </div>
         <ClaimsFeed dates={dates} />
       </>}
@@ -174,14 +196,14 @@ export function EntitiesPage() {
       <Input value={filters.q} placeholder="Пошук сутності" onChange={(event) => set("q", event.target.value)} />
       <FilterField label="Тип сутності"><Select value={filters.coarse_type ?? "all"} onValueChange={(value) => set("type", value)}><SelectTrigger aria-label="Тип сутності"><SelectValue>{filters.coarse_type ? entityTypes[filters.coarse_type] : "Усі типи"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі типи</SelectItem>{Object.entries(entityTypes).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>
       <FilterField label="Статус моніторингу"><Select value={filters.monitored ?? "all"} onValueChange={(value) => set("monitored", value)}><SelectTrigger aria-label="Статус моніторингу"><SelectValue>{filters.monitored === "true" ? "Відстежуються" : filters.monitored === "false" ? "Не відстежуються" : "Усі статуси"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі статуси</SelectItem><SelectItem value="true">Відстежуються</SelectItem><SelectItem value="false">Не відстежуються</SelectItem></SelectContent></Select></FilterField>
-      <FilterField label="Сортування"><Select value={filters.sort} onValueChange={(value) => set("sort", value)}><SelectTrigger aria-label="Сортування"><SelectValue>{{ name: "За назвою", mentions: "За згадуваннями", positive: "За позитивними", negative: "За негативними" }[filters.sort]}</SelectValue></SelectTrigger><SelectContent><SelectItem value="name">За назвою</SelectItem><SelectItem value="mentions">За згадуваннями</SelectItem><SelectItem value="positive">За позитивними</SelectItem><SelectItem value="negative">За негативними</SelectItem></SelectContent></Select></FilterField>
+      <FilterField label="Сортування"><Select value={filters.sort} onValueChange={(value) => set("sort", value)}><SelectTrigger aria-label="Сортування"><SelectValue>{{ name: "За назвою", mentions: "За згадуваннями", positive: "За позитивними", negative: "За негативними", negative_volume: "За обсягом негативу", negative_balance: "За негативним балансом", positive_volume: "За обсягом позитиву", evaluative_volume: "За обсягом оцінок" }[filters.sort]}</SelectValue></SelectTrigger><SelectContent><SelectItem value="name">За назвою</SelectItem><SelectItem value="mentions">За згадуваннями</SelectItem><SelectItem value="positive">За позитивними</SelectItem><SelectItem value="negative">За негативними</SelectItem><SelectItem value="negative_volume">За обсягом негативу</SelectItem><SelectItem value="negative_balance">За негативним балансом</SelectItem><SelectItem value="positive_volume">За обсягом позитиву</SelectItem><SelectItem value="evaluative_volume">За обсягом оцінок</SelectItem></SelectContent></Select></FilterField>
     </div>
     <QueryBoundary loading={query.isLoading} error={query.isError}>
       {!query.data?.items.length ? <EmptyState /> : <section>
         <div className="hidden border-b border-ink pb-2 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_8rem_8rem_8rem]"><span>Сутність</span><span>Згадування</span><span>Позитивні</span><span>Негативні</span></div>
         {query.data.items.map((entity) => <Link key={entity.id} to={`/entities/${entity.id}?${new URLSearchParams(params).toString()}`} className="group grid gap-3 border-b border-rule py-5 md:grid-cols-[minmax(0,1fr)_8rem_8rem_8rem] md:items-center">
           <div><p className="font-heading text-2xl font-bold group-hover:text-negative">{entity.canonical_name}</p><div className="mt-2 h-1 max-w-md bg-neutral/20"><span className="block h-full bg-ink" style={{ width: `${(entity.mention_count / max) * 100}%` }} /></div></div>
-          <strong className="tabular-nums">{formatNumber(entity.mention_count)}</strong><span className="font-semibold tabular-nums text-positive">{formatNumber(entity.positive_count)}</span><span className="font-semibold tabular-nums text-negative">{formatNumber(entity.negative_count)}</span>
+          <strong className="tabular-nums">{formatNumber(entity.mention_count)}</strong><span className="font-semibold tabular-nums text-positive">{formatNumber(entity.positive_count)}</span><span className="font-semibold tabular-nums text-negative">{formatNumber(entity.negative_count)}</span><div className="md:col-span-4"><span className="sr-only">Баланс оцінок</span><div className="max-w-md"><EvaluativeBalanceStrip item={{ ...entity, absent_count: 0 }} /></div></div>
         </Link>)}
         <Pager page={query.data} />
       </section>}
@@ -347,6 +369,7 @@ export function EntityPage() {
     source_kind: (params.get("source_kind") ?? undefined) as SourceKind | undefined,
     source_entity_id: params.get("source_entity_id") ?? undefined,
     attribution_mode: (params.get("attribution_mode") ?? undefined) as AttributionMode | undefined,
+    sort: (params.get("channel_sort") ?? "evaluative_volume") as RankingSort,
     offset: Number(params.get("channel_offset") ?? 0),
   };
   const evidenceFilters = { ...filters, offset: Number(params.get("evidence_offset") ?? 0) };
@@ -363,7 +386,7 @@ export function EntityPage() {
           <Graphic eyebrow="Тональність у часі" title="Як змінювалась оцінка сутності" dek="Позитивні та негативні класифікації; натисніть дату для одноденного зрізу."><DailyChart data={profile.data.daily} mode="stance" onDate={chooseDate} /></Graphic>
           <div className="grid gap-12 xl:grid-cols-2">
             <Graphic eyebrow="Риторика атак" title="Які типи атак використовували найчастіше" dek="Частка від усіх призначених риторичних міток."><DistributionBars items={profile.data.rhetoric} labels={rhetoricLabels} selected={filters.rhetoric} onSelect={(key) => setEntityFilter("rhetoric", key)} /></Graphic>
-            <Graphic eyebrow="Порівняння каналів" title="Де сутність згадували найчастіше" dek="Оціночні твердження за каналами публікації."><RankedBars items={profile.data.channels.items} value={(item) => item.claim_count} label={(item) => item.title ?? "—"} href={(item) => `/channels/${item.id}?${new URLSearchParams(params).toString()}`} tone="ink" /><Pager page={profile.data.channels} param="channel_offset" /></Graphic>
+            <Graphic eyebrow="Порівняння каналів" title="Як канали оцінювали сутність" dek="Обраний порядок відокремлює обсяг оцінок від їхнього негативного балансу." action={<RankingSelect value={filters.sort ?? "evaluative_volume"} onChange={(value) => setEntityFilter("channel_sort", value)} />}><RankedBars items={profile.data.channels.items} value={(item) => rankingValue(item, filters.sort ?? "evaluative_volume")} label={(item) => item.title ?? "—"} href={(item) => `/channels/${item.id}?${new URLSearchParams(params).toString()}`} tone="ink" showBalance /><Pager page={profile.data.channels} param="channel_offset" /></Graphic>
           </div>
           <div className="grid gap-12 xl:grid-cols-2">
             <Graphic eyebrow="Епістемічний статус" title="Наскільки категорично сформульовані твердження" dek="Частка від унікальних тверджень."><DistributionBars items={profile.data.epistemic} labels={epistemicLabels} selected={filters.epistemic_status} onSelect={(key) => setEntityFilter("epistemic", key)} tone="ink" /></Graphic>
@@ -386,17 +409,18 @@ function EvidenceFeed({ query }: { query: ReturnType<typeof useQuery<ReturnType<
 }
 
 export function ChannelsPage() {
-  const [params] = useSearchParams();
+  const { params, set } = useFilters();
   const dates = datesFromParams(params);
   const offset = Number(params.get("offset") ?? 0);
-  const query = useQuery({ queryKey: ["channels", dates, offset], queryFn: () => apiClient.channels(dates, offset) });
+  const sort = (params.get("sort") ?? "evaluative_volume") as RankingSort;
+  const query = useQuery({ queryKey: ["channels", dates, offset, sort], queryFn: () => apiClient.channels(dates, offset, sort) });
   const chooseDate = useExactDate();
   return <PageLayout>
     <PageHeader eyebrow={`Джерела моніторингу · ${periodLabel(params)}`} title="Як канали формують інформаційну картину" dek="Порівняння активності, охоплення сутностей і тональності у погодженому пулі джерел." />
     <QueryBoundary loading={query.isLoading} error={query.isError}>
       {query.data && <>
         <Graphic eyebrow="Загальна активність" title="Скільки тверджень з’являлося щодня" dek="Натисніть на дату, щоб побачити зріз одного дня."><DailyChart data={query.data.daily} mode="volume" onDate={chooseDate} /></Graphic>
-        <Graphic eyebrow="Рейтинг каналів" title="Джерела за обсягом проаналізованих тверджень" dek="Смуга показує співвідношення позитивних, негативних та безоціночних класифікацій." footer={false}>
+        <Graphic eyebrow="Рейтинг каналів" title="Порівняння джерел за оціночним висвітленням" dek="Баланс показує лише позитивні й негативні оцінки; безоціночні класифікації подані окремо." action={<RankingSelect value={sort} onChange={(value) => set("sort", value)} />} footer={false}>
           <div className="border-t border-ink">{query.data.items.map((channel, index) => <ChannelRow key={channel.id} channel={channel} rank={index + 1} params={params} />)}<Pager page={query.data} /></div>
         </Graphic>
       </>}
@@ -426,7 +450,8 @@ export function ChannelPage() {
   const { params, set } = useFilters();
   const dates = datesFromParams(params);
   const offset = Number(params.get("offset") ?? 0);
-  const profile = useQuery({ queryKey: ["channel", id, dates, offset], queryFn: () => apiClient.channel(id, dates, offset) });
+  const entitySort = (params.get("entity_sort") ?? "negative_volume") as RankingSort;
+  const profile = useQuery({ queryKey: ["channel", id, dates, offset, entitySort], queryFn: () => apiClient.channel(id, dates, offset, entitySort) });
   const chooseDate = useExactDate();
   const rhetoric = (params.get("rhetoric") ?? undefined) as RhetoricLabel | undefined;
   const epistemic = (params.get("epistemic") ?? undefined) as EpistemicStatus | undefined;
@@ -438,7 +463,7 @@ export function ChannelPage() {
         <MetricStrip items={[{ label: "Дописи", value: profile.data.summary.post_count }, { label: "Твердження", value: profile.data.summary.claim_count }, { label: "Сутності", value: profile.data.summary.entity_count ?? 0 }, { label: "Негативні оцінки", value: profile.data.summary.negative_count, accent: true }]} />
         <Graphic eyebrow="Тональність у часі" title="Як змінювалася позиція каналу" dek="Класифікації тверджень щодо цільових сутностей; натисніть дату для одноденного зрізу."><DailyChart data={profile.data.daily} mode="stance" onDate={chooseDate} /></Graphic>
         <div className="grid gap-12 xl:grid-cols-2">
-          <Graphic eyebrow="Мішені" title="Кого канал оцінював негативно найчастіше" dek="Натисніть сутність, щоб відфільтрувати твердження нижче."><RankedBars items={profile.data.entities.items} value={(item) => item.negative_count} label={(item) => item.canonical_name ?? "—"} selected={params.get("claim_entity") ?? undefined} onSelect={(item) => set("claim_entity", String(item.id), "claim_offset")} /><Pager page={profile.data.entities} /></Graphic>
+          <Graphic eyebrow="Мішені" title="Кого канал оцінював" dek="Порядок відокремлює абсолютний обсяг негативу від стабільно негативного балансу."><div className="mb-4"><RankingSelect value={entitySort} onChange={(value) => set("entity_sort", value)} /></div><RankedBars items={profile.data.entities.items} value={(item) => rankingValue(item, entitySort)} label={(item) => item.canonical_name ?? "—"} selected={params.get("claim_entity") ?? undefined} onSelect={(item) => set("claim_entity", String(item.id), "claim_offset")} showBalance /><Pager page={profile.data.entities} /></Graphic>
           <Graphic eyebrow="Риторика атак" title="Які типи атак переважають" dek="Частка від усіх призначених риторичних міток."><DistributionBars items={profile.data.rhetoric} labels={rhetoricLabels} selected={rhetoric} onSelect={(key) => set("rhetoric", key, "claim_offset")} /></Graphic>
         </div>
         <div className="grid gap-12 xl:grid-cols-2">

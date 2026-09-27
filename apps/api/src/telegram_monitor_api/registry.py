@@ -31,6 +31,13 @@ class RegistryRepository:
             "mentions": "mention_count DESC, canonical_name ASC",
             "positive": "positive_count DESC, canonical_name ASC",
             "negative": "negative_count DESC, canonical_name ASC",
+            "negative_volume": "negative_count DESC, evaluative_count DESC, canonical_name ASC",
+            "negative_balance": (
+                "negative_balance_score DESC, evaluative_count DESC, negative_count DESC, "
+                "canonical_name ASC"
+            ),
+            "positive_volume": "positive_count DESC, evaluative_count DESC, canonical_name ASC",
+            "evaluative_volume": "evaluative_count DESC, negative_count DESC, canonical_name ASC",
         }.get(sort, "canonical_name ASC")
         sql = _ENTITY_PAGE_SQL.format(order=order)
         args = (search, coarse_type, monitored, start, end, limit, offset)
@@ -286,6 +293,28 @@ WHERE ($1::text IS NULL OR entity.canonical_name ILIKE '%' || $1 || '%'
   AND ($3::boolean IS NULL OR entity.monitored = $3)
 """
 
+
+def _entity_metrics_sql() -> str:
+    positive = "count(*) FILTER (WHERE post.id IS NOT NULL AND classification.stance = 'позитивне')"
+    negative = "count(*) FILTER (WHERE post.id IS NOT NULL AND classification.stance = 'негативне')"
+    total = f"({positive} + {negative})"
+    share = (
+        f"CASE WHEN {total} = 0 THEN 0::double precision "
+        f"ELSE {negative}::double precision / {total} END"
+    )
+    score = (
+        f"CASE WHEN {total} = 0 THEN 0::double precision ELSE (({share}) - 3.8416 / (2 * {total}) "
+        f"- 1.96 * sqrt((({share}) * (1 - ({share})) + 3.8416 / (4 * {total})) / {total})) "
+        f"/ (1 + 3.8416 / {total}) END"
+    )
+    return (
+        f"{positive} AS positive_count, {negative} AS negative_count, {total} AS evaluative_count, "
+        f"{share} AS negative_share, {score} AS negative_balance_score"
+    )
+
+
+_ENTITY_METRICS_SQL = _entity_metrics_sql()
+
 _ENTITY_PAGE_SQL = (
     """
 SELECT entity.id, entity.canonical_name, entity.coarse_type, entity.monitored,
@@ -293,10 +322,9 @@ SELECT entity.id, entity.canonical_name, entity.coarse_type, entity.monitored,
            WHERE post.id IS NOT NULL
              AND classification.stance IN ('позитивне', 'негативне')
        ) AS mention_count,
-       count(*) FILTER (WHERE post.id IS NOT NULL AND classification.stance = 'позитивне')
-           AS positive_count,
-       count(*) FILTER (WHERE post.id IS NOT NULL AND classification.stance = 'негативне')
-           AS negative_count
+       """
+    + _ENTITY_METRICS_SQL
+    + """
 """
     + """
 FROM registry_entities AS entity
