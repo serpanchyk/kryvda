@@ -22,6 +22,24 @@ from telegram_monitor_api.analytics import (
 )
 
 
+class DashboardPool:
+    """Reject unrendered SQL templates in the dashboard query sequence."""
+
+    async def fetchrow(self, query: str, *args: object) -> dict[str, object]:
+        assert "{" not in query
+        return {}
+
+    async def fetch(self, query: str, *args: object) -> list[dict[str, object]]:
+        assert "{" not in query
+        return []
+
+
+async def test_dashboard_renders_channel_summary_ordering() -> None:
+    result = await AnalyticsRepository(DashboardPool()).dashboard(None, None)  # type: ignore[arg-type]
+
+    assert result["channels"] == []
+
+
 class EditorialPool:
     """Return deterministic rows for the channel-profile query sequence."""
 

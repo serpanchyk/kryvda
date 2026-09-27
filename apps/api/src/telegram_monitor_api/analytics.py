@@ -84,7 +84,11 @@ class AnalyticsRepository:
         summary = await self._pool.fetchrow(_DASHBOARD_SUMMARY_SQL, start, end)
         daily = await self._pool.fetch(_DAILY_SQL, start, end)
         entities = await self._pool.fetch(_ENTITY_SUMMARY_SQL, start, end)
-        channels = await self._pool.fetch(_CHANNEL_SUMMARY_SQL, start, end)
+        channels = await self._pool.fetch(
+            _CHANNEL_SUMMARY_SQL.format(order=_ranking_order("negative_volume", "channel.title")),
+            start,
+            end,
+        )
         pipeline = await self._pool.fetchrow(_PIPELINE_SQL)
         retry_rows = await self._pool.fetch(_RETRY_ERROR_SQL)
         pipeline_value = dict(pipeline) if pipeline is not None else _empty_pipeline()
