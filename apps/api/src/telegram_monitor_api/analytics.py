@@ -763,7 +763,8 @@ _EVIDENCE_SQL = (
     """SELECT claim.id AS claim_id, claim.normalized_text, claim.evidence_text,
     claim.epistemic_status, claim.source_kind, source_registry.id AS source_entity_id,
     classification.stance, classification.rhetoric, post.id AS post_id, post.published_at,
-    channel.id AS channel_id, channel.title AS channel_title,
+    channel.id AS channel_id, channel.title AS channel_title, entity.id AS entity_id,
+    entity.canonical_name AS entity_name,
     COALESCE(source_registry.canonical_name, source_candidate.representative_mention)
         AS source_entity_name
 """

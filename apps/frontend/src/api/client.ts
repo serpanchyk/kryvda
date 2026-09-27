@@ -64,6 +64,8 @@ export interface Evidence {
   published_at: string;
   channel_id: number;
   channel_title: string;
+  entity_id: number;
+  entity_name: string;
   source_kind: SourceKind;
   source_entity_id: number | null;
   source_entity_name: string | null;

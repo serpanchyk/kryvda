@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowUpRight, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 
 import {
@@ -38,10 +38,12 @@ import {
   StanceStrip,
   useExactDate,
 } from "@/components/editorial";
+import { ClaimMetadata, type ClaimMetadataActions } from "@/components/claim-metadata";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
+  dateParams,
   datesFromParams,
   entityTypes,
   epistemicLabels,
@@ -115,41 +117,19 @@ function ClaimEntityFilter({ selected, onSelect }: { selected?: string; onSelect
 function ClaimsFeed({ dates, channelId, compact = false }: { dates: DateRange; channelId?: string; compact?: boolean }) {
   const { params, set } = useFilters();
   const location = useLocation();
-  const filters = {
-    search: params.get("claim_q") ?? "",
-    entity_id: params.get("claim_entity") ?? undefined,
-    channel_id: channelId,
-    stance: (params.get("claim_stance") ?? params.get("stance") ?? undefined) as Stance | undefined,
-    rhetoric: (params.get("rhetoric") ?? undefined) as RhetoricLabel | undefined,
-    epistemic_status: (params.get("epistemic") ?? undefined) as EpistemicStatus | undefined,
-    source_kind: (params.get("source") ?? undefined) as SourceKind | undefined,
-    offset: Number(params.get("claim_offset") ?? 0),
-  };
+  const filters = { search: params.get("claim_q") ?? "", entity_id: params.get("claim_entity") ?? undefined, channel_id: channelId, stance: (params.get("claim_stance") ?? params.get("stance") ?? undefined) as Stance | undefined, rhetoric: (params.get("rhetoric") ?? undefined) as RhetoricLabel | undefined, epistemic_status: (params.get("epistemic") ?? undefined) as EpistemicStatus | undefined, source_kind: (params.get("source") ?? undefined) as SourceKind | undefined, offset: Number(params.get("claim_offset") ?? 0) };
   const query = useQuery({ queryKey: ["claims", dates, filters], queryFn: () => apiClient.claims(dates, filters) });
   const selectEntity = (entity?: Entity) => set("claim_entity", entity ? String(entity.id) : undefined, "claim_offset");
+  const channelQuery = dateParams(params).toString();
   return <Graphic eyebrow="Доказова база" title="Твердження та першоджерела" dek="Кожен рядок веде до повного допису та структурованого аналізу." footer={false}>
-    {!compact && <div className="mb-6 flex flex-wrap gap-3 border-y border-rule py-4">
-      <div className="relative min-w-56 flex-[2]"><Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" /><Input className="pl-9" value={filters.search} placeholder="Пошук у твердженнях" onChange={(event) => set("claim_q", event.target.value, "claim_offset")} /></div>
-      <ClaimEntityFilter selected={filters.entity_id} onSelect={selectEntity} />
-      <FilterField label="Позиція"><Select value={filters.stance ?? "all"} onValueChange={(value) => set("claim_stance", value, "claim_offset")}><SelectTrigger aria-label="Позиція"><SelectValue>{filters.stance ? stanceLabels[filters.stance] : "Усі оцінки"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі оцінки</SelectItem>{Object.entries(stanceLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>
-    </div>}
-    <QueryBoundary loading={query.isLoading} error={query.isError}>
-      {!query.data?.items.length ? <EmptyState /> : <div className="border-t border-rule">
-        {query.data.items.map((claim) => <ClaimRow key={`${claim.claim_id}-${claim.entity_id}`} claim={claim} from={`${location.pathname}${location.search}`} />)}
-        <Pager page={query.data} param="claim_offset" />
-      </div>}
-    </QueryBoundary>
+    {!compact && <div className="mb-6 flex flex-wrap gap-3 border-y border-rule py-4"><div className="relative min-w-56 flex-[2]"><Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" /><Input className="pl-9" value={filters.search} placeholder="Пошук у твердженнях" onChange={(event) => set("claim_q", event.target.value, "claim_offset")} /></div><ClaimEntityFilter selected={filters.entity_id} onSelect={selectEntity} /><FilterField label="Позиція"><Select value={filters.stance ?? "all"} onValueChange={(value) => set("claim_stance", value, "claim_offset")}><SelectTrigger aria-label="Позиція"><SelectValue>{filters.stance ? stanceLabels[filters.stance] : "Усі оцінки"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі оцінки</SelectItem>{Object.entries(stanceLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField></div>}
+    <QueryBoundary loading={query.isLoading} error={query.isError}>{!query.data?.items.length ? <EmptyState /> : <div className="border-t border-rule">{query.data.items.map((claim) => <ClaimRow key={claim.claim_id + "-" + claim.entity_id} claim={claim} from={location.pathname + location.search} channelHref={"/channels/" + claim.channel_id + (channelQuery ? "?" + channelQuery : "")} setFilter={(key, value) => set(key, value, "claim_offset")} />)}<Pager page={query.data} param="claim_offset" /></div>}</QueryBoundary>
   </Graphic>;
 }
-
-function ClaimRow({ claim, from }: { claim: Claim; from: string }) {
-  return <Link to={`/posts/${claim.post_id}`} state={{ from }} className="group grid gap-3 border-b border-rule py-5 hover:bg-ink/[0.025] md:grid-cols-[minmax(0,1fr)_14rem_8rem] md:items-start">
-    <div><p className="font-heading text-xl font-bold leading-snug group-hover:text-negative">{claim.normalized_text}</p><p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">«{claim.evidence_text}»</p></div>
-    <div className="text-sm"><p className="font-semibold">{claim.entity_name}</p><p className="mt-1 text-muted-foreground">{claim.channel_title}</p></div>
-    <div className="flex items-center justify-between gap-2 md:justify-end"><Badge variant="outline" className={`rounded-none ${stanceClass(claim.stance)}`}>{stanceLabels[claim.stance]}</Badge><ArrowUpRight className="size-4 opacity-0 transition-opacity group-hover:opacity-100" /></div>
-  </Link>;
+function ClaimRow({ claim, from, channelHref, setFilter }: { claim: Claim; from: string; channelHref: string; setFilter: (key: string, value?: string) => void }) {
+  const actions: ClaimMetadataActions = { channel: { href: channelHref }, stance: { onClick: () => setFilter("claim_stance", claim.stance) }, epistemic: { onClick: () => setFilter("epistemic", claim.epistemic_status) }, rhetoric: (label) => ({ onClick: () => setFilter("rhetoric", label) }) };
+  return <article className="border-b border-rule py-5"><ClaimMetadata data={claim} actions={actions} /><Link to={"/posts/" + claim.post_id} state={{ from }} className="group mt-4 block hover:text-negative"><p className="font-heading text-xl font-bold leading-snug">{claim.normalized_text}</p><p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">«{claim.evidence_text}»</p></Link></article>;
 }
-
 export function DashboardPage() {
   const [params] = useSearchParams();
   const dates = datesFromParams(params);
@@ -401,13 +381,13 @@ export function EntityPage() {
 
 function EvidenceFeed({ query }: { query: ReturnType<typeof useQuery<ReturnType<typeof apiClient.evidence> extends Promise<infer T> ? T : never>> }) {
   const location = useLocation();
-  return <Graphic eyebrow="Докази" title="Твердження, що формують цей профіль" dek="Фрагменти першоджерел відповідно до активних фільтрів." footer={false}>
-    <QueryBoundary loading={query.isLoading} error={query.isError}>
-      {!query.data?.items.length ? <EmptyState /> : <div className="border-t border-rule">{query.data.items.map((item: Evidence) => <Link key={item.claim_id} to={`/posts/${item.post_id}`} state={{ from: `${location.pathname}${location.search}` }} className="block border-b border-rule py-5 hover:bg-ink/[0.025]"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="eyebrow text-muted-foreground">Опубліковано в</p><span className="text-sm font-bold">{item.channel_title}</span></div><Badge variant="outline" className={`rounded-none ${stanceClass(item.stance)}`}>{stanceLabels[item.stance]}</Badge></div><p className="mt-3 text-sm"><span className="eyebrow text-muted-foreground">Автор твердження · </span><span className="font-semibold">{item.source_entity_name ?? sourceLabels[item.source_kind]}</span></p><p className="mt-2 font-heading text-xl font-bold">{item.normalized_text}</p><p className="mt-2 text-sm leading-6 text-muted-foreground">«{item.evidence_text}»</p></Link>)}<Pager page={query.data} param="evidence_offset" /></div>}
-    </QueryBoundary>
-  </Graphic>;
+  const [params, setParams] = useSearchParams();
+  const update = (changes: Record<string, string | undefined>) => { const next = new URLSearchParams(params); Object.entries(changes).forEach(([key, value]) => value ? next.set(key, value) : next.delete(key)); next.delete("channel_offset"); next.delete("evidence_offset"); setParams(next); };
+  return <Graphic eyebrow="Докази" title="Твердження, що формують цей профіль" dek="Фрагменти першоджерел відповідно до активних фільтрів." footer={false}><QueryBoundary loading={query.isLoading} error={query.isError}>{!query.data?.items.length ? <EmptyState /> : <div className="border-t border-rule">{query.data.items.map((item: Evidence) => {
+    const actions: ClaimMetadataActions = { channel: { onClick: () => update({ channel: String(item.channel_id) }) }, stance: { onClick: () => update({ stance: item.stance }) }, epistemic: { onClick: () => update({ epistemic: item.epistemic_status }) }, rhetoric: (label) => ({ onClick: () => update({ rhetoric: label }) }), source: item.source_entity_id == null ? undefined : { onClick: () => update({ attribution_mode: "quoted_sources", source_kind: "named_entity", source_entity_id: String(item.source_entity_id) }) } };
+    return <article key={item.claim_id} className="border-b border-rule py-5"><ClaimMetadata data={item} actions={actions} /><Link to={"/posts/" + item.post_id} state={{ from: location.pathname + location.search }} className="group mt-4 block hover:text-negative"><p className="font-heading text-xl font-bold leading-snug">{item.normalized_text}</p><p className="mt-2 text-sm leading-6 text-muted-foreground">«{item.evidence_text}»</p></Link></article>;
+  })}<Pager page={query.data} param="evidence_offset" /></div>}</QueryBoundary></Graphic>;
 }
-
 export function ChannelsPage() {
   const { params, set } = useFilters();
   const dates = datesFromParams(params);
@@ -503,13 +483,13 @@ export function PostPage() {
         <PageHeader eyebrow={`Першоджерело · ${formatDateTime(query.data.published_at)}`} title={query.data.channel_title} dek={query.data.username ? `Telegram: @${query.data.username} · повідомлення №${query.data.telegram_message_id}` : `Telegram · повідомлення №${query.data.telegram_message_id}`} aside={fallback ? <Link to={fallback} className="eyebrow border-b border-ink pb-1">Повернутися до вибірки</Link> : undefined} />
         <div className="grid gap-12 xl:grid-cols-2 xl:items-start">
           <Graphic eyebrow="Оригінальний допис" title="Текст першоджерела" dek="Підкреслені фрагменти використані як докази." footer={false}><article className="whitespace-pre-wrap border-t border-ink pt-6 text-[17px] leading-8">{highlightPost(query.data.content, query.data.claims)}</article></Graphic>
-          <Graphic eyebrow="Структурований аналіз" title={`${formatNumber(query.data.claims.length)} ${query.data.claims.length === 1 ? "твердження" : "тверджень"}`} dek="Ціль, доказ, позиція, риторика, модальність та джерело для кожного твердження." footer={false}>{!query.data.claims.length ? <EmptyState>У дописі немає завершених аналітичних тверджень.</EmptyState> : <div className="border-t border-ink">{query.data.claims.map((claim, index) => <PostClaimBlock key={`${claim.id}-${claim.entity}-${index}`} claim={claim} index={index + 1} />)}</div>}</Graphic>
+          <Graphic eyebrow="Структурований аналіз" title={`${formatNumber(query.data.claims.length)} ${query.data.claims.length === 1 ? "твердження" : "тверджень"}`} dek="Ціль, доказ, позиція, риторика, модальність та джерело для кожного твердження." footer={false}>{!query.data.claims.length ? <EmptyState>У дописі немає завершених аналітичних тверджень.</EmptyState> : <div className="border-t border-ink">{query.data.claims.map((claim, index) => <PostClaimBlock key={`${claim.id}-${claim.entity}-${index}`} claim={claim} index={index + 1} post={query.data} />)}</div>}</Graphic>
         </div>
       </>}
     </QueryBoundary>
   </PageLayout>;
 }
 
-function PostClaimBlock({ claim, index }: { claim: PostClaim; index: number }) {
-  return <article className="border-b border-rule py-6"><p className="eyebrow text-muted-foreground">Твердження {String(index).padStart(2, "0")}</p><h3 className="mt-2 font-heading text-2xl font-bold leading-snug">{claim.text}</h3><blockquote className="mt-4 border-l-2 border-negative pl-4 text-sm italic leading-6 text-muted-foreground">«{claim.evidence}»</blockquote><dl className="mt-5 grid gap-x-5 gap-y-4 text-sm sm:grid-cols-2"><div><dt className="eyebrow text-muted-foreground">Ціль</dt><dd className="mt-1 font-semibold">{claim.entity}</dd></div><div><dt className="eyebrow text-muted-foreground">Позиція</dt><dd className="mt-1"><Badge variant="outline" className={`rounded-none ${stanceClass(claim.stance)}`}>{stanceLabels[claim.stance]}</Badge></dd></div><div><dt className="eyebrow text-muted-foreground">Статус твердження</dt><dd className="mt-1 font-semibold">{epistemicLabels[claim.epistemic_status]}</dd></div><div><dt className="eyebrow text-muted-foreground">Джерело</dt><dd className="mt-1 font-semibold">{claim.source_entity_name ?? sourceLabels[claim.source_kind]}</dd></div>{claim.rhetoric.length > 0 && <div className="sm:col-span-2"><dt className="eyebrow text-muted-foreground">Риторика</dt><dd className="mt-2 flex flex-wrap gap-2">{claim.rhetoric.map((item) => <Badge key={item} variant="outline" className="rounded-none border-negative/40 text-negative">{rhetoricLabels[item]}</Badge>)}</dd></div>}</dl></article>;
+function PostClaimBlock({ claim, index, post }: { claim: PostClaim; index: number; post: { published_at: string; channel_id: number; channel_title: string } }) {
+  return <article className="border-b border-rule py-6"><p className="eyebrow text-muted-foreground">Твердження {String(index).padStart(2, "0")}</p><ClaimMetadata data={{ ...claim, ...post, entity_name: claim.entity }} /><h3 className="mt-4 font-heading text-2xl font-bold leading-snug">{claim.text}</h3><blockquote className="mt-4 border-l-2 border-negative pl-4 text-sm italic leading-6 text-muted-foreground">«{claim.evidence}»</blockquote></article>;
 }

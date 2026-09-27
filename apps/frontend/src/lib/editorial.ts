@@ -20,8 +20,8 @@ export const epistemicLabels: Record<EpistemicStatus, string> = {
   питання: "Питання",
 };
 export const sourceLabels: Record<SourceKind, string> = {
-  channel_editorial: "Редакційний голос каналу",
-  named_entity: "Назване джерело",
+  channel_editorial: "Позиція каналу",
+  named_entity: "Названа особа",
   external_unnamed: "Неназване зовнішнє джерело",
 };
 export const entityTypes: Record<string, string> = {

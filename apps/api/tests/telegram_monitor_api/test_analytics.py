@@ -14,6 +14,7 @@ from telegram_monitor_api.analytics import (
     _CHANNEL_TOTAL_SQL,
     _CLAIMS_COUNT_SQL,
     _ENTITY_CHANNEL_PAGE_SQL,
+    _EVIDENCE_SQL,
     _SOURCE_ACTOR_COUNT_SQL,
     _SOURCE_ACTOR_PAGE_SQL,
     AnalyticsRepository,
@@ -205,4 +206,14 @@ def test_negative_balance_metrics_penalize_small_samples() -> None:
     assert (
         negative_balance_metrics(1, 9)["negative_balance_score"]
         > negative_balance_metrics(5, 5)["negative_balance_score"]
+    )
+
+
+def test_evidence_query_exposes_target_identity_and_candidate_source_fallback() -> None:
+    """Evidence cards can show their target and an unresolved named source."""
+    assert "entity.id AS entity_id" in _EVIDENCE_SQL
+    assert "entity.canonical_name AS entity_name" in _EVIDENCE_SQL
+    assert (
+        "COALESCE(source_registry.canonical_name, source_candidate.representative_mention)"
+        in _EVIDENCE_SQL
     )
