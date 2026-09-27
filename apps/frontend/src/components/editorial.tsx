@@ -132,6 +132,13 @@ export function PageLayout({ children }: { children: ReactNode }) {
   return <main className="mx-auto max-w-[1480px] space-y-12 px-4 py-8 md:px-8 md:py-12">{children}</main>;
 }
 
+export function FilterField({ label, children }: { label: string; children: ReactNode }) {
+  return <div className="grid min-w-0 gap-1.5">
+    <span className="eyebrow text-muted-foreground">{label}</span>
+    {children}
+  </div>;
+}
+
 export function MetricStrip({ items }: { items: Array<{ label: string; value: number; accent?: boolean }> }) {
   return <dl className="grid border-y border-rule sm:grid-cols-2 lg:grid-cols-4">
     {items.map((item) => <div key={item.label} className="border-b border-rule py-5 sm:odd:border-r lg:border-b-0 lg:border-r lg:last:border-r-0 lg:px-6 lg:first:pl-0">

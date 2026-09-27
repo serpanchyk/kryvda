@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ArrowUpRight, Search } from "lucide-react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 
@@ -25,6 +25,7 @@ import {
   DistributionBars,
   EmptyState,
   ErrorState,
+  FilterField,
   Graphic,
   LoadState,
   MetricStrip,
@@ -110,7 +111,7 @@ function ClaimsFeed({ dates, channelId, compact = false }: { dates: DateRange; c
     {!compact && <div className="mb-6 flex flex-wrap gap-3 border-y border-rule py-4">
       <div className="relative min-w-56 flex-[2]"><Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" /><Input className="pl-9" value={filters.search} placeholder="Пошук у твердженнях" onChange={(event) => set("claim_q", event.target.value, "claim_offset")} /></div>
       <ClaimEntityFilter selected={filters.entity_id} onSelect={selectEntity} />
-      <Select value={filters.stance ?? "all"} onValueChange={(value) => set("claim_stance", value, "claim_offset")}><SelectTrigger className="w-48"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Усі оцінки</SelectItem>{Object.entries(stanceLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select>
+      <FilterField label="Позиція"><Select value={filters.stance ?? "all"} onValueChange={(value) => set("claim_stance", value, "claim_offset")}><SelectTrigger aria-label="Позиція"><SelectValue>{filters.stance ? stanceLabels[filters.stance] : "Усі оцінки"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі оцінки</SelectItem>{Object.entries(stanceLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>
     </div>}
     <QueryBoundary loading={query.isLoading} error={query.isError}>
       {!query.data?.items.length ? <EmptyState /> : <div className="border-t border-rule">
@@ -171,9 +172,9 @@ export function EntitiesPage() {
     <PageHeader eyebrow={`Реєстр спостереження · ${periodLabel(params)}`} title="Сутності в інформаційному полі" dek="Люди й організації, щодо яких система зберігає твердження, оцінки та доказові фрагменти." />
     <div className="grid gap-3 border-y border-rule py-4 md:grid-cols-4">
       <Input value={filters.q} placeholder="Пошук сутності" onChange={(event) => set("q", event.target.value)} />
-      <Select value={filters.coarse_type ?? "all"} onValueChange={(value) => set("type", value)}><SelectTrigger><SelectValue placeholder="Тип" /></SelectTrigger><SelectContent><SelectItem value="all">Усі типи</SelectItem>{Object.entries(entityTypes).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select>
-      <Select value={filters.monitored ?? "all"} onValueChange={(value) => set("monitored", value)}><SelectTrigger><SelectValue placeholder="Статус" /></SelectTrigger><SelectContent><SelectItem value="all">Усі статуси</SelectItem><SelectItem value="true">Відстежуються</SelectItem><SelectItem value="false">Не відстежуються</SelectItem></SelectContent></Select>
-      <Select value={filters.sort} onValueChange={(value) => set("sort", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="name">За назвою</SelectItem><SelectItem value="mentions">За згадуваннями</SelectItem><SelectItem value="positive">За позитивними</SelectItem><SelectItem value="negative">За негативними</SelectItem></SelectContent></Select>
+      <FilterField label="Тип сутності"><Select value={filters.coarse_type ?? "all"} onValueChange={(value) => set("type", value)}><SelectTrigger aria-label="Тип сутності"><SelectValue>{filters.coarse_type ? entityTypes[filters.coarse_type] : "Усі типи"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі типи</SelectItem>{Object.entries(entityTypes).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>
+      <FilterField label="Статус моніторингу"><Select value={filters.monitored ?? "all"} onValueChange={(value) => set("monitored", value)}><SelectTrigger aria-label="Статус моніторингу"><SelectValue>{filters.monitored === "true" ? "Відстежуються" : filters.monitored === "false" ? "Не відстежуються" : "Усі статуси"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі статуси</SelectItem><SelectItem value="true">Відстежуються</SelectItem><SelectItem value="false">Не відстежуються</SelectItem></SelectContent></Select></FilterField>
+      <FilterField label="Сортування"><Select value={filters.sort} onValueChange={(value) => set("sort", value)}><SelectTrigger aria-label="Сортування"><SelectValue>{{ name: "За назвою", mentions: "За згадуваннями", positive: "За позитивними", negative: "За негативними" }[filters.sort]}</SelectValue></SelectTrigger><SelectContent><SelectItem value="name">За назвою</SelectItem><SelectItem value="mentions">За згадуваннями</SelectItem><SelectItem value="positive">За позитивними</SelectItem><SelectItem value="negative">За негативними</SelectItem></SelectContent></Select></FilterField>
     </div>
     <QueryBoundary loading={query.isLoading} error={query.isError}>
       {!query.data?.items.length ? <EmptyState /> : <section>
@@ -196,7 +197,7 @@ function SourceActorFilter({ selected, onSelect }: { selected: Pick<Entity, "id"
     enabled: text.trim().length >= 2,
   });
   return <div className="relative min-w-56 flex-1">
-    <Input value={text} placeholder={selected?.canonical_name ?? "Знайти названого автора"} onChange={(event) => setText(event.target.value)} />
+    <Input aria-label="Автор твердження" value={text} placeholder={selected?.canonical_name ?? "Знайти названого автора"} onChange={(event) => setText(event.target.value)} />
     {(selected || results.data?.items.length) ? <div className="absolute z-30 mt-1 w-full border border-rule bg-paper shadow-md">
       {selected ? <button type="button" className="block w-full px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { setText(""); onSelect(); }}>Прибрати джерело: {selected.canonical_name}</button> : null}
       {results.data?.items.map((entity) => <button type="button" key={entity.id} className="block w-full px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { setText(""); onSelect(entity); }}>{entity.canonical_name}</button>)}
@@ -246,18 +247,31 @@ function EntityFilterBar({ profile }: { profile: EntityProfile }) {
     filters.rhetoric ? ["Риторика", rhetoricLabels[filters.rhetoric], "rhetoric"] : null,
     filters.epistemic_status ? ["Статус", epistemicLabels[filters.epistemic_status], "epistemic"] : null,
   ] as Array<[string, string, string] | null>;
+  const advancedCount = [filters.stance, filters.rhetoric, filters.epistemic_status].filter(Boolean).length;
+  const [additionalOpen, setAdditionalOpen] = useState(advancedCount > 0);
+  useEffect(() => {
+    if (advancedCount) setAdditionalOpen(true);
+  }, [advancedCount]);
   return <section className="my-8 border-y border-ink py-5">
     <p className="eyebrow text-muted-foreground">Глобальні фільтри профілю</p>
-    <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      <Select value={filters.channel_id ?? "all"} onValueChange={(value) => update({ channel: value })}><SelectTrigger><SelectValue placeholder="Канал публікації" /></SelectTrigger><SelectContent><SelectItem value="all">Усі канали публікації</SelectItem>{profile.channel_options.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.title}</SelectItem>)}</SelectContent></Select>
-      <Select value={mode} onValueChange={(value) => update({ attribution_mode: value === "all_claims" ? undefined : value, source_kind: undefined, source_entity_id: undefined })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(attributionModeLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select>
-      <Select value={source ?? "all"} onValueChange={(value) => update({ source_kind: value, source_entity_id: value === "named_entity" ? filters.source_entity_id : undefined })}><SelectTrigger><SelectValue placeholder="Тип атрибуції" /></SelectTrigger><SelectContent><SelectItem value="all">Усі типи атрибуції</SelectItem>{allowedSources.map((key) => <SelectItem key={key} value={key}>{sourceLabels[key]}</SelectItem>)}</SelectContent></Select>
-      {source === "named_entity" ? <SourceActorFilter selected={profile.source_entity} onSelect={(entity) => update({ source_entity_id: entity ? String(entity.id) : undefined, source_kind: entity ? "named_entity" : filters.source_kind })} /> : <div className="hidden xl:block" />}
-      <Select value={filters.stance ?? "all"} onValueChange={(value) => update({ stance: value })}><SelectTrigger><SelectValue placeholder="Позиція" /></SelectTrigger><SelectContent><SelectItem value="all">Усі позиції</SelectItem><SelectItem value="позитивне">Позитивна</SelectItem><SelectItem value="негативне">Негативна</SelectItem></SelectContent></Select>
-      <Select value={filters.rhetoric ?? "all"} onValueChange={(value) => update({ rhetoric: value })}><SelectTrigger><SelectValue placeholder="Риторика" /></SelectTrigger><SelectContent><SelectItem value="all">Уся риторика</SelectItem>{Object.entries(rhetoricLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select>
-      <Select value={filters.epistemic_status ?? "all"} onValueChange={(value) => update({ epistemic: value })}><SelectTrigger><SelectValue placeholder="Статус твердження" /></SelectTrigger><SelectContent><SelectItem value="all">Усі статуси</SelectItem>{Object.entries(epistemicLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select>
+    <div className="mt-4">
+      <p className="eyebrow text-muted-foreground">Основні фільтри</p>
+      <div className="mt-2 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <FilterField label="Канал публікації"><Select value={filters.channel_id ?? "all"} onValueChange={(value) => update({ channel: value })}><SelectTrigger aria-label="Канал публікації"><SelectValue>{filters.channel_id ? profile.channel_options.find((item) => String(item.id) === filters.channel_id)?.title ?? "Обраний канал" : "Усі канали публікації"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі канали публікації</SelectItem>{profile.channel_options.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.title}</SelectItem>)}</SelectContent></Select></FilterField>
+        <FilterField label="Режим джерела"><Select value={mode} onValueChange={(value) => update({ attribution_mode: value === "all_claims" ? undefined : value, source_kind: undefined, source_entity_id: undefined })}><SelectTrigger aria-label="Режим джерела"><SelectValue>{attributionModeLabels[mode]}</SelectValue></SelectTrigger><SelectContent>{Object.entries(attributionModeLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>
+        <FilterField label="Тип атрибуції"><Select value={source ?? "all"} onValueChange={(value) => update({ source_kind: value, source_entity_id: value === "named_entity" ? filters.source_entity_id : undefined })}><SelectTrigger aria-label="Тип атрибуції"><SelectValue>{source ? sourceLabels[source] : "Усі типи атрибуції"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі типи атрибуції</SelectItem>{allowedSources.map((key) => <SelectItem key={key} value={key}>{sourceLabels[key]}</SelectItem>)}</SelectContent></Select></FilterField>
+        {source === "named_entity" ? <FilterField label="Автор твердження"><SourceActorFilter selected={profile.source_entity} onSelect={(entity) => update({ source_entity_id: entity ? String(entity.id) : undefined, source_kind: entity ? "named_entity" : filters.source_kind })} /></FilterField> : null}
+      </div>
     </div>
-    {chips.some(Boolean) ? <div className="mt-4 flex flex-wrap items-center gap-2">{chips.filter((chip): chip is [string, string, string] => chip !== null).map(([label, value, key]) => <button type="button" key={key} onClick={() => update({ [key]: undefined })} className="border border-rule px-2 py-1 text-sm hover:border-ink">{label}: {value} ×</button>)}<button type="button" className="text-sm font-semibold underline underline-offset-4" onClick={() => { const next = new URLSearchParams(params); ["channel", "stance", "rhetoric", "epistemic", "source_kind", "source_entity_id", "attribution_mode", "channel_offset", "evidence_offset"].forEach((key) => next.delete(key)); setParams(next); }}>Скинути фільтри</button></div> : null}
+    <details className="mt-5 border-t border-rule pt-4" open={additionalOpen} onToggle={(event) => setAdditionalOpen(event.currentTarget.open)}>
+      <summary className="cursor-pointer font-heading text-lg font-bold marker:text-negative">Додаткові фільтри{advancedCount ? ` · ${advancedCount}` : ""}</summary>
+      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <FilterField label="Позиція"><Select value={filters.stance ?? "all"} onValueChange={(value) => update({ stance: value })}><SelectTrigger aria-label="Позиція"><SelectValue>{filters.stance ? stanceLabels[filters.stance] : "Усі позиції"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі позиції</SelectItem><SelectItem value="позитивне">Позитивна</SelectItem><SelectItem value="негативне">Негативна</SelectItem></SelectContent></Select></FilterField>
+        <FilterField label="Риторика"><Select value={filters.rhetoric ?? "all"} onValueChange={(value) => update({ rhetoric: value })}><SelectTrigger aria-label="Риторика"><SelectValue>{filters.rhetoric ? rhetoricLabels[filters.rhetoric] : "Уся риторика"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Уся риторика</SelectItem>{Object.entries(rhetoricLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>
+        <FilterField label="Епістемічний статус"><Select value={filters.epistemic_status ?? "all"} onValueChange={(value) => update({ epistemic: value })}><SelectTrigger aria-label="Епістемічний статус"><SelectValue>{filters.epistemic_status ? epistemicLabels[filters.epistemic_status] : "Усі статуси"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі статуси</SelectItem>{Object.entries(epistemicLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>
+      </div>
+    </details>
+    {chips.some(Boolean) ? <div className="mt-5 flex flex-wrap items-center gap-2">{chips.filter((chip): chip is [string, string, string] => chip !== null).map(([label, value, key]) => <button type="button" key={key} onClick={() => update({ [key]: undefined })} className="border border-rule px-2 py-1 text-sm hover:border-ink">{label}: {value} ×</button>)}<button type="button" className="text-sm font-semibold underline underline-offset-4" onClick={() => { const next = new URLSearchParams(params); ["channel", "stance", "rhetoric", "epistemic", "source_kind", "source_entity_id", "attribution_mode", "channel_offset", "evidence_offset"].forEach((key) => next.delete(key)); setParams(next); }}>Скинути фільтри</button></div> : null}
   </section>;
 }
 

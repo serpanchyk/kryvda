@@ -106,7 +106,9 @@ The overview leads with negative classifications, temporal activity, attacked-en
 channel comparisons, and auditable claims. Entity profiles add stance-over-time, epistemic-status,
 and attribution distributions. Their URL-backed global filters distinguish publication channel from
 claim attribution, including channel position, quoted-source, source-kind, and stable named-source
-registry identity filters; every Entity aggregate and its evidence feed shares that scope. Channel rows now open `/channels/{id}` profiles with activity,
+registry identity filters; every Entity aggregate and its evidence feed shares that scope. Select controls use
+Ukrainian visible labels and responsive, wrapping menus; Entity filters group primary controls separately from
+expandable additional analytical controls. Channel rows now open `/channels/{id}` profiles with activity,
 stance, entity, rhetoric, epistemic, attribution, and recent-claim analysis. Post detail uses a
 source/analysis split view and exposes evidence, target, stance, rhetoric, epistemic status, and
 attribution for every extracted claim.

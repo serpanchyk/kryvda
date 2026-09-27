@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeAll, describe, expect, test, vi } from "vitest";
 
@@ -77,6 +77,13 @@ describe("editorial analytics pages", () => {
     vi.mocked(apiClient.evidence).mockResolvedValue({ items: [{ claim_id: 1, normalized_text: "Твердження", evidence_text: "Доказ", epistemic_status: "ствердження", stance: "негативне", rhetoric: [], post_id: 9, published_at: "2026-09-01T10:00:00Z", channel_id: 7, channel_title: "Україна Сейчас", source_kind: "named_entity", source_entity_id: 12, source_entity_name: "Мар'яна Безугла" }], total: 1, limit: 25, offset: 0 });
     renderRoute("/entities/4?channel=7&stance=%D0%BD%D0%B5%D0%B3%D0%B0%D1%82%D0%B8%D0%B2%D0%BD%D0%B5&source_kind=named_entity&source_entity_id=12&attribution_mode=quoted_sources", "/entities/:id", <EntityPage />);
     expect(await screen.findByText("Глобальні фільтри профілю")).toBeInTheDocument();
+    expect(screen.getByLabelText("Канал публікації")).toBeInTheDocument();
+    expect(screen.getByLabelText("Режим джерела")).toBeInTheDocument();
+    expect(screen.getByLabelText("Тип атрибуції")).toBeInTheDocument();
+    expect(screen.getByLabelText("Автор твердження")).toBeInTheDocument();
+    const advanced = screen.getByText("Додаткові фільтри · 1").closest("details");
+    expect(advanced).toHaveProperty("open", true);
+    expect(within(advanced as HTMLElement).getByLabelText("Позиція")).toBeInTheDocument();
     expect(screen.getByText("Канал: Україна Сейчас ×")).toBeInTheDocument();
     expect(screen.getByText("Джерело: Мар'яна Безугла ×")).toBeInTheDocument();
     expect(await screen.findByText("Твердження")).toBeInTheDocument();
