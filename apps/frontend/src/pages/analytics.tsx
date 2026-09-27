@@ -189,19 +189,43 @@ export function EntitiesPage() {
   </PageLayout>;
 }
 
-function SourceActorFilter({ selected, onSelect }: { selected: Pick<Entity, "id" | "canonical_name"> | null; onSelect: (entity?: Entity) => void }) {
+function SourceActorFilter({
+  entityId,
+  dates,
+  filters,
+  selected,
+  onSelect,
+}: {
+  entityId: string;
+  dates: DateRange;
+  filters: Omit<EntityAnalyticsFilters, "source_kind" | "source_entity_id" | "offset">;
+  selected: Pick<Entity, "id" | "canonical_name"> | null;
+  onSelect: (actor?: { id: number; canonical_name: string }) => void;
+}) {
   const [text, setText] = useState("");
   const results = useQuery({
-    queryKey: ["source-actor-search", text],
-    queryFn: () => apiClient.entities({}, { q: text }),
-    enabled: text.trim().length >= 2,
+    queryKey: ["entity-source-actors", entityId, dates, filters, text],
+    queryFn: () => apiClient.sourceActors(entityId, dates, { ...filters, q: text || undefined }),
   });
-  return <div className="relative min-w-56 flex-1">
-    <Input aria-label="Автор твердження" value={text} placeholder={selected?.canonical_name ?? "Знайти названого автора"} onChange={(event) => setText(event.target.value)} />
-    {(selected || results.data?.items.length) ? <div className="absolute z-30 mt-1 w-full border border-rule bg-paper shadow-md">
-      {selected ? <button type="button" className="block w-full px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { setText(""); onSelect(); }}>Прибрати джерело: {selected.canonical_name}</button> : null}
-      {results.data?.items.map((entity) => <button type="button" key={entity.id} className="block w-full px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { setText(""); onSelect(entity); }}>{entity.canonical_name}</button>)}
-    </div> : null}
+  return <div className="border border-rule bg-paper">
+    <div className="border-b border-rule p-3">
+      <Input
+        aria-label="Знайти автора"
+        value={text}
+        placeholder="Знайти автора серед тверджень у цій вибірці"
+        onChange={(event) => setText(event.target.value)}
+      />
+    </div>
+    <div className="max-h-72 overflow-y-auto">
+      {selected ? <button type="button" className="flex w-full items-center justify-between gap-3 border-b border-rule px-3 py-3 text-left text-sm hover:bg-muted" onClick={() => { setText(""); onSelect(); }}>
+        <span>Автор: <strong>{selected.canonical_name}</strong></span><span className="text-muted-foreground">Прибрати ×</span>
+      </button> : null}
+      {results.isLoading ? <p className="px-3 py-4 text-sm text-muted-foreground">Шукаємо авторів…</p> : null}
+      {!results.isLoading && !results.data?.items.length ? <p className="px-3 py-4 text-sm text-muted-foreground">У цій вибірці названих авторів немає.</p> : null}
+      {results.data?.items.map((actor) => <button type="button" key={actor.id} className="flex w-full items-center justify-between gap-3 border-b border-rule px-3 py-3 text-left text-sm last:border-b-0 hover:bg-muted" onClick={() => { setText(""); onSelect(actor); }}>
+        <strong>{actor.canonical_name}</strong><span className="shrink-0 text-muted-foreground">{formatNumber(actor.claim_count)} тверджень</span>
+      </button>)}
+    </div>
   </div>;
 }
 
@@ -211,7 +235,14 @@ const attributionModeLabels: Record<AttributionMode, string> = {
   quoted_sources: "Цитовані джерела",
 };
 
-function EntityFilterBar({ profile }: { profile: EntityProfile }) {
+const quotedSourceLabels: Record<Exclude<SourceKind, "channel_editorial">, string> = {
+  named_entity: "Названі автори",
+  external_unnamed: "Неназвані джерела",
+};
+
+type FilterChip = { label: string; value: string; changes: Record<string, undefined> };
+
+function EntityFilterBar({ profile, entityId, dates }: { profile: EntityProfile; entityId: string; dates: DateRange }) {
   const [params, setParams] = useSearchParams();
   const mode = (params.get("attribution_mode") ?? "all_claims") as AttributionMode;
   const source = (params.get("source_kind") ?? undefined) as SourceKind | undefined;
@@ -233,45 +264,67 @@ function EntityFilterBar({ profile }: { profile: EntityProfile }) {
     for (const key of ["channel_offset", "evidence_offset"]) next.delete(key);
     setParams(next);
   };
-  const allowedSources = mode === "channel_position"
-    ? ["channel_editorial"] as SourceKind[]
-    : mode === "quoted_sources"
-      ? ["named_entity", "external_unnamed"] as SourceKind[]
-      : Object.keys(sourceLabels) as SourceKind[];
-  const chips = [
-    filters.channel_id ? ["Канал", profile.channel_options.find((item) => String(item.id) === filters.channel_id)?.title ?? filters.channel_id, "channel"] : null,
-    filters.stance ? ["Позиція", stanceLabels[filters.stance], "stance"] : null,
-    filters.attribution_mode ? ["Режим", attributionModeLabels[filters.attribution_mode], "attribution_mode"] : null,
-    filters.source_kind ? ["Атрибуція", sourceLabels[filters.source_kind], "source_kind"] : null,
-    filters.source_entity_id ? ["Джерело", profile.source_entity?.canonical_name ?? filters.source_entity_id, "source_entity_id"] : null,
-    filters.rhetoric ? ["Риторика", rhetoricLabels[filters.rhetoric], "rhetoric"] : null,
-    filters.epistemic_status ? ["Статус", epistemicLabels[filters.epistemic_status], "epistemic"] : null,
-  ] as Array<[string, string, string] | null>;
-  const advancedCount = [filters.stance, filters.rhetoric, filters.epistemic_status].filter(Boolean).length;
-  const [additionalOpen, setAdditionalOpen] = useState(advancedCount > 0);
+  const quotedRefinement = mode === "quoted_sources" && source !== "channel_editorial" ? source : undefined;
+  const advancedCount = [filters.stance, filters.rhetoric, filters.epistemic_status, quotedRefinement].filter(Boolean).length;
+  const [additionalOpen, setAdditionalOpen] = useState(advancedCount > 0 || mode === "quoted_sources");
   useEffect(() => {
-    if (advancedCount) setAdditionalOpen(true);
-  }, [advancedCount]);
+    if (advancedCount || mode === "quoted_sources") setAdditionalOpen(true);
+  }, [advancedCount, mode]);
+  const chips = [
+    filters.channel_id ? {
+      label: "Канал",
+      value: profile.channel_options.find((item) => String(item.id) === filters.channel_id)?.title ?? filters.channel_id,
+      changes: { channel: undefined },
+    } : null,
+    filters.attribution_mode ? {
+      label: "Джерело твердження",
+      value: attributionModeLabels[filters.attribution_mode],
+      changes: { attribution_mode: undefined, source_kind: undefined, source_entity_id: undefined },
+    } : null,
+    quotedRefinement ? {
+      label: "Цитовані",
+      value: quotedSourceLabels[quotedRefinement as Exclude<SourceKind, "channel_editorial">],
+      changes: { source_kind: undefined, source_entity_id: undefined },
+    } : null,
+    filters.source_entity_id ? {
+      label: "Автор",
+      value: profile.source_entity?.canonical_name ?? filters.source_entity_id,
+      changes: { source_entity_id: undefined },
+    } : null,
+    filters.stance ? { label: "Позиція", value: stanceLabels[filters.stance], changes: { stance: undefined } } : null,
+    filters.rhetoric ? { label: "Риторика", value: rhetoricLabels[filters.rhetoric], changes: { rhetoric: undefined } } : null,
+    filters.epistemic_status ? { label: "Статус", value: epistemicLabels[filters.epistemic_status], changes: { epistemic: undefined } } : null,
+  ] as Array<FilterChip | null>;
+  const activeChips = chips.filter((chip): chip is FilterChip => chip !== null);
+  const actorFilters = {
+    channel_id: filters.channel_id,
+    stance: filters.stance,
+    rhetoric: filters.rhetoric,
+    epistemic_status: filters.epistemic_status,
+    attribution_mode: "quoted_sources" as AttributionMode,
+  };
   return <section className="my-8 border-y border-ink py-5">
     <p className="eyebrow text-muted-foreground">Глобальні фільтри профілю</p>
     <div className="mt-4">
       <p className="eyebrow text-muted-foreground">Основні фільтри</p>
-      <div className="mt-2 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-2 grid gap-4 md:grid-cols-2">
         <FilterField label="Канал публікації"><Select value={filters.channel_id ?? "all"} onValueChange={(value) => update({ channel: value })}><SelectTrigger aria-label="Канал публікації"><SelectValue>{filters.channel_id ? profile.channel_options.find((item) => String(item.id) === filters.channel_id)?.title ?? "Обраний канал" : "Усі канали публікації"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі канали публікації</SelectItem>{profile.channel_options.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.title}</SelectItem>)}</SelectContent></Select></FilterField>
-        <FilterField label="Режим джерела"><Select value={mode} onValueChange={(value) => update({ attribution_mode: value === "all_claims" ? undefined : value, source_kind: undefined, source_entity_id: undefined })}><SelectTrigger aria-label="Режим джерела"><SelectValue>{attributionModeLabels[mode]}</SelectValue></SelectTrigger><SelectContent>{Object.entries(attributionModeLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>
-        <FilterField label="Тип атрибуції"><Select value={source ?? "all"} onValueChange={(value) => update({ source_kind: value, source_entity_id: value === "named_entity" ? filters.source_entity_id : undefined })}><SelectTrigger aria-label="Тип атрибуції"><SelectValue>{source ? sourceLabels[source] : "Усі типи атрибуції"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі типи атрибуції</SelectItem>{allowedSources.map((key) => <SelectItem key={key} value={key}>{sourceLabels[key]}</SelectItem>)}</SelectContent></Select></FilterField>
-        {source === "named_entity" ? <FilterField label="Автор твердження"><SourceActorFilter selected={profile.source_entity} onSelect={(entity) => update({ source_entity_id: entity ? String(entity.id) : undefined, source_kind: entity ? "named_entity" : filters.source_kind })} /></FilterField> : null}
+        <FilterField label="Джерело твердження"><Select value={mode} onValueChange={(value) => update({ attribution_mode: value === "all_claims" ? undefined : value, source_kind: undefined, source_entity_id: undefined })}><SelectTrigger aria-label="Джерело твердження"><SelectValue>{attributionModeLabels[mode]}</SelectValue></SelectTrigger><SelectContent>{Object.entries(attributionModeLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>
       </div>
     </div>
     <details className="mt-5 border-t border-rule pt-4" open={additionalOpen} onToggle={(event) => setAdditionalOpen(event.currentTarget.open)}>
       <summary className="cursor-pointer font-heading text-lg font-bold marker:text-negative">Додаткові фільтри{advancedCount ? ` · ${advancedCount}` : ""}</summary>
       <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {mode === "quoted_sources" ? <div className="md:col-span-2 xl:col-span-3">
+          <FilterField label="Уточнити цитоване джерело"><Select value={quotedRefinement ?? "all"} onValueChange={(value) => update({ source_kind: value, source_entity_id: undefined })}><SelectTrigger aria-label="Уточнити цитоване джерело"><SelectValue>{quotedRefinement ? quotedSourceLabels[quotedRefinement as Exclude<SourceKind, "channel_editorial">] : "Усі цитовані"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі цитовані</SelectItem><SelectItem value="named_entity">Названі автори</SelectItem><SelectItem value="external_unnamed">Неназвані джерела</SelectItem></SelectContent></Select></FilterField>
+          {quotedRefinement === "named_entity" ? <div className="mt-3"><FilterField label="Обрати названого автора"><SourceActorFilter entityId={entityId} dates={dates} filters={actorFilters} selected={profile.source_entity} onSelect={(actor) => update({ source_entity_id: actor ? String(actor.id) : undefined })} /></FilterField></div> : null}
+        </div> : null}
         <FilterField label="Позиція"><Select value={filters.stance ?? "all"} onValueChange={(value) => update({ stance: value })}><SelectTrigger aria-label="Позиція"><SelectValue>{filters.stance ? stanceLabels[filters.stance] : "Усі позиції"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі позиції</SelectItem><SelectItem value="позитивне">Позитивна</SelectItem><SelectItem value="негативне">Негативна</SelectItem></SelectContent></Select></FilterField>
         <FilterField label="Риторика"><Select value={filters.rhetoric ?? "all"} onValueChange={(value) => update({ rhetoric: value })}><SelectTrigger aria-label="Риторика"><SelectValue>{filters.rhetoric ? rhetoricLabels[filters.rhetoric] : "Уся риторика"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Уся риторика</SelectItem>{Object.entries(rhetoricLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>
         <FilterField label="Епістемічний статус"><Select value={filters.epistemic_status ?? "all"} onValueChange={(value) => update({ epistemic: value })}><SelectTrigger aria-label="Епістемічний статус"><SelectValue>{filters.epistemic_status ? epistemicLabels[filters.epistemic_status] : "Усі статуси"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі статуси</SelectItem>{Object.entries(epistemicLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>
       </div>
     </details>
-    {chips.some(Boolean) ? <div className="mt-5 flex flex-wrap items-center gap-2">{chips.filter((chip): chip is [string, string, string] => chip !== null).map(([label, value, key]) => <button type="button" key={key} onClick={() => update({ [key]: undefined })} className="border border-rule px-2 py-1 text-sm hover:border-ink">{label}: {value} ×</button>)}<button type="button" className="text-sm font-semibold underline underline-offset-4" onClick={() => { const next = new URLSearchParams(params); ["channel", "stance", "rhetoric", "epistemic", "source_kind", "source_entity_id", "attribution_mode", "channel_offset", "evidence_offset"].forEach((key) => next.delete(key)); setParams(next); }}>Скинути фільтри</button></div> : null}
+    {activeChips.length ? <div className="mt-5 flex flex-wrap items-center gap-2">{activeChips.map((chip) => <button type="button" key={chip.label} onClick={() => update(chip.changes)} className="border border-rule px-2 py-1 text-sm hover:border-ink">{chip.label}: {chip.value} ×</button>)}<button type="button" className="text-sm font-semibold underline underline-offset-4" onClick={() => { const next = new URLSearchParams(params); ["channel", "stance", "rhetoric", "epistemic", "source_kind", "source_entity_id", "attribution_mode", "channel_offset", "evidence_offset"].forEach((key) => next.delete(key)); setParams(next); }}>Скинути фільтри</button></div> : null}
   </section>;
 }
 
@@ -305,7 +358,7 @@ export function EntityPage() {
       {profile.data && <>
         <PageHeader eyebrow={`${entityTypes[profile.data.entity.coarse_type] ?? profile.data.entity.coarse_type} · ${periodLabel(params)}`} title={profile.data.entity.canonical_name} dek="Аналітичний профіль того, як сутність представлена в досліджуваних Telegram-каналах." aside={<div className="eyebrow text-muted-foreground">{profile.data.incomplete_posts ? `${formatNumber(profile.data.incomplete_posts)} дописів очікують повного аналізу` : "Аналіз завершено"}</div>} />
         {!profile.data.entity.monitored ? <EmptyState>Сутність не відстежується.</EmptyState> : <>
-          <EntityFilterBar profile={profile.data} />
+          <EntityFilterBar profile={profile.data} entityId={id} dates={dates} />
           <MetricStrip items={[{ label: "Оціночні згадування", value: profile.data.summary.mention_count }, { label: "Позитивні", value: profile.data.summary.positive_count }, { label: "Негативні", value: profile.data.summary.negative_count, accent: true }]} />
           <Graphic eyebrow="Тональність у часі" title="Як змінювалась оцінка сутності" dek="Позитивні та негативні класифікації; натисніть дату для одноденного зрізу."><DailyChart data={profile.data.daily} mode="stance" onDate={chooseDate} /></Graphic>
           <div className="grid gap-12 xl:grid-cols-2">

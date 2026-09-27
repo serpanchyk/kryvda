@@ -167,6 +167,36 @@ class AnalyticsRepository:
             "offset": offset,
         }
 
+    async def source_actors(
+        self,
+        entity_id: int,
+        filters: EntityAnalyticsFilters,
+        start: datetime | None,
+        end: datetime | None,
+        query: str | None,
+        limit: int,
+        offset: int,
+    ) -> dict[str, Any]:
+        """Return named claim authors that occur in one filtered entity profile."""
+        actor_filters = EntityAnalyticsFilters(
+            filters.channel_id,
+            filters.stance,
+            filters.rhetoric,
+            filters.epistemic_status,
+            "named_entity",
+            None,
+            filters.attribution_mode,
+        )
+        args = (entity_id, *actor_filters.values(), start, end, query, limit, offset)
+        rows = await self._pool.fetch(_SOURCE_ACTOR_PAGE_SQL, *args)
+        total = await self._pool.fetchval(_SOURCE_ACTOR_COUNT_SQL, *args[:11])
+        return {
+            "items": [dict(row) for row in rows],
+            "total": int(total or 0),
+            "limit": limit,
+            "offset": offset,
+        }
+
     async def channels(
         self, start: datetime | None, end: datetime | None, limit: int, offset: int
     ) -> dict[str, Any]:
@@ -483,6 +513,22 @@ _ENTITY_ATTRIBUTION_SQL = (
     + " GROUP BY claim.source_kind\n)\n"
     + _DISTRIBUTION_SELECT
 )
+
+_SOURCE_ACTOR_BASE = (
+    _ENTITY_BASE
+    + """ AND source_registry.id IS NOT NULL
+  AND ($11::text IS NULL OR source_registry.canonical_name ILIKE '%' || $11 || '%')"""
+)
+_SOURCE_ACTOR_SQL = (
+    """SELECT source_registry.id, source_registry.canonical_name,
+    count(DISTINCT claim.id) AS claim_count
+"""
+    + _SOURCE_ACTOR_BASE
+    + " GROUP BY source_registry.id, source_registry.canonical_name"
+    + " ORDER BY claim_count DESC, source_registry.canonical_name"
+)
+_SOURCE_ACTOR_PAGE_SQL = _SOURCE_ACTOR_SQL + " LIMIT $12 OFFSET $13"
+_SOURCE_ACTOR_COUNT_SQL = "SELECT count(DISTINCT source_registry.id) " + _SOURCE_ACTOR_BASE
 
 _CHANNEL_SQL = """SELECT channel.id, channel.title, channel.username, channel.avatar_url,
     channel.status, max(post.published_at) AS last_published_at

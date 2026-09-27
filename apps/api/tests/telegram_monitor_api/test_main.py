@@ -124,6 +124,24 @@ class FakeAnalytics:
             "rhetoric": [],
         }
 
+    async def source_actors(
+        self,
+        entity_id: int,
+        filters: object,
+        start: object,
+        end: object,
+        query: object,
+        limit: int,
+        offset: int,
+    ) -> dict[str, object]:
+        type(self).last_source_actor_args = (entity_id, filters, start, end, query, limit, offset)
+        return {
+            "items": [{"id": 12, "canonical_name": "Автор", "claim_count": 3}],
+            "total": 1,
+            "limit": limit,
+            "offset": offset,
+        }
+
     async def evidence(
         self, entity_id: int, filters: object, start: object, end: object, limit: int, offset: int
     ) -> dict[str, object]:
@@ -196,6 +214,26 @@ async def test_read_only_investigation_endpoints(monkeypatch: object) -> None:
         assert entity_filters.source_entity_id == 12
         assert entity_filters.attribution_mode == "quoted_sources"
         assert FakeAnalytics.last_entity_args[-2:] == (1, 0)
+        actors = await client.get(
+            "/entities/4/source-actors",
+            params={
+                "q": "Автор",
+                "channel_id": 7,
+                "stance": "негативне",
+                "rhetoric": "делегітимізація",
+                "epistemic_status": "питання",
+                "attribution_mode": "quoted_sources",
+                "limit": 0,
+                "offset": -1,
+            },
+        )
+        assert actors.json()["items"][0]["id"] == 12
+        assert FakeAnalytics.last_source_actor_args is not None
+        actor_filters = FakeAnalytics.last_source_actor_args[1]
+        assert actor_filters.channel_id == 7
+        assert actor_filters.rhetoric == "делегітимізація"
+        assert actor_filters.attribution_mode == "quoted_sources"
+        assert FakeAnalytics.last_source_actor_args[-2:] == (1, 0)
         evidence = await client.get(
             "/entities/4/evidence",
             params={

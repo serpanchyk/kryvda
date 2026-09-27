@@ -105,10 +105,13 @@ self-contained visualization sections, Kyiv Type Serif headlines, and Fixel Text
 The overview leads with negative classifications, temporal activity, attacked-entity rankings,
 channel comparisons, and auditable claims. Entity profiles add stance-over-time, epistemic-status,
 and attribution distributions. Their URL-backed global filters distinguish publication channel from
-claim attribution, including channel position, quoted-source, source-kind, and stable named-source
-registry identity filters; every Entity aggregate and its evidence feed shares that scope. Select controls use
-Ukrainian visible labels and responsive, wrapping menus; Entity filters group primary controls separately from
-expandable additional analytical controls. Channel rows now open `/channels/{id}` profiles with activity,
+claim attribution: a single `Джерело твердження` control offers all claims, channel position, or quoted
+sources. Quoted sources can be refined to all quoted claims, named authors, or unnamed sources; the
+inline author finder lists only named registry actors that occur in the current filtered Entity scope and
+shows each actor's claim count. The stable registry identity remains the API `source_entity_id`; every
+Entity aggregate and its evidence feed shares the same scope. Evidence separately labels publication
+channel and statement author. Select controls use Ukrainian visible labels and responsive, wrapping menus;
+Entity filters group primary controls separately from expandable additional analytical controls. Channel rows now open `/channels/{id}` profiles with activity,
 stance, entity, rhetoric, epistemic, attribution, and recent-claim analysis. Post detail uses a
 source/analysis split view and exposes evidence, target, stance, rhetoric, epistemic status, and
 attribution for every extracted claim.

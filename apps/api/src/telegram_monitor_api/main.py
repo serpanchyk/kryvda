@@ -255,6 +255,36 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         finally:
             await pool.close()
 
+    @app.get("/entities/{entity_id}/source-actors")
+    async def entity_source_actors(
+        entity_id: int,
+        q: str | None = None,
+        channel_id: int | None = None,
+        stance: Literal["позитивне", "негативне"] | None = None,
+        rhetoric: RhetoricLabel | None = None,
+        epistemic_status: EpistemicStatus | None = None,
+        attribution_mode: AttributionMode | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> dict[str, object]:
+        """Return named actors with claims in one filtered entity profile."""
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            filters = EntityAnalyticsFilters(
+                channel_id=channel_id,
+                stance=stance,
+                rhetoric=rhetoric,
+                epistemic_status=epistemic_status,
+                attribution_mode=attribution_mode,
+            )
+            return await AnalyticsRepository(pool).source_actors(
+                entity_id, filters, start, end, q, min(max(limit, 1), 100), max(offset, 0)
+            )
+        finally:
+            await pool.close()
+
     @app.get("/entities/{entity_id}/evidence")
     async def entity_evidence(
         entity_id: int,

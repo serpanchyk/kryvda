@@ -11,7 +11,7 @@ import { DashboardPage, EntityPage } from "@/pages/analytics";
 
 vi.mock("@/api/client", async () => {
   const actual = await vi.importActual<typeof import("@/api/client")>("@/api/client");
-  return { ...actual, apiClient: { ...actual.apiClient, dashboard: vi.fn(), claims: vi.fn(), entity: vi.fn(), evidence: vi.fn(), entities: vi.fn(), post: vi.fn() } };
+  return { ...actual, apiClient: { ...actual.apiClient, dashboard: vi.fn(), claims: vi.fn(), entity: vi.fn(), evidence: vi.fn(), sourceActors: vi.fn(), entities: vi.fn(), post: vi.fn() } };
 });
 
 beforeAll(() => {
@@ -74,23 +74,26 @@ describe("editorial analytics pages", () => {
       rhetoric: [], epistemic: [], attribution: [], daily: [], incomplete_posts: 0,
     };
     vi.mocked(apiClient.entity).mockResolvedValue(profile);
+    vi.mocked(apiClient.sourceActors).mockResolvedValue({ items: [{ id: 12, canonical_name: "Мар'яна Безугла", claim_count: 2 }], total: 1, limit: 25, offset: 0 });
     vi.mocked(apiClient.evidence).mockResolvedValue({ items: [{ claim_id: 1, normalized_text: "Твердження", evidence_text: "Доказ", epistemic_status: "ствердження", stance: "негативне", rhetoric: [], post_id: 9, published_at: "2026-09-01T10:00:00Z", channel_id: 7, channel_title: "Україна Сейчас", source_kind: "named_entity", source_entity_id: 12, source_entity_name: "Мар'яна Безугла" }], total: 1, limit: 25, offset: 0 });
     renderRoute("/entities/4?channel=7&stance=%D0%BD%D0%B5%D0%B3%D0%B0%D1%82%D0%B8%D0%B2%D0%BD%D0%B5&source_kind=named_entity&source_entity_id=12&attribution_mode=quoted_sources", "/entities/:id", <EntityPage />);
     expect(await screen.findByText("Глобальні фільтри профілю")).toBeInTheDocument();
     expect(screen.getByLabelText("Канал публікації")).toBeInTheDocument();
-    expect(screen.getByLabelText("Режим джерела")).toBeInTheDocument();
-    expect(screen.getByLabelText("Тип атрибуції")).toBeInTheDocument();
-    expect(screen.getByLabelText("Автор твердження")).toBeInTheDocument();
-    const advanced = screen.getByText("Додаткові фільтри · 1").closest("details");
+    expect(screen.getByLabelText("Джерело твердження")).toBeInTheDocument();
+    expect(screen.getByLabelText("Уточнити цитоване джерело")).toBeInTheDocument();
+    expect(screen.getByLabelText("Знайти автора")).toBeInTheDocument();
+    const advanced = screen.getByText("Додаткові фільтри · 2").closest("details");
     expect(advanced).toHaveProperty("open", true);
     expect(within(advanced as HTMLElement).getByLabelText("Позиція")).toBeInTheDocument();
     expect(screen.getByText("Канал: Україна Сейчас ×")).toBeInTheDocument();
-    expect(screen.getByText("Джерело: Мар'яна Безугла ×")).toBeInTheDocument();
+    expect(screen.getByText("Цитовані: Названі автори ×")).toBeInTheDocument();
+    expect(screen.getByText("Автор: Мар'яна Безугла ×")).toBeInTheDocument();
     expect(await screen.findByText("Твердження")).toBeInTheDocument();
     expect(screen.getByText("Опубліковано в")).toBeInTheDocument();
     expect(screen.getByText("Автор твердження ·")).toBeInTheDocument();
     expect(apiClient.entity).toHaveBeenCalledWith("4", expect.any(Object), expect.objectContaining({ channel_id: "7", source_entity_id: "12", attribution_mode: "quoted_sources" }));
     expect(apiClient.evidence).toHaveBeenCalledWith("4", expect.any(Object), expect.objectContaining({ channel_id: "7", source_entity_id: "12", attribution_mode: "quoted_sources" }));
+    expect(apiClient.sourceActors).toHaveBeenCalledWith("4", expect.any(Object), expect.objectContaining({ channel_id: "7", attribution_mode: "quoted_sources" }));
   });
 
   test("renders post evidence and attribution in the split analysis", async () => {

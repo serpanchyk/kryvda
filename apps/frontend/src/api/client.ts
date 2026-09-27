@@ -126,6 +126,11 @@ export interface EntityAnalyticsFilters {
   attribution_mode?: AttributionMode;
   offset?: number;
 }
+export interface SourceActorOption {
+  id: number;
+  canonical_name: string;
+  claim_count: number;
+}
 export interface EntityProfile {
   entity: Entity;
   summary: { mention_count: number; positive_count: number; negative_count: number };
@@ -184,6 +189,16 @@ export const apiClient = {
     filters: EntityAnalyticsFilters = {},
   ): Promise<Page<Evidence>> => get(
     `/entities/${id}/evidence${query({ ...range(dates), ...filters, limit: 25, offset: filters.offset })}`,
+  ),
+  sourceActors: (
+    id: string,
+    dates: DateRange,
+    filters: Omit<EntityAnalyticsFilters, "source_kind" | "source_entity_id" | "offset"> & {
+      q?: string;
+      offset?: number;
+    } = {},
+  ): Promise<Page<SourceActorOption>> => get(
+    `/entities/${id}/source-actors${query({ ...range(dates), ...filters, limit: 25, offset: filters.offset })}`,
   ),
   channels: (dates: DateRange, offset = 0): Promise<Page<Summary> & { daily: Daily[] }> => get(
     `/channels${query({ ...range(dates), limit: 25, offset })}`,

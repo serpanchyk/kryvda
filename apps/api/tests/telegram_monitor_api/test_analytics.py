@@ -14,7 +14,10 @@ from telegram_monitor_api.analytics import (
     _CHANNEL_TOTAL_SQL,
     _CLAIMS_COUNT_SQL,
     _ENTITY_CHANNEL_PAGE_SQL,
+    _SOURCE_ACTOR_COUNT_SQL,
+    _SOURCE_ACTOR_PAGE_SQL,
     AnalyticsRepository,
+    EntityAnalyticsFilters,
 )
 
 
@@ -95,13 +98,19 @@ async def test_channel_profile_returns_none_for_unknown_channel() -> None:
 class JsonPool:
     """Mimic asyncpg's default JSONB text decoding."""
 
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, tuple[object, ...]]] = []
+
     async def fetchrow(self, query: str, *args: object) -> dict[str, object]:
+        self.calls.append((query, args))
         return {"id": args[0], "claims": '[{"id": 1, "rhetoric": ["делегітимізація"]}]'}
 
     async def fetch(self, query: str, *args: object) -> list[dict[str, object]]:
+        self.calls.append((query, args))
         return [{"claim_id": 1, "rhetoric": '["делегітимізація"]'}]
 
     async def fetchval(self, query: str, *args: object) -> int:
+        self.calls.append((query, args))
         return 1
 
 
@@ -121,3 +130,35 @@ async def test_jsonb_claim_fields_are_normalized_for_http_clients() -> None:
 def test_entity_channel_page_uses_new_filter_pagination_arguments() -> None:
     """Regression: date parameters must not be reused as pagination offsets."""
     assert "LIMIT $11 OFFSET $12" in _ENTITY_CHANNEL_PAGE_SQL
+
+
+async def test_source_actors_force_named_attribution_and_forward_global_filters() -> None:
+    pool = JsonPool()
+    repository = AnalyticsRepository(pool)  # type: ignore[arg-type]
+    filters = EntityAnalyticsFilters(
+        channel_id=7,
+        stance="негативне",
+        rhetoric="делегітимізація",
+        epistemic_status="питання",
+        source_kind="external_unnamed",
+        source_entity_id=99,
+        attribution_mode="quoted_sources",
+    )
+
+    result = await repository.source_actors(4, filters, None, None, "Автор", 25, 0)
+
+    assert result["total"] == 1
+    page_call = next(args for query, args in pool.calls if query == _SOURCE_ACTOR_PAGE_SQL)
+    count_call = next(args for query, args in pool.calls if query == _SOURCE_ACTOR_COUNT_SQL)
+    assert page_call[:8] == (
+        4,
+        7,
+        "негативне",
+        "делегітимізація",
+        "питання",
+        "named_entity",
+        None,
+        "quoted_sources",
+    )
+    assert page_call[10:] == ("Автор", 25, 0)
+    assert count_call[5:7] == ("named_entity", None)
