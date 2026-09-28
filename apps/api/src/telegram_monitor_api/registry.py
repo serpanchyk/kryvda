@@ -28,7 +28,8 @@ class RegistryRepository:
         """Return one registry page while keeping aliases internal to search."""
         order = {
             "name": "canonical_name ASC",
-            "mentions": "mention_count DESC, canonical_name ASC",
+            "mentions": "evaluative_claim_count DESC, canonical_name ASC",
+            "evaluative_claims": "evaluative_claim_count DESC, canonical_name ASC",
             "positive": "positive_count DESC, canonical_name ASC",
             "negative": "negative_count DESC, canonical_name ASC",
             "negative_volume": "negative_count DESC, evaluative_count DESC, canonical_name ASC",
@@ -308,7 +309,10 @@ def _entity_metrics_sql() -> str:
         f"/ (1 + 3.8416 / {total}) END"
     )
     return (
-        f"{positive} AS positive_count, {negative} AS negative_count, {total} AS evaluative_count, "
+        f"{positive} AS positive_classification_count, "
+        f"{negative} AS negative_classification_count, "
+        f"{positive} AS positive_count, {negative} AS negative_count, "
+        f"{total} AS evaluative_count, "
         f"{share} AS negative_share, {score} AS negative_balance_score"
     )
 
@@ -318,9 +322,25 @@ _ENTITY_METRICS_SQL = _entity_metrics_sql()
 _ENTITY_PAGE_SQL = (
     """
 SELECT entity.id, entity.canonical_name, entity.coarse_type, entity.monitored,
+       COALESCE((SELECT sum(jsonb_array_length(observed.mentions))
+           FROM post_entities AS observed
+           JOIN analysis_runs AS observed_run ON observed_run.id = observed.run_id
+           JOIN post_revisions AS observed_revision
+             ON observed_revision.id = observed_run.post_revision_id
+           JOIN raw_posts AS observed_post ON observed_post.id = observed_revision.raw_post_id
+           WHERE observed.registry_entity_id = entity.id
+             AND observed_run.status IN ('completed', 'completed_with_partial_classification',
+                                         'completed_with_entity_fallback')
+             AND observed_post.deleted_at IS NULL AND observed_post.inaccessible_at IS NULL
+             AND ($4::timestamptz IS NULL OR observed_post.published_at >= $4)
+             AND ($5::timestamptz IS NULL OR observed_post.published_at < $5)), 0)
+           AS entity_mention_count,
        count(DISTINCT claim.id) FILTER (
            WHERE post.id IS NOT NULL
              AND classification.stance IN ('позитивне', 'негативне')
+       ) AS evaluative_claim_count,
+       count(DISTINCT claim.id) FILTER (
+           WHERE post.id IS NOT NULL AND classification.stance IN ('позитивне', 'негативне')
        ) AS mention_count,
        """
     + _ENTITY_METRICS_SQL
@@ -329,7 +349,9 @@ SELECT entity.id, entity.canonical_name, entity.coarse_type, entity.monitored,
     + """
 FROM registry_entities AS entity
 LEFT JOIN post_entities AS post_entity ON post_entity.registry_entity_id = entity.id
-LEFT JOIN analysis_runs AS run ON run.id = post_entity.run_id AND run.status = 'completed'
+LEFT JOIN analysis_runs AS run ON run.id = post_entity.run_id
+    AND run.status IN ('completed', 'completed_with_partial_classification',
+                       'completed_with_entity_fallback')
 LEFT JOIN claims AS claim ON claim.run_id = run.id
 LEFT JOIN claim_target_classifications AS classification
     ON classification.claim_id = claim.id AND classification.post_entity_id = post_entity.id

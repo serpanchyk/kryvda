@@ -89,17 +89,25 @@ class AnalyticsRepository:
             start,
             end,
         )
+        completeness = await self._pool.fetchrow(_DASHBOARD_COMPLETENESS_SQL, start, end)
         pipeline = await self._pool.fetchrow(_PIPELINE_SQL)
         retry_rows = await self._pool.fetch(_RETRY_ERROR_SQL)
         pipeline_value = dict(pipeline) if pipeline is not None else _empty_pipeline()
         pipeline_value["retry_by_error_kind"] = {
             str(row["error_kind"]): int(row["count"]) for row in retry_rows
         }
+        rhetoric = await self._pool.fetch(_DASHBOARD_RHETORIC_SQL, start, end)
+        source_actors = await self._pool.fetch(_DASHBOARD_SOURCE_ACTORS_SQL, start, end)
         return {
             "summary": dict(summary) if summary is not None else _empty_summary(),
             "daily": [dict(row) for row in daily],
             "entities": [dict(row) for row in entities],
             "channels": [dict(row) for row in channels],
+            "rhetoric": [_distribution(row) for row in rhetoric],
+            "source_actors": [dict(row) for row in source_actors],
+            "completeness": dict(completeness)
+            if completeness is not None
+            else _empty_completeness(),
             "pipeline": pipeline_value,
         }
 
@@ -142,6 +150,7 @@ class AnalyticsRepository:
             "summary": dict(summary)
             if summary is not None
             else {
+                "evaluative_claim_count": 0,
                 "mention_count": 0,
                 **negative_balance_metrics(0, 0),
                 "positive_count": 0,
@@ -294,6 +303,7 @@ class AnalyticsRepository:
         sort: Literal["newest", "oldest"],
         limit: int,
         offset: int,
+        source_entity_id: int | None = None,
     ) -> dict[str, Any]:
         """Return a page of auditable claims with controlled ordering."""
         order = "ASC" if sort == "oldest" else "DESC"
@@ -305,6 +315,7 @@ class AnalyticsRepository:
             rhetoric,
             epistemic_status,
             source_kind,
+            source_entity_id,
             start,
             end,
             limit,
@@ -318,6 +329,16 @@ class AnalyticsRepository:
             "limit": limit,
             "offset": offset,
         }
+
+    async def claim_source_actors(self, search: str | None, limit: int) -> list[dict[str, Any]]:
+        """Return named source actors for global Claims Explorer filters."""
+        rows = await self._pool.fetch(_CLAIM_SOURCE_ACTORS_SQL, search, limit)
+        return [dict(row) for row in rows]
+
+    async def claim_channels(self, search: str | None, limit: int) -> list[dict[str, Any]]:
+        """Return channels for global Claims Explorer filters."""
+        rows = await self._pool.fetch(_CLAIM_CHANNELS_SQL, search, limit)
+        return [dict(row) for row in rows]
 
     async def post(self, raw_post_id: int) -> dict[str, Any] | None:
         row = await self._pool.fetchrow(_POST_SQL, raw_post_id)
@@ -342,6 +363,16 @@ def _empty_summary() -> dict[str, int | float]:
         "absent_count": 0,
         "today_post_count": 0,
         "today_claim_count": 0,
+    }
+
+
+def _empty_completeness() -> dict[str, int]:
+    return {
+        "completed": 0,
+        "partial_classification": 0,
+        "entity_fallback": 0,
+        "incomplete": 0,
+        "filtered_out": 0,
     }
 
 
@@ -423,7 +454,7 @@ def _base(start_arg: str, end_arg: str) -> str:
 FROM claim_target_classifications AS classification
 JOIN claims AS claim ON claim.id = classification.claim_id
 JOIN post_entities AS post_entity ON post_entity.id = classification.post_entity_id
-JOIN analysis_runs AS run ON run.id = claim.run_id AND run.status = 'completed'
+JOIN analysis_runs AS run ON run.id = claim.run_id AND run.status IN ('completed', 'completed_with_partial_classification', 'completed_with_entity_fallback')
 JOIN post_revisions AS revision ON revision.id = run.post_revision_id
 JOIN raw_posts AS post ON post.id = revision.raw_post_id
 JOIN monitored_channels AS channel ON channel.id = post.channel_id
@@ -497,6 +528,54 @@ _CHANNEL_SUMMARY_SQL = (
 )
 _CHANNEL_PAGE_SQL = _CHANNEL_SUMMARY_SQL + " LIMIT $3 OFFSET $4"
 _CHANNEL_COUNT_SQL = "SELECT count(DISTINCT channel.id) " + _base("$1", "$2")
+
+_DASHBOARD_COMPLETENESS_SQL = """SELECT
+    count(*) FILTER (WHERE run.status = 'completed') AS completed,
+    count(*) FILTER (WHERE run.status = 'completed_with_partial_classification') AS partial_classification,
+    count(*) FILTER (WHERE run.status = 'completed_with_entity_fallback') AS entity_fallback,
+    count(*) FILTER (WHERE run.status IN ('running', 'retry_scheduled', 'failed')) AS incomplete,
+    count(*) FILTER (WHERE run.status = 'filtered_out') AS filtered_out
+FROM analysis_runs AS run
+JOIN post_revisions AS revision ON revision.id = run.post_revision_id
+JOIN raw_posts AS post ON post.id = revision.raw_post_id
+WHERE post.deleted_at IS NULL AND post.inaccessible_at IS NULL
+  AND revision.id = (SELECT latest.id FROM post_revisions AS latest
+                     WHERE latest.raw_post_id = post.id ORDER BY latest.revision_number DESC LIMIT 1)
+  AND ($1::timestamptz IS NULL OR post.published_at >= $1)
+  AND ($2::timestamptz IS NULL OR post.published_at < $2)"""
+
+_DASHBOARD_RHETORIC_SQL = """WITH labels(key, ordinal) AS (
+    VALUES ('корупція_або_особиста_вигода', 1), ('злочинна_або_незаконна_поведінка', 2),
+           ('делегітимізація', 3), ('лицемірство_або_подвійні_стандарти', 4),
+           ('висміювання_або_особиста_образа', 5), ('зовнішній_контроль_або_нелояльність', 6)
+), counts AS (
+    SELECT feature.key, count(*) AS count FROM claim_target_classifications AS classification
+    JOIN claims AS claim ON claim.id = classification.claim_id
+    JOIN analysis_runs AS run ON run.id = claim.run_id AND run.status IN ('completed', 'completed_with_partial_classification', 'completed_with_entity_fallback')
+    JOIN post_revisions AS revision ON revision.id = run.post_revision_id
+    JOIN raw_posts AS post ON post.id = revision.raw_post_id
+    CROSS JOIN LATERAL jsonb_array_elements_text(classification.rhetoric) AS feature(key)
+    WHERE post.deleted_at IS NULL AND post.inaccessible_at IS NULL
+      AND revision.id = (SELECT latest.id FROM post_revisions AS latest WHERE latest.raw_post_id = post.id ORDER BY latest.revision_number DESC LIMIT 1)
+      AND ($1::timestamptz IS NULL OR post.published_at >= $1)
+      AND ($2::timestamptz IS NULL OR post.published_at < $2)
+    GROUP BY feature.key
+)
+SELECT labels.key, COALESCE(counts.count, 0)::bigint AS count,
+       CASE WHEN sum(COALESCE(counts.count, 0)) OVER () = 0 THEN 0::double precision
+            ELSE COALESCE(counts.count, 0)::double precision / sum(COALESCE(counts.count, 0)) OVER () END AS share
+FROM labels LEFT JOIN counts ON counts.key = labels.key ORDER BY labels.ordinal
+"""
+
+_DASHBOARD_SOURCE_ACTORS_SQL = (
+    """SELECT source_registry.id, source_registry.canonical_name,
+    count(*) AS claim_count
+"""
+    + _base("$1", "$2")
+    + """ AND source_registry.id IS NOT NULL
+GROUP BY source_registry.id, source_registry.canonical_name
+ORDER BY claim_count DESC, source_registry.canonical_name LIMIT 8"""
+)
 
 _PIPELINE_SQL = """SELECT count(*) FILTER (WHERE status = 'pending' AND priority = 'live') AS pending_live,
     count(*) FILTER (WHERE status = 'pending' AND priority = 'backfill') AS pending_backfill,
@@ -698,7 +777,7 @@ _CHANNEL_RHETORIC_SQL = (
     SELECT feature.key, count(*) AS count
     FROM claim_target_classifications AS classification
     JOIN claims AS claim ON claim.id = classification.claim_id
-    JOIN analysis_runs AS run ON run.id = claim.run_id AND run.status = 'completed'
+    JOIN analysis_runs AS run ON run.id = claim.run_id AND run.status IN ('completed', 'completed_with_partial_classification', 'completed_with_entity_fallback')
     JOIN post_revisions AS revision ON revision.id = run.post_revision_id
     JOIN raw_posts AS post ON post.id = revision.raw_post_id
     CROSS JOIN LATERAL jsonb_array_elements_text(classification.rhetoric) AS feature(key)
@@ -775,14 +854,15 @@ _EVIDENCE_PAGE_SQL = _EVIDENCE_SQL + " LIMIT $11 OFFSET $12"
 _EVIDENCE_COUNT_SQL = "SELECT count(*) " + _ENTITY_BASE
 
 _CLAIMS_BASE = (
-    _base("$8", "$9")
+    _base("$9", "$10")
     + """ AND ($1::text IS NULL OR claim.normalized_text ILIKE '%' || $1 || '%'
     OR entity.canonical_name ILIKE '%' || $1 || '%') AND ($2::bigint IS NULL OR entity.id = $2)
   AND ($3::bigint IS NULL OR channel.id = $3)
   AND ($4::text IS NULL OR classification.stance = $4)
   AND ($5::text IS NULL OR classification.rhetoric ? $5)
   AND ($6::text IS NULL OR claim.epistemic_status = $6)
-  AND ($7::text IS NULL OR claim.source_kind = $7)"""
+  AND ($7::text IS NULL OR claim.source_kind = $7)
+  AND ($8::bigint IS NULL OR source_registry.id = $8)"""
 )
 _CLAIMS_SQL = (
     """SELECT claim.id AS claim_id, claim.normalized_text, claim.evidence_text,
@@ -793,7 +873,7 @@ _CLAIMS_SQL = (
     channel.title AS channel_title, entity.id AS entity_id, entity.canonical_name AS entity_name
 """
     + _CLAIMS_BASE
-    + " ORDER BY post.published_at {order}, claim.id {order} LIMIT $10 OFFSET $11"
+    + " ORDER BY post.published_at {order}, claim.id {order} LIMIT $11 OFFSET $12"
 )
 _CLAIMS_COUNT_SQL = "SELECT count(*) " + _CLAIMS_BASE
 
@@ -808,7 +888,7 @@ _POST_SQL = """SELECT post.id, post.telegram_message_id, post.published_at, revi
         'entity', entity.canonical_name)) FILTER (WHERE claim.id IS NOT NULL), '[]'::jsonb) AS claims
 FROM raw_posts AS post JOIN monitored_channels AS channel ON channel.id = post.channel_id
 JOIN LATERAL (SELECT * FROM post_revisions WHERE raw_post_id = post.id ORDER BY revision_number DESC LIMIT 1) AS revision ON true
-LEFT JOIN analysis_runs AS run ON run.post_revision_id = revision.id AND run.status = 'completed'
+LEFT JOIN analysis_runs AS run ON run.post_revision_id = revision.id AND run.status IN ('completed', 'completed_with_partial_classification', 'completed_with_entity_fallback')
 LEFT JOIN claims AS claim ON claim.run_id = run.id LEFT JOIN claim_target_classifications AS classification ON classification.claim_id = claim.id
 LEFT JOIN post_entities AS post_entity ON post_entity.id = classification.post_entity_id
 LEFT JOIN registry_entities AS entity ON entity.id = post_entity.registry_entity_id
@@ -819,3 +899,17 @@ LEFT JOIN candidate_entities AS source_candidate
     ON source_candidate.id = source_post_entity.candidate_entity_id
 WHERE post.id = $1 AND post.deleted_at IS NULL AND post.inaccessible_at IS NULL
 GROUP BY post.id, post.telegram_message_id, post.published_at, revision.content, channel.id, channel.title, channel.username"""
+
+_CLAIM_SOURCE_ACTORS_SQL = """SELECT source_registry.id, source_registry.canonical_name,
+    count(*) AS claim_count
+FROM claims AS claim
+JOIN analysis_runs AS run ON run.id = claim.run_id AND run.status IN ('completed', 'completed_with_partial_classification', 'completed_with_entity_fallback')
+JOIN post_entities AS source_post_entity ON source_post_entity.id = claim.source_post_entity_id
+JOIN registry_entities AS source_registry ON source_registry.id = source_post_entity.registry_entity_id
+WHERE ($1::text IS NULL OR source_registry.canonical_name ILIKE '%' || $1 || '%')
+GROUP BY source_registry.id, source_registry.canonical_name
+ORDER BY claim_count DESC, source_registry.canonical_name LIMIT $2"""
+
+_CLAIM_CHANNELS_SQL = """SELECT id, title FROM monitored_channels
+WHERE ($1::text IS NULL OR title ILIKE '%' || $1 || '%' OR username ILIKE '%' || $1 || '%')
+ORDER BY title LIMIT $2"""

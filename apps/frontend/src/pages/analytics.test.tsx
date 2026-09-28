@@ -61,8 +61,9 @@ describe("editorial analytics pages", () => {
     renderRoute("/?period=all", "/", <DashboardPage />);
     expect(await screen.findByText("Хто і як стає мішенню негативних тверджень")).toBeInTheDocument();
     expect((await screen.findAllByText("7")).length).toBeGreaterThan(0);
-    expect(screen.getByText("Черга AI-воркера")).toBeInTheDocument();
-    expect(screen.getByText("Фонові повтори")).toBeInTheDocument();
+    expect(screen.queryByText("Черга AI-воркера")).not.toBeInTheDocument();
+    expect(screen.getByText("Відкрити Claims Explorer →")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Твердження" })).toHaveAttribute("href", "/claims?period=all");
     expect(screen.getByRole("link", { name: "Сутності" })).toHaveAttribute("href", "/entities?period=all");
     expect(screen.getByRole("link", { name: /Віталій Шабунін/ })).toHaveAttribute("href", "/entities/4?period=all");
   });

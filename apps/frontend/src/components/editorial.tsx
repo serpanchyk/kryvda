@@ -28,6 +28,8 @@ const navigation = [
   { to: "/", label: "Огляд" },
   { to: "/entities", label: "Сутності" },
   { to: "/channels", label: "Канали" },
+  { to: "/claims", label: "Твердження" },
+  { to: "/system", label: "Система" },
 ];
 
 function EditorialNav({ mobile = false }: { mobile?: boolean }) {

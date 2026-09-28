@@ -386,6 +386,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         rhetoric: RhetoricLabel | None = None,
         epistemic_status: EpistemicStatus | None = None,
         source_kind: SourceKind | None = None,
+        source_entity_id: int | None = None,
         start: datetime | None = None,
         end: datetime | None = None,
         sort: Literal["newest", "oldest"] = "newest",
@@ -410,7 +411,26 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
                 sort,
                 safe_limit,
                 safe_offset,
+                source_entity_id,
             )
+        finally:
+            await pool.close()
+
+    @app.get("/claims/filter-options/channels")
+    async def claim_channels(q: str | None = None, limit: int = 25) -> list[dict[str, object]]:
+        """Return channel choices for Claims Explorer."""
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            return await AnalyticsRepository(pool).claim_channels(q, min(max(limit, 1), 100))
+        finally:
+            await pool.close()
+
+    @app.get("/claims/filter-options/source-actors")
+    async def claim_source_actors(q: str | None = None, limit: int = 25) -> list[dict[str, object]]:
+        """Return named-source choices for Claims Explorer."""
+        pool = await asyncpg.create_pool(settings.postgres_dsn)
+        try:
+            return await AnalyticsRepository(pool).claim_source_actors(q, min(max(limit, 1), 100))
         finally:
             await pool.close()
 

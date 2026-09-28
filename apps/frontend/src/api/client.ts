@@ -19,7 +19,12 @@ export interface Entity {
   canonical_name: string;
   coarse_type: string;
   monitored: boolean;
+  /** @deprecated: use evaluative_claim_count. */
   mention_count: number;
+  evaluative_claim_count?: number;
+  entity_mention_count?: number;
+  positive_classification_count?: number;
+  negative_classification_count?: number;
   positive_count: number;
   negative_count: number;
   evaluative_count?: number;
@@ -44,6 +49,9 @@ export interface Summary {
   negative_share?: number;
   negative_balance_score?: number;
   absent_count: number;
+  positive_classification_count?: number;
+  negative_classification_count?: number;
+  absent_classification_count?: number;
 }
 export interface Daily {
   date: string;
@@ -109,6 +117,9 @@ export interface Dashboard {
     today_post_count: number;
     today_claim_count: number;
   };
+  rhetoric?: Distribution<RhetoricLabel>[];
+  source_actors?: SourceActorOption[];
+  completeness?: Completeness;
   daily: Daily[];
   entities: Summary[];
   channels: Summary[];
@@ -124,6 +135,13 @@ export interface Dashboard {
     failed_last_hour: number;
     last_completed_at: string | null;
   };
+}
+export interface Completeness {
+  completed: number;
+  partial_classification: number;
+  entity_fallback: number;
+  incomplete: number;
+  filtered_out: number;
 }
 export interface EntityAnalyticsFilters {
   channel_id?: string;
@@ -143,7 +161,7 @@ export interface SourceActorOption {
 }
 export interface EntityProfile {
   entity: Entity;
-  summary: { mention_count: number; positive_count: number; negative_count: number };
+  summary: { mention_count: number; evaluative_claim_count?: number; positive_count: number; negative_count: number };
   channels: Page<Summary>;
   channel_options: Array<Pick<Summary, "id" | "title">>;
   source_entity: Pick<Entity, "id" | "canonical_name"> | null;
@@ -226,9 +244,13 @@ export const apiClient = {
       rhetoric?: RhetoricLabel;
       epistemic_status?: EpistemicStatus;
       source_kind?: SourceKind;
+      source_entity_id?: string;
       sort?: "newest" | "oldest";
       offset?: number;
     } = {},
   ): Promise<Page<Claim>> => get(`/claims${query({ ...range(dates), ...filters, limit: 25 })}`),
+  claimChannels: (q?: string): Promise<Array<Pick<Summary, "id" | "title">>> => get(`/claims/filter-options/channels${query({ q })}`),
+  claimSourceActors: (q?: string): Promise<SourceActorOption[]> => get(`/claims/filter-options/source-actors${query({ q })}`),
+  analysisHealth: (): Promise<{ jobs: Dashboard["pipeline"]; runs: Record<string, number | string | null> }> => get("/analysis/health"),
   post: (id: string): Promise<PostDetail> => get(`/posts/${id}`),
 };

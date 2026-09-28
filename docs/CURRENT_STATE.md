@@ -143,3 +143,6 @@ services remain unchanged.
 
 `VISION.md` describes target capability. `system/` describes the implemented foundation. Future
 work belongs in `tasks/backlog/`; operational records belong in `problems/backlog/`.
+## Claims Explorer and analytical completeness
+
+`/claims` is the primary investigation workspace for URL-backed claim filtering. Analytical aggregates include valid persisted records from `completed_with_partial_classification` and `completed_with_entity_fallback` runs; the Dashboard exposes completeness counts so degraded and unfinished coverage is visible. Operational AI queue details live on `/system`, not the main Dashboard. Entity-facing evaluative-claim totals are labelled as claims/classifications rather than mentions.

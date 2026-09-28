@@ -6,4 +6,6 @@ export {
   EntitiesPage,
   EntityPage,
   PostPage,
+  ClaimsPage,
+  SystemPage,
 } from "@/pages/analytics";
