@@ -1,35 +1,12 @@
 import type { EpistemicStatus, RhetoricLabel, SourceKind, Stance } from "@/api/client";
+import { labelsOf } from "@/lib/glossary";
 
 export const PAGE_SIZE = 25;
-export const stanceLabels: Record<Stance, string> = {
-  позитивне: "Позитивне",
-  негативне: "Негативне",
-  відсутнє: "Без оцінки",
-};
-export const rhetoricLabels: Record<RhetoricLabel, string> = {
-  корупція_або_особиста_вигода: "Корупція / особиста вигода",
-  злочинна_або_незаконна_поведінка: "Злочинна / незаконна поведінка",
-  делегітимізація: "Делегітимізація",
-  лицемірство_або_подвійні_стандарти: "Лицемірство / подвійні стандарти",
-  висміювання_або_особиста_образа: "Висміювання / особиста образа",
-  зовнішній_контроль_або_нелояльність: "Зовнішній контроль / нелояльність",
-};
-export const epistemicLabels: Record<EpistemicStatus, string> = {
-  ствердження: "Ствердження",
-  невпевнене: "Невпевнене",
-  питання: "Питання",
-};
-export const sourceLabels: Record<SourceKind, string> = {
-  channel_editorial: "Позиція каналу",
-  named_entity: "Названа особа",
-  external_unnamed: "Неназване зовнішнє джерело",
-};
-export const entityTypes: Record<string, string> = {
-  person: "Людина",
-  organization: "Організація",
-  state_institution: "Державна установа",
-  media: "Медіа",
-};
+export const stanceLabels: Record<Stance, string> = labelsOf("stance");
+export const rhetoricLabels: Record<RhetoricLabel, string> = labelsOf("rhetoric");
+export const epistemicLabels: Record<EpistemicStatus, string> = labelsOf("epistemic");
+export const sourceLabels: Record<SourceKind, string> = labelsOf("source");
+export const entityTypes: Record<string, string> = labelsOf("entityType");
 export const formatNumber = (value: number | undefined): string =>
   Number(value ?? 0).toLocaleString("uk-UA");
 export const formatPercent = (value: number): string =>
@@ -75,5 +52,5 @@ export const dateParams = (params: URLSearchParams): URLSearchParams => {
 export const exportFileName = (title: string, today: Date = new Date()): string => {
   const slug = title.toLocaleLowerCase("uk-UA").replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "").slice(0, 60);
   const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  return `kryvda-${slug || "graphic"}-${day}.png`;
+  return `кривда-${slug || "графік"}-${day}.png`;
 };

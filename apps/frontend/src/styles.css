@@ -184,5 +184,6 @@
   .editorial-nav-link.is-active { @apply text-foreground; }
   .editorial-nav-link.is-active::after { @apply scale-x-100; }
   .editorial-graphic { @apply border-t-2 border-ink pt-4; }
+  .is-exporting .term-label { text-decoration: none; }
   .editorial-card { @apply flex min-w-0 flex-col border border-t-2 border-rule border-t-ink bg-popover p-4 md:p-5; }
 }

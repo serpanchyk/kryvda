@@ -131,14 +131,28 @@ from its evaluative totals. Rhetoric shares count assigned labels, while epistem
 shares count distinct claims; the interface labels these denominators explicitly.
 
 Every chart section is a shareable card: a thesis headline, the active period in its eyebrow, and a
-branded `КРИВДА.` footer with source and period. A `Зберегти PNG` control exports the card at 2x
-pixel ratio through `html-to-image`, excluding controls marked `data-export-ignore`. Layout density
-favours three-column card grids on wide screens; the overview opens with a single metric strip
-(negative classifications with their evaluative share first) instead of a hero figure. Daily series
-render as bars, never interpolated areas; stance-over-time stacks only negative and positive
-classifications and reports `без оцінки` in the tooltip. Negative is red (`--negative`) and positive
-is blue (`--positive: #2d5d9f`) for colour-vision-deficiency safety. Claims Explorer filter selects
-and active-filter chips show Ukrainian labels and resolved channel, actor, and target names.
+branded `КРИВДА.` footer with source and period. A `Зберегти зображення` control exports the card at
+2x pixel ratio through `html-to-image`, excluding controls marked `data-export-ignore` and hiding
+term underlines. Layout density favours three-column card grids on wide screens.
+
+The overview opens with a metric strip whose counts carry a sparkline and the relative change
+against the equally long previous period (fetched as a second request; unavailable for «Увесь
+час»). Daily charts render bars, never interpolated areas, with a day/week toggle (weeks by default
+beyond 120 days), spikes highlighted when a bin exceeds the period mean + 2σ and at least 5, and a
+dashed mean line; clicking a bar narrows the page to that day or week. Stance-over-time stacks
+negative and positive classifications with a trailing 7-day negative-share line (hidden below 5
+evaluations). A target map plots entities by evaluative volume (log scale) against negative share,
+split at the median volume and 50% into four named quadrants, and «Кого атакували більше, ніж
+раніше» lists the largest growth in negative classifications against the previous period. Entity
+and channel rankings are diverging bars: negative extends left and positive right from one shared
+axis and scale, with the evaluative sample size per row. Negative is red (`--negative`) and positive
+is blue (`--positive: #2d5d9f`) for colour-vision-deficiency safety.
+
+The interface is Ukrainian-only. `apps/frontend/src/lib/glossary.ts` is the single source of UI
+terms: each term has a visible `label`, an optional `definition` shown in a tooltip next to the
+term (stance, rhetoric, epistemic and attribution labels, metrics, quadrants, pipeline states), and
+a `draft` flag for translations awaiting editorial review. A regression test fails on Latin words
+in rendered text or accessible names, allowing only «Telegram» and data such as channel names.
 
 Every `daily` series from `/dashboard`, `/channels`, `/channels/{id}/analytics`, and
 `/entities/{id}/analytics` buckets posts by `Europe/Kyiv` calendar day and returns one row per day

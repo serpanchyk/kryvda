@@ -7,15 +7,14 @@ import type {
   SourceKind,
   Stance,
 } from "@/api/client";
+import { TermLabel } from "@/components/editorial";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
-  epistemicLabels,
   formatDateTime,
-  rhetoricLabels,
   sourceLabels,
-  stanceLabels,
 } from "@/lib/editorial";
+import { termOf } from "@/lib/glossary";
 
 export type MetadataAction = { href?: string; onClick?: () => void };
 export type ClaimMetadataData = {
@@ -115,7 +114,7 @@ export function StanceBadge({
         : "border-neutral text-muted-foreground";
   return (
     <MetadataBadge action={action} className={className}>
-      {stanceLabels[stance]}
+      <TermLabel term={termOf("stance", stance)} />
     </MetadataBadge>
   );
 }
@@ -129,7 +128,7 @@ export function EpistemicBadge({
 }) {
   return (
     <MetadataBadge action={action} className="border-ink/50 text-ink">
-      {epistemicLabels[status]}
+      <TermLabel term={termOf("epistemic", status)} />
     </MetadataBadge>
   );
 }
@@ -151,7 +150,7 @@ export function RhetoricBadges({
           action={action?.(label)}
           className="border-rule text-muted-foreground"
         >
-          {rhetoricLabels[label]}
+          <TermLabel term={termOf("rhetoric", label)} />
         </MetadataBadge>
       ))}
     </div>
