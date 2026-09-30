@@ -4,8 +4,9 @@
 import json
 import math
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
+from zoneinfo import ZoneInfo
 
 import asyncpg
 
@@ -62,6 +63,47 @@ def negative_balance_metrics(positive_count: int, negative_count: int) -> dict[s
     }
 
 
+_REPORT_TIMEZONE = "Europe/Kyiv"
+_REPORT_ZONE = ZoneInfo(_REPORT_TIMEZONE)
+
+
+def _report_day(moment: datetime) -> date:
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=_REPORT_ZONE)
+    return moment.astimezone(_REPORT_ZONE).date()
+
+
+def _empty_day(day: date) -> dict[str, Any]:
+    return {
+        "date": day,
+        "post_count": 0,
+        "claim_count": 0,
+        "positive_count": 0,
+        "negative_count": 0,
+        **negative_balance_metrics(0, 0),
+        "absent_count": 0,
+    }
+
+
+def _fill_daily(
+    rows: list[Any], start: datetime | None, end: datetime | None
+) -> list[dict[str, Any]]:
+    """Return one row per report day so charts never interpolate across silent days."""
+    by_day = {row["date"]: dict(row) for row in rows}
+    if start is None and not by_day:
+        return []
+    first = _report_day(start) if start is not None else min(by_day)
+    if end is not None:
+        last = _report_day(end - timedelta(microseconds=1))
+    else:
+        last = max([*by_day, _report_day(datetime.now(_REPORT_ZONE))])
+    days = (last - first).days + 1
+    return [
+        by_day.get(day, _empty_day(day))
+        for day in (first + timedelta(days=offset) for offset in range(max(days, 0)))
+    ]
+
+
 def _ranking_order(sort: RankingSort, name: str) -> str:
     """Return safe, deterministic ordering for aggregate ranking rows."""
     primary = {
@@ -100,7 +142,7 @@ class AnalyticsRepository:
         source_actors = await self._pool.fetch(_DASHBOARD_SOURCE_ACTORS_SQL, start, end)
         return {
             "summary": dict(summary) if summary is not None else _empty_summary(),
-            "daily": [dict(row) for row in daily],
+            "daily": _fill_daily(daily, start, end),
             "entities": [dict(row) for row in entities],
             "channels": [dict(row) for row in channels],
             "rhetoric": [_distribution(row) for row in rhetoric],
@@ -170,7 +212,7 @@ class AnalyticsRepository:
             ],
             "epistemic": [_distribution(row) for row in epistemic],
             "attribution": [_distribution(row) for row in attribution],
-            "daily": [dict(row) for row in daily],
+            "daily": _fill_daily(daily, start, end),
             "incomplete_posts": int(incomplete or 0),
         }
 
@@ -204,7 +246,7 @@ class AnalyticsRepository:
         return {
             "channel": dict(channel),
             "summary": dict(summary) if summary is not None else _empty_channel_summary(),
-            "daily": [dict(row) for row in daily],
+            "daily": _fill_daily(daily, start, end),
             "entities": {
                 "items": [dict(row) for row in entities],
                 "total": int(entity_total or 0),
@@ -286,7 +328,7 @@ class AnalyticsRepository:
             "total": int(total or 0),
             "limit": limit,
             "offset": offset,
-            "daily": [dict(row) for row in daily],
+            "daily": _fill_daily(daily, start, end),
         }
 
     async def claims(
@@ -322,7 +364,7 @@ class AnalyticsRepository:
             offset,
         )
         rows = await self._pool.fetch(_CLAIMS_SQL.format(order=order), *args)
-        total = await self._pool.fetchval(_CLAIMS_COUNT_SQL, *args[:9])
+        total = await self._pool.fetchval(_CLAIMS_COUNT_SQL, *args[:10])
         return {
             "items": [_analytical_row(row) for row in rows],
             "total": int(total or 0),
@@ -490,7 +532,9 @@ _DASHBOARD_SUMMARY_SQL = (
 )
 
 _DAILY_SQL = (
-    """SELECT date_trunc('day', post.published_at)::date AS date,
+    """SELECT (post.published_at AT TIME ZONE '"""
+    + _REPORT_TIMEZONE
+    + """')::date AS date,
     count(DISTINCT post.id) AS post_count, count(DISTINCT claim.id) AS claim_count,
     """
     + _AGGREGATE_METRICS_SQL
@@ -631,7 +675,9 @@ _ENTITY_CHANNEL_OPTIONS_SQL = (
 )
 
 _ENTITY_DAILY_SQL = (
-    """SELECT date_trunc('day', post.published_at)::date AS date,
+    """SELECT (post.published_at AT TIME ZONE '"""
+    + _REPORT_TIMEZONE
+    + """')::date AS date,
     count(DISTINCT post.id) AS post_count, count(DISTINCT claim.id) AS claim_count,
     """
     + _AGGREGATE_METRICS_SQL
@@ -736,7 +782,9 @@ _CHANNEL_TOTAL_SQL = (
 )
 
 _CHANNEL_DAILY_SQL = (
-    """SELECT date_trunc('day', post.published_at)::date AS date,
+    """SELECT (post.published_at AT TIME ZONE '"""
+    + _REPORT_TIMEZONE
+    + """')::date AS date,
     count(DISTINCT post.id) AS post_count, count(DISTINCT claim.id) AS claim_count,
     """
     + _AGGREGATE_METRICS_SQL

@@ -152,10 +152,10 @@
   --input: #b9b3a9;
   --ring: #171714;
   --negative: #c72c32;
-  --positive: #326b5c;
+  --positive: #2d5d9f;
   --neutral: #aaa49a;
   --chart-1: #c72c32;
-  --chart-2: #326b5c;
+  --chart-2: #2d5d9f;
   --chart-3: #aaa49a;
   --chart-4: #6d6962;
   --chart-5: #171714;
@@ -183,5 +183,6 @@
   .editorial-nav-link::after { content: ""; @apply absolute inset-x-0 bottom-0 h-0.5 origin-left scale-x-0 bg-negative transition-transform; }
   .editorial-nav-link.is-active { @apply text-foreground; }
   .editorial-nav-link.is-active::after { @apply scale-x-100; }
-  .editorial-graphic { @apply border-t-2 border-ink pt-5; }
+  .editorial-graphic { @apply border-t-2 border-ink pt-4; }
+  .editorial-card { @apply flex min-w-0 flex-col border border-t-2 border-rule border-t-ink bg-popover p-4 md:p-5; }
 }

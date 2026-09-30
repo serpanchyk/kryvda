@@ -71,3 +71,9 @@ export const dateParams = (params: URLSearchParams): URLSearchParams => {
   }
   return next;
 };
+
+export const exportFileName = (title: string, today: Date = new Date()): string => {
+  const slug = title.toLocaleLowerCase("uk-UA").replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+  const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  return `kryvda-${slug || "graphic"}-${day}.png`;
+};

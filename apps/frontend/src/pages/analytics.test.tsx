@@ -8,11 +8,18 @@ import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 import { apiClient } from "@/api/client";
 import { PostPage, Shell } from "@/App";
-import { DashboardPage, EntityPage } from "@/pages/analytics";
+import { toPng } from "html-to-image";
+import { toast } from "sonner";
+
+import { exportFileName } from "@/lib/editorial";
+import { ClaimsPage, DashboardPage, EntityPage } from "@/pages/analytics";
+
+vi.mock("html-to-image", () => ({ toPng: vi.fn() }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 vi.mock("@/api/client", async () => {
   const actual = await vi.importActual<typeof import("@/api/client")>("@/api/client");
-  return { ...actual, apiClient: { ...actual.apiClient, dashboard: vi.fn(), claims: vi.fn(), entity: vi.fn(), evidence: vi.fn(), sourceActors: vi.fn(), entities: vi.fn(), post: vi.fn() } };
+  return { ...actual, apiClient: { ...actual.apiClient, dashboard: vi.fn(), claims: vi.fn(), entity: vi.fn(), evidence: vi.fn(), sourceActors: vi.fn(), entities: vi.fn(), post: vi.fn(), claimChannels: vi.fn(), claimSourceActors: vi.fn() } };
 });
 
 afterEach(() => cleanup());
@@ -138,5 +145,47 @@ describe("editorial analytics pages", () => {
     expect(screen.getByText("Автор")).toBeInTheDocument();
     expect(screen.getByText("Делегітимізація")).toBeInTheDocument();
     expect(screen.getByText("доказове речення").tagName).toBe("MARK");
+  });
+
+  test("exports a shareable chart card as a PNG without its controls", async () => {
+    vi.mocked(apiClient.dashboard).mockResolvedValue({
+      summary: { post_count: 10, claim_count: 20, entity_count: 1, channel_count: 1, positive_count: 3, negative_count: 7, absent_count: 10, today_post_count: 0, today_claim_count: 0 },
+      daily: [{ date: "2026-09-01", post_count: 2, claim_count: 4, positive_count: 1, negative_count: 2, absent_count: 1 }],
+      entities: [],
+      channels: [],
+      pipeline: { pending_live: 0, pending_backfill: 0, leased: 0, retry_scheduled: 0, next_retry_at: null, retry_by_error_kind: {}, failed: 0, completed_last_hour: 0, failed_last_hour: 0, last_completed_at: null },
+    });
+    vi.mocked(toPng).mockResolvedValueOnce("data:image/png;base64,AA").mockRejectedValueOnce(new Error("canvas"));
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    renderRoute("/?period=all", "/", <DashboardPage />);
+    expect(await screen.findByText(/Пік — .*: 2 негативних класифікацій/)).toBeInTheDocument();
+    const [save] = screen.getAllByRole("button", { name: "Зберегти PNG" });
+    await userEvent.click(save);
+    const [node, options] = vi.mocked(toPng).mock.calls[0];
+    expect(node.tagName).toBe("SECTION");
+    expect(within(node).getByText("Коли зростала кількість негативних тверджень")).toBeInTheDocument();
+    expect(options).toEqual(expect.objectContaining({ pixelRatio: 2 }));
+    expect(options?.filter?.(within(node).getByRole("button", { name: "Зберегти PNG" }).parentElement as HTMLElement)).toBe(false);
+    expect(options?.filter?.(within(node).getByText("Коли зростала кількість негативних тверджень"))).toBe(true);
+    expect(click).toHaveBeenCalledTimes(1);
+    await userEvent.click(save);
+    expect(toast.error).toHaveBeenCalledWith("Не вдалося зберегти зображення.");
+    click.mockRestore();
+  });
+
+  test("names claims explorer filter chips in Ukrainian", async () => {
+    vi.mocked(apiClient.claims).mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 });
+    vi.mocked(apiClient.claimChannels).mockResolvedValue([{ id: 7, title: "Україна Сейчас" }]);
+    vi.mocked(apiClient.claimSourceActors).mockResolvedValue([{ id: 12, canonical_name: "Мар'яна Безугла", claim_count: 2 }]);
+    renderRoute("/claims?stance=%D0%BD%D0%B5%D0%B3%D0%B0%D1%82%D0%B8%D0%B2%D0%BD%D0%B5&channel_id=7&source_entity_id=12&source_kind=named_entity", "/claims", <ClaimsPage />);
+    expect(await screen.findByText("Канал: Україна Сейчас ×")).toBeInTheDocument();
+    expect(screen.getByText("Позиція: Негативне ×")).toBeInTheDocument();
+    expect(await screen.findByText("Названий актор: Мар'яна Безугла ×")).toBeInTheDocument();
+    expect(screen.getByText("Атрибуція: Названа особа ×")).toBeInTheDocument();
+  });
+
+  test("builds dated file names for exported graphics", () => {
+    expect(exportFileName("Коли зростала кількість?", new Date(2026, 8, 30))).toBe("kryvda-коли-зростала-кількість-2026-09-30.png");
+    expect(exportFileName("!!!", new Date(2026, 0, 2))).toBe("kryvda-graphic-2026-01-02.png");
   });
 });

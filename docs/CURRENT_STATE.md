@@ -130,6 +130,21 @@ filter their evidence or claims. Entity analytics excludes the technical `від
 from its evaluative totals. Rhetoric shares count assigned labels, while epistemic and attribution
 shares count distinct claims; the interface labels these denominators explicitly.
 
+Every chart section is a shareable card: a thesis headline, the active period in its eyebrow, and a
+branded `КРИВДА.` footer with source and period. A `Зберегти PNG` control exports the card at 2x
+pixel ratio through `html-to-image`, excluding controls marked `data-export-ignore`. Layout density
+favours three-column card grids on wide screens; the overview opens with a single metric strip
+(negative classifications with their evaluative share first) instead of a hero figure. Daily series
+render as bars, never interpolated areas; stance-over-time stacks only negative and positive
+classifications and reports `без оцінки` in the tooltip. Negative is red (`--negative`) and positive
+is blue (`--positive: #2d5d9f`) for colour-vision-deficiency safety. Claims Explorer filter selects
+and active-filter chips show Ukrainian labels and resolved channel, actor, and target names.
+
+Every `daily` series from `/dashboard`, `/channels`, `/channels/{id}/analytics`, and
+`/entities/{id}/analytics` buckets posts by `Europe/Kyiv` calendar day and returns one row per day
+of the requested range, zero-filled where no analysis exists (an unbounded range spans the first
+analysed day to today in Kyiv).
+
 The production frontend nginx configuration falls back to `index.html` for unknown paths so
 browser refreshes and direct links to React Router routes such as `/entities/{id}` remain valid.
 

@@ -46,8 +46,10 @@ import {
   datesFromParams,
   entityTypes,
   epistemicLabels,
+  formatDate,
   formatDateTime,
   formatNumber,
+  formatPercent,
   periodLabel,
   rhetoricLabels,
   sourceLabels,
@@ -121,7 +123,7 @@ function ClaimsFeed({ dates, channelId, compact = false }: { dates: DateRange; c
 }
 function ClaimRow({ claim, from, channelHref, setFilter }: { claim: Claim; from: string; channelHref: string; setFilter: (key: string, value?: string) => void }) {
   const actions: ClaimMetadataActions = { channel: { href: channelHref }, stance: { onClick: () => setFilter("claim_stance", claim.stance) }, epistemic: { onClick: () => setFilter("epistemic", claim.epistemic_status) }, rhetoric: (label) => ({ onClick: () => setFilter("rhetoric", label) }) };
-  return <article className="border-b border-rule py-5"><ClaimMetadata data={claim} actions={actions} /><Link to={"/posts/" + claim.post_id} state={{ from }} className="group mt-4 block hover:text-negative"><p className="font-heading text-xl font-bold leading-snug">{claim.normalized_text}</p><p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">«{claim.evidence_text}»</p></Link></article>;
+  return <article className="border-b border-rule py-4"><ClaimMetadata data={claim} actions={actions} /><Link to={"/posts/" + claim.post_id} state={{ from }} className="group mt-3 block hover:text-negative"><p className="font-heading text-lg font-bold leading-snug">{claim.normalized_text}</p><p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">«{claim.evidence_text}»</p></Link></article>;
 }
 function CompletenessNotice({ completeness }: { completeness?: { partial_classification: number; entity_fallback: number; incomplete: number } }) {
   if (!completeness || (!completeness.partial_classification && !completeness.entity_fallback && !completeness.incomplete)) return null;
@@ -129,21 +131,48 @@ function CompletenessNotice({ completeness }: { completeness?: { partial_classif
   return <div className="border-y border-rule py-4 text-sm text-muted-foreground"><strong className="text-foreground">Повнота аналізу.</strong> У підсумки включено валідні збережені результати; {degraded ? `${formatNumber(degraded)} дописів мають деградоване покриття. ` : ""}{completeness.incomplete ? `${formatNumber(completeness.incomplete)} дописів ще не мають завершеного аналізу.` : ""}</div>;
 }
 
+type ClaimFilterKey = "search" | "entity_id" | "channel_id" | "source_entity_id" | "stance" | "rhetoric" | "epistemic_status" | "source_kind";
+
+const claimFilterLabels: Record<ClaimFilterKey, string> = {
+  search: "Пошук",
+  entity_id: "Ціль",
+  channel_id: "Канал",
+  source_entity_id: "Названий актор",
+  stance: "Позиція",
+  rhetoric: "Риторика",
+  epistemic_status: "Статус",
+  source_kind: "Атрибуція",
+};
+
 export function ClaimsPage() {
   const { params, set } = useFilters(); const [, setParams] = useSearchParams(); const dates = datesFromParams(params); const location = useLocation();
   const filters = { search: params.get("search") ?? "", entity_id: params.get("entity_id") ?? undefined, channel_id: params.get("channel_id") ?? undefined, source_entity_id: params.get("source_entity_id") ?? undefined, stance: (params.get("stance") ?? undefined) as Stance | undefined, rhetoric: (params.get("rhetoric") ?? undefined) as RhetoricLabel | undefined, epistemic_status: (params.get("epistemic_status") ?? undefined) as EpistemicStatus | undefined, source_kind: (params.get("source_kind") ?? undefined) as SourceKind | undefined, sort: (params.get("sort") ?? "newest") as "newest" | "oldest", offset: Number(params.get("offset") ?? 0) };
   const claims = useQuery({ queryKey: ["claims-explorer", dates, filters], queryFn: () => apiClient.claims(dates, filters) });
   const channels = useQuery({ queryKey: ["claim-channels"], queryFn: () => apiClient.claimChannels() }); const actors = useQuery({ queryKey: ["claim-actors"], queryFn: () => apiClient.claimSourceActors() });
   const update = (key: string, value?: string) => set(key, value, "offset");
-  const active = Object.entries(filters).filter(([key, value]) => key !== "offset" && value && key !== "sort") as Array<[string, string]>;
+  const active = Object.entries(filters).filter(([key, value]) => key !== "offset" && value && key !== "sort") as Array<[ClaimFilterKey, string]>;
+  const chipValue = (key: ClaimFilterKey, value: string): string => {
+    if (key === "stance") return stanceLabels[value as Stance] ?? value;
+    if (key === "rhetoric") return rhetoricLabels[value as RhetoricLabel] ?? value;
+    if (key === "epistemic_status") return epistemicLabels[value as EpistemicStatus] ?? value;
+    if (key === "source_kind") return sourceLabels[value as SourceKind] ?? value;
+    if (key === "channel_id") return channels.data?.find((item) => String(item.id) === value)?.title ?? value;
+    if (key === "source_entity_id") return actors.data?.find((item) => String(item.id) === value)?.canonical_name ?? value;
+    if (key === "entity_id") return claims.data?.items.find((item) => String(item.entity_id) === value)?.entity_name ?? value;
+    return value;
+  };
   const reset = () => { const next = new URLSearchParams(); for (const key of ["start", "end", "period"]) { const value = params.get(key); if (value) next.set(key, value); } setParams(next); };
   return <PageLayout><PageHeader eyebrow={`Дослідження тверджень · ${periodLabel(params)}`} title="Claims Explorer" dek="Пошук витягнутих тверджень, їхніх цілей, атрибуції та першоджерел." />
-    <div className="grid gap-3 border-y border-rule py-4 md:grid-cols-3"><Input value={filters.search} placeholder="Пошук у твердженнях" onChange={(event) => update("search", event.target.value)} /><ClaimEntityFilter selected={filters.entity_id} onSelect={(entity) => update("entity_id", entity ? String(entity.id) : undefined)} /><FilterField label="Канал"><Select value={filters.channel_id ?? "all"} onValueChange={(value) => update("channel_id", value)}><SelectTrigger><SelectValue placeholder="Усі канали" /></SelectTrigger><SelectContent><SelectItem value="all">Усі канали</SelectItem>{channels.data?.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.title}</SelectItem>)}</SelectContent></Select></FilterField><FilterField label="Атрибуція"><Select value={filters.source_kind ?? "all"} onValueChange={(value) => update("source_kind", value)}><SelectTrigger><SelectValue placeholder="Усі типи" /></SelectTrigger><SelectContent><SelectItem value="all">Усі типи</SelectItem>{Object.entries(sourceLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField><FilterField label="Названий актор"><Select value={filters.source_entity_id ?? "all"} onValueChange={(value) => update("source_entity_id", value)}><SelectTrigger><SelectValue placeholder="Усі актори" /></SelectTrigger><SelectContent><SelectItem value="all">Усі актори</SelectItem>{actors.data?.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.canonical_name}</SelectItem>)}</SelectContent></Select></FilterField><FilterField label="Позиція"><Select value={filters.stance ?? "all"} onValueChange={(value) => update("stance", value)}><SelectTrigger><SelectValue placeholder="Усі" /></SelectTrigger><SelectContent><SelectItem value="all">Усі</SelectItem>{Object.entries(stanceLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField><FilterField label="Риторика"><Select value={filters.rhetoric ?? "all"} onValueChange={(value) => update("rhetoric", value)}><SelectTrigger><SelectValue placeholder="Уся" /></SelectTrigger><SelectContent><SelectItem value="all">Уся</SelectItem>{Object.entries(rhetoricLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField><FilterField label="Статус"><Select value={filters.epistemic_status ?? "all"} onValueChange={(value) => update("epistemic_status", value)}><SelectTrigger><SelectValue placeholder="Усі" /></SelectTrigger><SelectContent><SelectItem value="all">Усі</SelectItem>{Object.entries(epistemicLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField><FilterField label="Сортування"><Select value={filters.sort} onValueChange={(value) => update("sort", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Найновіші</SelectItem><SelectItem value="oldest">Найстаріші</SelectItem></SelectContent></Select></FilterField></div>
-    {active.length ? <div className="flex flex-wrap gap-2 pt-4">{active.map(([key, value]) => <button key={key} type="button" className="border border-rule px-2 py-1 text-sm" onClick={() => update(key)}>{key}: {value} ×</button>)}<button type="button" className="text-sm font-semibold underline" onClick={reset}>Скинути все</button></div> : null}
+    <div className="grid gap-3 border-y border-rule py-4 md:grid-cols-3"><FilterField label="Пошук"><Input value={filters.search} placeholder="Пошук у твердженнях" onChange={(event) => update("search", event.target.value)} /></FilterField><FilterField label="Ціль"><ClaimEntityFilter selected={filters.entity_id} onSelect={(entity) => update("entity_id", entity ? String(entity.id) : undefined)} /></FilterField><FilterField label="Канал"><Select value={filters.channel_id ?? "all"} onValueChange={(value) => update("channel_id", value)}><SelectTrigger aria-label="Канал"><SelectValue>{filters.channel_id ? chipValue("channel_id", filters.channel_id) : "Усі канали"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі канали</SelectItem>{channels.data?.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.title}</SelectItem>)}</SelectContent></Select></FilterField><FilterField label="Атрибуція"><Select value={filters.source_kind ?? "all"} onValueChange={(value) => update("source_kind", value)}><SelectTrigger aria-label="Атрибуція"><SelectValue>{filters.source_kind ? sourceLabels[filters.source_kind] : "Усі типи"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі типи</SelectItem>{Object.entries(sourceLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField><FilterField label="Названий актор"><Select value={filters.source_entity_id ?? "all"} onValueChange={(value) => update("source_entity_id", value)}><SelectTrigger aria-label="Названий актор"><SelectValue>{filters.source_entity_id ? chipValue("source_entity_id", filters.source_entity_id) : "Усі актори"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі актори</SelectItem>{actors.data?.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.canonical_name}</SelectItem>)}</SelectContent></Select></FilterField><FilterField label="Позиція"><Select value={filters.stance ?? "all"} onValueChange={(value) => update("stance", value)}><SelectTrigger aria-label="Позиція"><SelectValue>{filters.stance ? stanceLabels[filters.stance] : "Усі"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі</SelectItem>{Object.entries(stanceLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField><FilterField label="Риторика"><Select value={filters.rhetoric ?? "all"} onValueChange={(value) => update("rhetoric", value)}><SelectTrigger aria-label="Риторика"><SelectValue>{filters.rhetoric ? rhetoricLabels[filters.rhetoric] : "Уся"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Уся</SelectItem>{Object.entries(rhetoricLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField><FilterField label="Статус"><Select value={filters.epistemic_status ?? "all"} onValueChange={(value) => update("epistemic_status", value)}><SelectTrigger aria-label="Статус"><SelectValue>{filters.epistemic_status ? epistemicLabels[filters.epistemic_status] : "Усі"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі</SelectItem>{Object.entries(epistemicLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField><FilterField label="Сортування"><Select value={filters.sort} onValueChange={(value) => update("sort", value)}><SelectTrigger aria-label="Сортування"><SelectValue>{filters.sort === "oldest" ? "Найстаріші" : "Найновіші"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="newest">Найновіші</SelectItem><SelectItem value="oldest">Найстаріші</SelectItem></SelectContent></Select></FilterField></div>
+    {active.length ? <div className="flex flex-wrap gap-2 pt-4">{active.map(([key, value]) => <button key={key} type="button" className="border border-rule px-2 py-1 text-sm hover:border-ink" onClick={() => update(key)}>{`${claimFilterLabels[key]}: ${chipValue(key, value)} ×`}</button>)}<button type="button" className="text-sm font-semibold underline" onClick={reset}>Скинути все</button></div> : null}
     <Graphic eyebrow="Результати" title="Твердження та першоджерела" footer={false}><QueryBoundary loading={claims.isLoading} error={claims.isError}>{!claims.data?.items.length ? <EmptyState /> : <div className="border-t border-rule">{claims.data.items.map((claim) => <ClaimRow key={`${claim.claim_id}-${claim.entity_id}`} claim={claim} from={location.pathname + location.search} channelHref={`/channels/${claim.channel_id}`} setFilter={(key, value) => update(key === "claim_stance" ? "stance" : key, value)} />)}<Pager page={claims.data} /></div>}</QueryBoundary></Graphic></PageLayout>;
 }
 
 export function SystemPage() { const query = useQuery({ queryKey: ["analysis-health"], queryFn: apiClient.analysisHealth }); return <PageLayout><PageHeader eyebrow="Операційний стан" title="Система аналізу" dek="Черга, повторні спроби та останні результати AI-воркера." /><QueryBoundary loading={query.isLoading} error={query.isError}>{query.data && <Graphic eyebrow="AI-воркер" title="Черга та повторні спроби"><MetricStrip items={[{ label: "Live", value: query.data.jobs.pending_live }, { label: "Backfill", value: query.data.jobs.pending_backfill }, { label: "У роботі", value: query.data.jobs.leased }, { label: "Повтори", value: query.data.jobs.retry_scheduled }, { label: "Помилки", value: query.data.jobs.failed }]} /></Graphic>}</QueryBoundary></PageLayout>; }
+
+function topBy<T>(items: T[], value: (item: T) => number): T | undefined {
+  return items.reduce<T | undefined>((best, item) => (best === undefined || value(item) > value(best) ? item : best), undefined);
+}
 
 export function DashboardPage() {
   const [params] = useSearchParams();
@@ -152,26 +181,31 @@ export function DashboardPage() {
   const chooseDate = useExactDate();
   const [entityRanking, setEntityRanking] = useState<RankingSort>("negative_volume");
   const [channelRanking, setChannelRanking] = useState<RankingSort>("negative_volume");
+  const suffix = new URLSearchParams(params).toString();
+  const rankingToggle = (value: RankingSort, onChange: (next: RankingSort) => void) => <div className="flex gap-3">{(["negative_volume", "negative_balance"] as const).map((key) => <button key={key} type="button" className={value === key ? "border-b-2 border-negative text-xs font-bold" : "text-xs text-muted-foreground hover:text-foreground"} onClick={() => onChange(key)}>{rankingLabels[key]}</button>)}</div>;
   return <PageLayout>
-    <PageHeader eyebrow={`Моніторинг інформаційного простору · ${periodLabel(params)}`} title="Хто і як стає мішенню негативних тверджень" dek="Оперативна картина публікацій, атак і позицій у погодженому пулі Telegram-каналів." />
+    <PageHeader eyebrow={`Моніторинг інформаційного простору · ${periodLabel(params)}`} title="Хто і як стає мішенню негативних тверджень" dek="Оперативна картина публікацій, атак і позицій у погодженому пулі Telegram-каналів." aside={<Link to={`/claims?${suffix}`} className="inline-flex border-b-2 border-negative pb-1 font-heading text-lg font-bold text-negative">Відкрити Claims Explorer →</Link>} />
     <QueryBoundary loading={query.isLoading} error={query.isError}>
-      {query.data && <>
-        <div className="grid gap-8 border-b border-rule pb-10 lg:grid-cols-[0.7fr_1.3fr] lg:items-end">
-          <div><p className="eyebrow text-negative">Ключовий показник</p><p className="mt-2 font-sans text-7xl font-black leading-none text-negative md:text-8xl">{formatNumber(query.data.summary.negative_count)}</p><p className="mt-3 font-heading text-2xl font-bold">негативних класифікацій</p></div>
-          <MetricStrip items={[{ label: "Дописи", value: query.data.summary.post_count }, { label: "Твердження", value: query.data.summary.claim_count }, { label: "Сутності", value: query.data.summary.entity_count }, { label: "Канали", value: query.data.summary.channel_count }]} />
-        </div>
-        <CompletenessNotice completeness={query.data.completeness} />
-        <div className="grid gap-12 xl:grid-cols-2">
-          <Graphic eyebrow="Баланс оцінок" title="Позитивні та негативні класифікації" dek="Баланс обчислено лише для оціночних класифікацій."><EvaluativeBalanceStrip item={{ ...query.data.summary, evaluative_count: query.data.summary.positive_count + query.data.summary.negative_count, negative_share: query.data.summary.positive_count + query.data.summary.negative_count ? query.data.summary.negative_count / (query.data.summary.positive_count + query.data.summary.negative_count) : 0 }} /></Graphic>
-          <Graphic eyebrow="Риторика" title="Огляд риторичних міток" dek="Частка від усіх призначених риторичних міток."><DistributionBars items={query.data.rhetoric ?? []} labels={rhetoricLabels} /></Graphic>
-        </div>
-        <Graphic eyebrow="Динаміка атак" period={periodLabel(params)} title="Коли зростала кількість негативних тверджень" dek="Натисніть на дату, щоб звузити всю сторінку до одного дня."><DailyChart data={query.data.daily} mode="negative" onDate={chooseDate} /></Graphic>
-        <div className="grid gap-12 xl:grid-cols-2">
-          <Graphic eyebrow="Рейтинг сутностей" title={entityRanking === "negative_balance" ? "Негативний баланс оцінок" : "Найбільший обсяг негативних оцінок"} dek={entityRanking === "negative_balance" ? "Рейтинг стабільно негативної оцінки з поправкою на малу вибірку." : "Абсолютна кількість негативних класифікацій щодо кожної сутності."} action={<div className="flex gap-2"><button type="button" className={entityRanking === "negative_volume" ? "border-b-2 border-negative text-sm font-bold" : "text-sm"} onClick={() => setEntityRanking("negative_volume")}>За обсягом негативу</button><button type="button" className={entityRanking === "negative_balance" ? "border-b-2 border-negative text-sm font-bold" : "text-sm"} onClick={() => setEntityRanking("negative_balance")}>За негативним балансом</button></div>}><RankedBars items={[...query.data.entities].sort((a, b) => rankingValue(b, entityRanking) - rankingValue(a, entityRanking)).slice(0, 8)} value={(item) => rankingValue(item, entityRanking)} label={(item) => item.canonical_name ?? "—"} href={(item) => `/entities/${item.id}?${new URLSearchParams(params).toString()}`} showBalance /></Graphic>
-          <Graphic eyebrow="Порівняння джерел" title={channelRanking === "negative_balance" ? "Канали за негативним балансом" : "Найбільший обсяг негативних оцінок"} dek={channelRanking === "negative_balance" ? "Рейтинг стабільно негативної оцінки з поправкою на малу вибірку." : "Абсолютна кількість; рядок відкриває профіль джерела."} action={<div className="flex gap-2"><button type="button" className={channelRanking === "negative_volume" ? "border-b-2 border-negative text-sm font-bold" : "text-sm"} onClick={() => setChannelRanking("negative_volume")}>За обсягом негативу</button><button type="button" className={channelRanking === "negative_balance" ? "border-b-2 border-negative text-sm font-bold" : "text-sm"} onClick={() => setChannelRanking("negative_balance")}>За негативним балансом</button></div>}><RankedBars items={[...query.data.channels].sort((a, b) => rankingValue(b, channelRanking) - rankingValue(a, channelRanking))} value={(item) => rankingValue(item, channelRanking)} label={(item) => item.title ?? "—"} href={(item) => `/channels/${item.id}?${new URLSearchParams(params).toString()}`} showBalance /></Graphic>
-        </div>
-        <Graphic eyebrow="Дослідження" title="Переглядайте твердження та першоджерела" dek="Повна вибірка, фільтри та повернення до контексту доступні у Claims Explorer." footer={false}><Link to={`/claims?${new URLSearchParams(params).toString()}`} className="inline-flex border-b-2 border-negative pb-1 font-heading text-xl font-bold text-negative">Відкрити Claims Explorer →</Link></Graphic>
-      </>}
+      {query.data && (() => {
+        const { summary, daily, entities, channels } = query.data;
+        const evaluative = summary.positive_count + summary.negative_count;
+        const negativeShare = evaluative ? summary.negative_count / evaluative : 0;
+        const peak = topBy(daily, (day) => day.negative_count);
+        const rankedEntities = [...entities].sort((a, b) => rankingValue(b, entityRanking) - rankingValue(a, entityRanking)).slice(0, 8);
+        const rankedChannels = [...channels].sort((a, b) => rankingValue(b, channelRanking) - rankingValue(a, channelRanking));
+        const topRhetoric = topBy(query.data.rhetoric ?? [], (item) => item.count);
+        const balance = (ranking: RankingSort) => ranking === "negative_balance";
+        return <>
+          <MetricStrip items={[{ label: "Негативні класифікації", value: summary.negative_count, accent: true, hint: `${formatPercent(negativeShare)} оціночних класифікацій` }, { label: "Дописи", value: summary.post_count }, { label: "Твердження", value: summary.claim_count }, { label: "Сутності", value: summary.entity_count }, { label: "Канали", value: summary.channel_count }]} />
+          <CompletenessNotice completeness={query.data.completeness} />
+          <Graphic eyebrow="Динаміка атак" title="Коли зростала кількість негативних тверджень" dek={`${peak && peak.negative_count ? `Пік — ${formatDate(peak.date)}: ${formatNumber(peak.negative_count)} негативних класифікацій. ` : ""}Натисніть на стовпчик, щоб звузити всю сторінку до одного дня.`}><DailyChart data={daily} mode="negative" onDate={chooseDate} /></Graphic>
+          <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+            <Graphic eyebrow="Рейтинг сутностей" title={balance(entityRanking) ? "Кого оцінюють найнегативніше" : "Хто отримує найбільше негативу"} dek={`${rankedEntities[0] ? `Лідер — ${rankedEntities[0].canonical_name}. ` : ""}${balance(entityRanking) ? "Стабільно негативна оцінка з поправкою на малу вибірку." : "Абсолютна кількість негативних класифікацій."}`} action={rankingToggle(entityRanking, setEntityRanking)}><RankedBars items={rankedEntities} value={(item) => rankingValue(item, entityRanking)} label={(item) => item.canonical_name ?? "—"} href={(item) => `/entities/${item.id}?${suffix}`} showBalance /></Graphic>
+            <Graphic eyebrow="Порівняння джерел" title={balance(channelRanking) ? "Чий тон найнегативніший" : "Хто публікує найбільше негативу"} dek={`${rankedChannels[0] ? `Лідер — ${rankedChannels[0].title}. ` : ""}${balance(channelRanking) ? "Стабільно негативна оцінка з поправкою на малу вибірку." : "Абсолютна кількість; рядок відкриває профіль джерела."}`} action={rankingToggle(channelRanking, setChannelRanking)}><RankedBars items={rankedChannels} value={(item) => rankingValue(item, channelRanking)} label={(item) => item.title ?? "—"} href={(item) => `/channels/${item.id}?${suffix}`} showBalance /></Graphic>
+            <Graphic eyebrow="Риторика" title="Якими прийомами атакують" dek={`${topRhetoric ? `Найчастіше — ${rhetoricLabels[topRhetoric.key].toLocaleLowerCase("uk-UA")} (${formatPercent(topRhetoric.share)}). ` : ""}Частка від усіх призначених риторичних міток.`}><DistributionBars items={query.data.rhetoric ?? []} labels={rhetoricLabels} /></Graphic>
+          </div>
+        </>;
+      })()}
     </QueryBoundary>
   </PageLayout>;
 }
@@ -317,17 +351,16 @@ function EntityFilterBar({ profile, entityId, dates }: { profile: EntityProfile;
     epistemic_status: filters.epistemic_status,
     attribution_mode: "quoted_sources" as AttributionMode,
   };
-  return <section className="my-8 border-y border-ink py-5">
+  return <section className="border-y border-ink py-4">
     <p className="eyebrow text-muted-foreground">Глобальні фільтри профілю</p>
-    <div className="mt-4">
-      <p className="eyebrow text-muted-foreground">Основні фільтри</p>
-      <div className="mt-2 grid gap-4 md:grid-cols-2">
+    <div className="mt-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <FilterField label="Канал публікації"><Select value={filters.channel_id ?? "all"} onValueChange={(value) => update({ channel: value })}><SelectTrigger aria-label="Канал публікації"><SelectValue>{filters.channel_id ? profile.channel_options.find((item) => String(item.id) === filters.channel_id)?.title ?? "Обраний канал" : "Усі канали публікації"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі канали публікації</SelectItem>{profile.channel_options.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.title}</SelectItem>)}</SelectContent></Select></FilterField>
         <FilterField label="Джерело твердження"><Select value={mode} onValueChange={(value) => update({ attribution_mode: value === "all_claims" ? undefined : value, source_kind: undefined, source_entity_id: undefined })}><SelectTrigger aria-label="Джерело твердження"><SelectValue>{attributionModeLabels[mode]}</SelectValue></SelectTrigger><SelectContent>{Object.entries(attributionModeLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>
       </div>
     </div>
-    <details className="mt-5 border-t border-rule pt-4" open={additionalOpen} onToggle={(event) => setAdditionalOpen(event.currentTarget.open)}>
-      <summary className="cursor-pointer font-heading text-lg font-bold marker:text-negative">Додаткові фільтри{advancedCount ? ` · ${advancedCount}` : ""}</summary>
+    <details className="mt-4 border-t border-rule pt-3" open={additionalOpen} onToggle={(event) => setAdditionalOpen(event.currentTarget.open)}>
+      <summary className="cursor-pointer font-heading text-base font-bold marker:text-negative">Додаткові фільтри{advancedCount ? ` · ${advancedCount}` : ""}</summary>
       <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {mode === "quoted_sources" ? <div className="md:col-span-2 xl:col-span-3">
           <FilterField label="Уточнити цитоване джерело"><Select value={quotedRefinement ?? "all"} onValueChange={(value) => update({ source_kind: value, source_entity_id: undefined })}><SelectTrigger aria-label="Уточнити цитоване джерело"><SelectValue>{quotedRefinement ? quotedSourceLabels[quotedRefinement as Exclude<SourceKind, "channel_editorial">] : "Усі цитовані"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі цитовані</SelectItem><SelectItem value="named_entity">Названі автори</SelectItem><SelectItem value="external_unnamed">Неназвані джерела</SelectItem></SelectContent></Select></FilterField>
@@ -338,7 +371,7 @@ function EntityFilterBar({ profile, entityId, dates }: { profile: EntityProfile;
         <FilterField label="Епістемічний статус"><Select value={filters.epistemic_status ?? "all"} onValueChange={(value) => update({ epistemic: value })}><SelectTrigger aria-label="Епістемічний статус"><SelectValue>{filters.epistemic_status ? epistemicLabels[filters.epistemic_status] : "Усі статуси"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі статуси</SelectItem>{Object.entries(epistemicLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>
       </div>
     </details>
-    {activeChips.length ? <div className="mt-5 flex flex-wrap items-center gap-2">{activeChips.map((chip) => <button type="button" key={chip.label} onClick={() => update(chip.changes)} className="border border-rule px-2 py-1 text-sm hover:border-ink">{chip.label}: {chip.value} ×</button>)}<button type="button" className="text-sm font-semibold underline underline-offset-4" onClick={() => { const next = new URLSearchParams(params); ["channel", "stance", "rhetoric", "epistemic", "source_kind", "source_entity_id", "attribution_mode", "channel_offset", "evidence_offset"].forEach((key) => next.delete(key)); setParams(next); }}>Скинути фільтри</button></div> : null}
+    {activeChips.length ? <div className="mt-4 flex flex-wrap items-center gap-2">{activeChips.map((chip) => <button type="button" key={chip.label} onClick={() => update(chip.changes)} className="border border-rule px-2 py-1 text-sm hover:border-ink">{chip.label}: {chip.value} ×</button>)}<button type="button" className="text-sm font-semibold underline underline-offset-4" onClick={() => { const next = new URLSearchParams(params); ["channel", "stance", "rhetoric", "epistemic", "source_kind", "source_entity_id", "attribution_mode", "channel_offset", "evidence_offset"].forEach((key) => next.delete(key)); setParams(next); }}>Скинути фільтри</button></div> : null}
   </section>;
 }
 
@@ -376,14 +409,12 @@ export function EntityPage() {
           <EntityFilterBar profile={profile.data} entityId={id} dates={dates} />
           <MetricStrip items={[{ label: "Оціночні твердження", value: profile.data.summary.evaluative_claim_count ?? profile.data.summary.mention_count }, { label: "Позитивні", value: profile.data.summary.positive_count }, { label: "Негативні", value: profile.data.summary.negative_count, accent: true }]} />
           <Graphic eyebrow="Тональність у часі" title="Як змінювалась оцінка сутності" dek="Позитивні та негативні класифікації; натисніть дату для одноденного зрізу."><DailyChart data={profile.data.daily} mode="stance" onDate={chooseDate} /></Graphic>
-          <div className="grid gap-12 xl:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
             <Graphic eyebrow="Риторика атак" title="Які типи атак використовували найчастіше" dek="Частка від усіх призначених риторичних міток."><DistributionBars items={profile.data.rhetoric} labels={rhetoricLabels} selected={filters.rhetoric} onSelect={(key) => setEntityFilter("rhetoric", key)} /></Graphic>
-            <Graphic eyebrow="Порівняння каналів" title="Як канали оцінювали сутність" dek="Обраний порядок відокремлює обсяг оцінок від їхнього негативного балансу." action={<RankingSelect value={filters.sort ?? "evaluative_volume"} onChange={(value) => setEntityFilter("channel_sort", value)} />}><RankedBars items={profile.data.channels.items} value={(item) => rankingValue(item, filters.sort ?? "evaluative_volume")} label={(item) => item.title ?? "—"} href={(item) => `/channels/${item.id}?${new URLSearchParams(params).toString()}`} tone="ink" showBalance /><Pager page={profile.data.channels} param="channel_offset" /></Graphic>
-          </div>
-          <div className="grid gap-12 xl:grid-cols-2">
             <Graphic eyebrow="Епістемічний статус" title="Наскільки категорично сформульовані твердження" dek="Частка від унікальних тверджень."><DistributionBars items={profile.data.epistemic} labels={epistemicLabels} selected={filters.epistemic_status} onSelect={(key) => setEntityFilter("epistemic", key)} tone="ink" /></Graphic>
             <Graphic eyebrow="Атрибуція" title="Від чийого імені звучать твердження" dek="Частка від унікальних тверджень."><DistributionBars items={profile.data.attribution} labels={sourceLabels} selected={filters.source_kind} onSelect={(key) => setEntityFilter("source_kind", key)} tone="ink" /></Graphic>
           </div>
+          <Graphic eyebrow="Порівняння каналів" title="Як канали оцінювали сутність" dek="Обраний порядок відокремлює обсяг оцінок від їхнього негативного балансу." action={<RankingSelect value={filters.sort ?? "evaluative_volume"} onChange={(value) => setEntityFilter("channel_sort", value)} />}><RankedBars items={profile.data.channels.items} value={(item) => rankingValue(item, filters.sort ?? "evaluative_volume")} label={(item) => item.title ?? "—"} href={(item) => `/channels/${item.id}?${new URLSearchParams(params).toString()}`} tone="ink" showBalance /><Pager page={profile.data.channels} param="channel_offset" /></Graphic>
           <EvidenceFeed query={evidence} />
         </>}
       </>}
@@ -397,7 +428,7 @@ function EvidenceFeed({ query }: { query: ReturnType<typeof useQuery<ReturnType<
   const update = (changes: Record<string, string | undefined>) => { const next = new URLSearchParams(params); Object.entries(changes).forEach(([key, value]) => value ? next.set(key, value) : next.delete(key)); next.delete("channel_offset"); next.delete("evidence_offset"); setParams(next); };
   return <Graphic eyebrow="Докази" title="Твердження, що формують цей профіль" dek="Фрагменти першоджерел відповідно до активних фільтрів." footer={false}><QueryBoundary loading={query.isLoading} error={query.isError}>{!query.data?.items.length ? <EmptyState /> : <div className="border-t border-rule">{query.data.items.map((item: Evidence) => {
     const actions: ClaimMetadataActions = { channel: { onClick: () => update({ channel: String(item.channel_id) }) }, stance: { onClick: () => update({ stance: item.stance }) }, epistemic: { onClick: () => update({ epistemic: item.epistemic_status }) }, rhetoric: (label) => ({ onClick: () => update({ rhetoric: label }) }), source: item.source_entity_id == null ? undefined : { onClick: () => update({ attribution_mode: "quoted_sources", source_kind: "named_entity", source_entity_id: String(item.source_entity_id) }) } };
-    return <article key={item.claim_id} className="border-b border-rule py-5"><ClaimMetadata data={item} actions={actions} /><Link to={"/posts/" + item.post_id} state={{ from: location.pathname + location.search }} className="group mt-4 block hover:text-negative"><p className="font-heading text-xl font-bold leading-snug">{item.normalized_text}</p><p className="mt-2 text-sm leading-6 text-muted-foreground">«{item.evidence_text}»</p></Link></article>;
+    return <article key={item.claim_id} className="border-b border-rule py-4"><ClaimMetadata data={item} actions={actions} /><Link to={"/posts/" + item.post_id} state={{ from: location.pathname + location.search }} className="group mt-3 block hover:text-negative"><p className="font-heading text-lg font-bold leading-snug">{item.normalized_text}</p><p className="mt-2 text-sm leading-6 text-muted-foreground">«{item.evidence_text}»</p></Link></article>;
   })}<Pager page={query.data} param="evidence_offset" /></div>}</QueryBoundary></Graphic>;
 }
 export function ChannelsPage() {
@@ -454,14 +485,12 @@ export function ChannelPage() {
         <PageHeader eyebrow={`Профіль каналу · ${periodLabel(params)}`} title={profile.data.channel.title ?? "Канал"} dek={profile.data.channel.username ? `@${profile.data.channel.username} · аналітичний профіль активності та висвітлення сутностей.` : "Аналітичний профіль активності та висвітлення сутностей."} aside={<ChannelAvatar channel={profile.data.channel} large />} />
         <MetricStrip items={[{ label: "Дописи", value: profile.data.summary.post_count }, { label: "Твердження", value: profile.data.summary.claim_count }, { label: "Сутності", value: profile.data.summary.entity_count ?? 0 }, { label: "Негативні оцінки", value: profile.data.summary.negative_count, accent: true }]} />
         <Graphic eyebrow="Тональність у часі" title="Як змінювалася позиція каналу" dek="Класифікації тверджень щодо цільових сутностей; натисніть дату для одноденного зрізу."><DailyChart data={profile.data.daily} mode="stance" onDate={chooseDate} /></Graphic>
-        <div className="grid gap-12 xl:grid-cols-2">
-          <Graphic eyebrow="Мішені" title="Кого канал оцінював" dek="Порядок відокремлює абсолютний обсяг негативу від стабільно негативного балансу."><div className="mb-4"><RankingSelect value={entitySort} onChange={(value) => set("entity_sort", value)} /></div><RankedBars items={profile.data.entities.items} value={(item) => rankingValue(item, entitySort)} label={(item) => item.canonical_name ?? "—"} selected={params.get("claim_entity") ?? undefined} onSelect={(item) => set("claim_entity", String(item.id), "claim_offset")} showBalance /><Pager page={profile.data.entities} /></Graphic>
+        <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
           <Graphic eyebrow="Риторика атак" title="Які типи атак переважають" dek="Частка від усіх призначених риторичних міток."><DistributionBars items={profile.data.rhetoric} labels={rhetoricLabels} selected={rhetoric} onSelect={(key) => set("rhetoric", key, "claim_offset")} /></Graphic>
-        </div>
-        <div className="grid gap-12 xl:grid-cols-2">
           <Graphic eyebrow="Епістемічний статус" title="Як канал формулює твердження" dek="Частка від унікальних тверджень."><DistributionBars items={profile.data.epistemic} labels={epistemicLabels} selected={epistemic} onSelect={(key) => set("epistemic", key, "claim_offset")} tone="ink" /></Graphic>
           <Graphic eyebrow="Атрибуція" title="Хто виступає джерелом тверджень" dek="Частка від унікальних тверджень."><DistributionBars items={profile.data.attribution} labels={sourceLabels} selected={source} onSelect={(key) => set("source", key, "claim_offset")} tone="ink" /></Graphic>
         </div>
+        <Graphic eyebrow="Мішені" title="Кого канал оцінював" dek="Порядок відокремлює абсолютний обсяг негативу від стабільно негативного балансу." action={<RankingSelect value={entitySort} onChange={(value) => set("entity_sort", value)} />}><RankedBars items={profile.data.entities.items} value={(item) => rankingValue(item, entitySort)} label={(item) => item.canonical_name ?? "—"} selected={params.get("claim_entity") ?? undefined} onSelect={(item) => set("claim_entity", String(item.id), "claim_offset")} showBalance /><Pager page={profile.data.entities} /></Graphic>
         <ClaimsFeed dates={dates} channelId={id} compact />
       </>}
     </QueryBoundary>
@@ -493,7 +522,7 @@ export function PostPage() {
     <QueryBoundary loading={query.isLoading} error={query.isError}>
       {query.data && <>
         <PageHeader eyebrow={`Першоджерело · ${formatDateTime(query.data.published_at)}`} title={query.data.channel_title} dek={query.data.username ? `Telegram: @${query.data.username} · повідомлення №${query.data.telegram_message_id}` : `Telegram · повідомлення №${query.data.telegram_message_id}`} aside={fallback ? <Link to={fallback} className="eyebrow border-b border-ink pb-1">Повернутися до вибірки</Link> : undefined} />
-        <div className="grid gap-12 xl:grid-cols-2 xl:items-start">
+        <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
           <Graphic eyebrow="Оригінальний допис" title="Текст першоджерела" dek="Підкреслені фрагменти використані як докази." footer={false}><article className="whitespace-pre-wrap border-t border-ink pt-6 text-[17px] leading-8">{highlightPost(query.data.content, query.data.claims)}</article></Graphic>
           <Graphic eyebrow="Структурований аналіз" title={`${formatNumber(query.data.claims.length)} ${query.data.claims.length === 1 ? "твердження" : "тверджень"}`} dek="Ціль, доказ, позиція, риторика, модальність та джерело для кожного твердження." footer={false}>{!query.data.claims.length ? <EmptyState>У дописі немає завершених аналітичних тверджень.</EmptyState> : <div className="border-t border-ink">{query.data.claims.map((claim, index) => <PostClaimBlock key={`${claim.id}-${claim.entity}-${index}`} claim={claim} index={index + 1} post={query.data} />)}</div>}</Graphic>
         </div>
@@ -503,5 +532,5 @@ export function PostPage() {
 }
 
 function PostClaimBlock({ claim, index, post }: { claim: PostClaim; index: number; post: { published_at: string; channel_id: number; channel_title: string } }) {
-  return <article className="border-b border-rule py-6"><p className="eyebrow text-muted-foreground">Твердження {String(index).padStart(2, "0")}</p><ClaimMetadata data={{ ...claim, ...post, entity_name: claim.entity }} /><h3 className="mt-4 font-heading text-2xl font-bold leading-snug">{claim.text}</h3><blockquote className="mt-4 border-l-2 border-negative pl-4 text-sm italic leading-6 text-muted-foreground">«{claim.evidence}»</blockquote></article>;
+  return <article className="border-b border-rule py-6"><p className="eyebrow text-muted-foreground">Твердження {String(index).padStart(2, "0")}</p><ClaimMetadata data={{ ...claim, ...post, entity_name: claim.entity }} /><h3 className="mt-3 font-heading text-xl font-bold leading-snug">{claim.text}</h3><blockquote className="mt-4 border-l-2 border-negative pl-4 text-sm italic leading-6 text-muted-foreground">«{claim.evidence}»</blockquote></article>;
 }
