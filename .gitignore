@@ -19,3 +19,4 @@ node_modules/
 .dvc/cache/
 .idea/
 .vscode/
+.claude/settings.local.json
