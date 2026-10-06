@@ -2,8 +2,8 @@ import { expect, test, vi } from "vitest";
 
 import { apiClient } from "./client";
 
-test("builds the default API health URL", () => {
-  expect(apiClient.healthUrl()).toBe("http://localhost:8000/health");
+test("builds the default same-origin API health URL", () => {
+  expect(apiClient.healthUrl()).toBe("/api/health");
 });
 
 test("builds editorial profile and evidence filter URLs", () => {

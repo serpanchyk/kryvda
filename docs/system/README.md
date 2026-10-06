@@ -5,5 +5,6 @@ The repository provides collection plus the target-monitoring inference-v3 runti
 - [Configuration](foundation/configuration.md)
 - [Runtime](foundation/runtime.md)
 - [Service boundaries](services/boundaries.md)
+- [Telegram gateway deployment](../deploy/telegram-gateway-vercel.md)
 - [Annotation and offline experiments](ai/annotation-experiments.md)
 - [Inference v3 contract](ai/post-analysis-extraction.md)

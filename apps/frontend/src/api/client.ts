@@ -1,4 +1,5 @@
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+// Same-origin by default: the production nginx and the Vite dev server proxy /api to the API.
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 export type Stance = "позитивне" | "негативне" | "відсутнє";
 export type EpistemicStatus = "ствердження" | "невпевнене" | "питання";

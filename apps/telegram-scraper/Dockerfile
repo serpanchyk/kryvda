@@ -6,6 +6,7 @@ COPY packages/monitoring-common/pyproject.toml ./packages/monitoring-common/pypr
 COPY packages/monitoring-common/src ./packages/monitoring-common/src
 COPY apps/api/pyproject.toml ./apps/api/pyproject.toml
 COPY apps/telegram-scraper/pyproject.toml ./apps/telegram-scraper/pyproject.toml
+COPY apps/telegram-gateway/pyproject.toml ./apps/telegram-gateway/pyproject.toml
 COPY apps/ai-worker/pyproject.toml ./apps/ai-worker/pyproject.toml
 COPY apps/telegram-scraper/src ./apps/telegram-scraper/src
 RUN --mount=type=cache,target=/root/.cache/uv \

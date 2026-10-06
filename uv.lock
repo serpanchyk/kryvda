@@ -12,6 +12,7 @@ members = [
     "telegram-monitor",
     "telegram-monitor-ai-worker",
     "telegram-monitor-api",
+    "telegram-monitor-gateway",
     "telegram-monitor-scraper",
 ]
 
@@ -2878,20 +2879,41 @@ requires-dist = [
 ]
 
 [[package]]
+name = "telegram-monitor-gateway"
+version = "0.1.0"
+source = { editable = "apps/telegram-gateway" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "pydantic-settings" },
+    { name = "python-json-logger" },
+    { name = "telethon" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "python-json-logger", specifier = ">=3.2" },
+    { name = "telethon", specifier = ">=1.40" },
+    { name = "uvicorn", specifier = ">=0.32" },
+]
+
+[[package]]
 name = "telegram-monitor-scraper"
 version = "0.1.0"
 source = { editable = "apps/telegram-scraper" }
 dependencies = [
     { name = "asyncpg" },
+    { name = "httpx" },
     { name = "monitoring-common" },
-    { name = "telethon" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "asyncpg", specifier = ">=0.30" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "monitoring-common", editable = "packages/monitoring-common" },
-    { name = "telethon", specifier = ">=1.40" },
 ]
 
 [[package]]

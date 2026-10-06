@@ -1,10 +1,25 @@
+# One file for both the department server and local development. `docker compose up -d --build`
+# starts the server stack; Telegram is reached through the external gateway at
+# TELEGRAM_GATEWAY_URL. Local development adds the gateway itself with COMPOSE_PROFILES=telegram.
+# Every setting is documented in .env.example and DEPLOY.md.
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-postgres-dsn: &postgres-dsn postgresql://${POSTGRES_USER:-telegram_monitor}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/${POSTGRES_DB:-telegram_monitor}
+
 services:
   postgres:
     image: postgres:16-alpine
-    env_file:
-      - ./infra/postgres/.env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-telegram_monitor}
+      POSTGRES_USER: ${POSTGRES_USER:-telegram_monitor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -13,13 +28,15 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
+    logging: *default-logging
 
   migrate:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-telegram_monitor}
       POSTGRES_USER: ${POSTGRES_USER:-telegram_monitor}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
       PGHOST: postgres
     volumes:
       - ./infra/postgres:/database:ro
@@ -28,15 +45,35 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    logging: *default-logging
+
+  backup:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: postgres
+      PGDATABASE: ${POSTGRES_DB:-telegram_monitor}
+      PGUSER: ${POSTGRES_USER:-telegram_monitor}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    command: ["sh", "/backup.sh"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    logging: *default-logging
 
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      POSTGRES_DSN: postgresql://${POSTGRES_USER:-telegram_monitor}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-telegram_monitor}
+      POSTGRES_DSN: *postgres-dsn
+    # Loopback only: browsers reach the API through the frontend's /api proxy.
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "127.0.0.1:${API_PORT:-8000}:8000"
     volumes:
       - channel-images:/var/lib/telegram-monitor/channel-images:ro
     depends_on:
@@ -47,32 +84,48 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    logging: *default-logging
+
+  # Local development only: on the department server Telegram is unreachable, and the same
+  # gateway runs on Vercel instead (see docs/deploy/telegram-gateway-vercel.md).
+  telegram-gateway:
+    profiles: ["telegram"]
+    build:
+      context: .
+      dockerfile: apps/telegram-gateway/Dockerfile
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
+      TELEGRAM_SESSION_STRING: ${TELEGRAM_SESSION_STRING:-}
+      TELEGRAM_GATEWAY_TOKEN: ${TELEGRAM_GATEWAY_TOKEN:-}
+    restart: unless-stopped
+    logging: *default-logging
 
   telegram-scraper:
     build:
       context: .
       dockerfile: apps/telegram-scraper/Dockerfile
     environment:
-      POSTGRES_DSN: postgresql://${POSTGRES_USER:-telegram_monitor}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-telegram_monitor}
-      TELEGRAM_API_ID: ${TELEGRAM_API_ID:?TELEGRAM_API_ID must be set}
-      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:?TELEGRAM_API_HASH must be set}
-      TELEGRAM_PHONE_NUMBER: ${TELEGRAM_PHONE_NUMBER:?TELEGRAM_PHONE_NUMBER must be set}
-      TELEGRAM_SESSION_STRING: ${TELEGRAM_SESSION_STRING:?TELEGRAM_SESSION_STRING must be set}
-      COLLECTION_POLL_INTERVAL_SECONDS: ${COLLECTION_POLL_INTERVAL_SECONDS:-300}
-    restart: unless-stopped
+      POSTGRES_DSN: *postgres-dsn
+      TELEGRAM_GATEWAY_URL: ${TELEGRAM_GATEWAY_URL:?TELEGRAM_GATEWAY_URL must be set in .env}
+      TELEGRAM_GATEWAY_TOKEN: ${TELEGRAM_GATEWAY_TOKEN:?TELEGRAM_GATEWAY_TOKEN must be set in .env}
+      COLLECTION_POLL_INTERVAL_SECONDS: ${COLLECTION_POLL_INTERVAL_SECONDS:-3600}
     volumes:
       - channel-images:/var/lib/telegram-monitor/channel-images
     depends_on:
       migrate:
         condition: service_completed_successfully
+    restart: unless-stopped
+    logging: *default-logging
 
   ai-worker:
     build:
       context: .
       dockerfile: apps/ai-worker/Dockerfile
     environment:
-      POSTGRES_DSN: postgresql://${POSTGRES_USER:-telegram_monitor}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-telegram_monitor}
-      LITELLM_API_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY must be set}
+      POSTGRES_DSN: *postgres-dsn
+      LITELLM_API_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY must be set in .env}
       ANALYSIS_CONCURRENCY: ${ANALYSIS_CONCURRENCY:-1}
       LLM_MAX_CONCURRENCY: ${LLM_MAX_CONCURRENCY:-1}
       ANALYSIS_CLASSIFICATION_CONCURRENCY: ${ANALYSIS_CLASSIFICATION_CONCURRENCY:-1}
@@ -86,14 +139,15 @@ services:
       litellm:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
 
   litellm:
     image: docker.litellm.ai/berriai/litellm@sha256:7c311546c25e7bb6e8cafede9fcd3d0d622ac636b5c9418befaa32e85dfb0186
     command: ["--config", "/app/config.yaml"]
     environment:
       LAPATHONIIA_API_BASE: ${LAPATHONIIA_API_BASE:-https://api.lapathoniia.top}
-      LAPATHONIIA_API_KEY: ${LAPATHONIIA_API_KEY:?LAPATHONIIA_API_KEY must be set}
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY must be set}
+      LAPATHONIIA_API_KEY: ${LAPATHONIIA_API_KEY:?LAPATHONIIA_API_KEY must be set in .env}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY must be set in .env}
     volumes:
       - ./infra/litellm/config.yaml:/app/config.yaml:ro
     healthcheck:
@@ -107,16 +161,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    logging: *default-logging
 
   frontend:
     build:
       context: .
       dockerfile: apps/frontend/Dockerfile
     ports:
-      - "${FRONTEND_PORT:-5173}:80"
+      - "${FRONTEND_PORT:-80}:80"
     depends_on:
       api:
         condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
 
 volumes:
   postgres-data:

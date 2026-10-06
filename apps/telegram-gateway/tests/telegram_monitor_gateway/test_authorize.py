@@ -3,7 +3,7 @@
 from typing import Any
 
 import pytest
-from telegram_monitor_scraper import authorize
+from telegram_monitor_gateway import authorize
 
 
 class FakeTelegramClient:

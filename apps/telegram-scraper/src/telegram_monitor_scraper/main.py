@@ -6,11 +6,11 @@ from pathlib import Path
 import asyncpg
 from monitoring_common.config import BaseServiceSettings
 from monitoring_common.logging import setup_logging
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 
 from telegram_monitor_scraper.avatar_storage import ChannelAvatarStorage
-from telegram_monitor_scraper.client import TelethonChannelClient
 from telegram_monitor_scraper.collector import Collector
+from telegram_monitor_scraper.gateway_client import GatewayChannelClient
 from telegram_monitor_scraper.repository import CollectionRepository
 
 
@@ -18,11 +18,13 @@ class ScraperSettings(BaseServiceSettings):
     """Settings owned by the Telegram collection boundary."""
 
     service_name: str = "telegram-monitor-scraper"
-    telegram_api_id: int
-    telegram_api_hash: SecretStr
-    telegram_phone_number: SecretStr
-    telegram_session_string: SecretStr
-    collection_poll_interval_seconds: int = 300
+    telegram_gateway_url: str
+    telegram_gateway_token: SecretStr
+    # Longer than the gateway's 300-second Vercel limit, so the gateway reports timeouts first.
+    telegram_gateway_timeout_seconds: float = 330
+    collection_poll_interval_seconds: int = 3600
+    collection_page_size: int = Field(default=200, ge=1, le=500)
+    collection_max_pages_per_channel: int = Field(default=10, ge=1)
     channel_image_storage_path: Path = Path("/var/lib/telegram-monitor/channel-images")
 
 
@@ -33,22 +35,30 @@ async def run(stop_event: asyncio.Event | None = None) -> None:
     settings = ScraperSettings()  # type: ignore[call-arg]
     logger = setup_logging(settings.service_name)
     pool = await asyncpg.create_pool(settings.postgres_dsn)
-    client = TelethonChannelClient(
-        settings.telegram_api_id,
-        settings.telegram_api_hash.get_secret_value(),
-        settings.telegram_session_string.get_secret_value(),
+    client = GatewayChannelClient.connect(
+        settings.telegram_gateway_url,
+        settings.telegram_gateway_token.get_secret_value(),
+        settings.telegram_gateway_timeout_seconds,
+        settings.collection_page_size,
     )
-    await client.connect(settings.telegram_phone_number.get_secret_value())
     collector = Collector(
         CollectionRepository(pool),
         client,
         ChannelAvatarStorage(settings.channel_image_storage_path),
+        settings.collection_max_pages_per_channel,
     )
     stop = stop_event or asyncio.Event()
-    logger.info("telegram collection worker started")
+    logger.info(
+        "telegram collection worker started",
+        extra={
+            "gateway_url": settings.telegram_gateway_url,
+            "poll_interval_seconds": settings.collection_poll_interval_seconds,
+        },
+    )
     try:
         while not stop.is_set():
             await collector.collect_once()
+            logger.info("telegram collection run finished")
             try:
                 await asyncio.wait_for(
                     stop.wait(), timeout=settings.collection_poll_interval_seconds
@@ -56,7 +66,7 @@ async def run(stop_event: asyncio.Event | None = None) -> None:
             except TimeoutError:
                 pass
     finally:
-        await client.disconnect()
+        await client.aclose()
         await pool.close()
 
 

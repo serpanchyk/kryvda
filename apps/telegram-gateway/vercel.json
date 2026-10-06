@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["fra1"],
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ../../uv.lock",
+  "functions": {
+    "app.py": {
+      "maxDuration": 300,
+      "excludeFiles": "{tests/**,Dockerfile,.env*}"
+    }
+  }
+}

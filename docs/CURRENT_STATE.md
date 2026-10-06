@@ -17,7 +17,8 @@ pipeline and claim analytics; registry mutations remain outside the UI.
 | Boundary | Responsibility | Dependencies |
 | --- | --- | --- |
 | API | Health, collection status, avatars, registry review and read-only investigation data | PostgreSQL, avatar volume |
-| Telegram scraper | Fixed channel/post/avatar collection and target-filtered job handoff | PostgreSQL, avatar volume |
+| Telegram scraper | Fixed channel/post/avatar collection and target-filtered job handoff | PostgreSQL, avatar volume, Telegram gateway |
+| Telegram gateway | Stateless Telegram MTProto access on Vercel, outside the department firewall | Telegram |
 | AI worker | Three-pass target inference and deterministic persistence | PostgreSQL, LiteLLM proxy |
 | LiteLLM proxy | Internal OpenAI-compatible model gateway | Lapathoniia AI API |
 | Frontend | Кривда dashboard, entity/channel analysis, claims and source-post evidence | API |
@@ -25,6 +26,16 @@ pipeline and claim analytics; registry mutations remain outside the UI.
 
 ## Runtime Decisions
 
+- Production is split across two hosts. The department server, which cannot reach Telegram, runs
+  the Docker Compose stack started by one `docker compose up -d --build` from a git checkout
+  (`DEPLOY.md`). The Telegram gateway (`apps/telegram-gateway`) runs on Vercel Hobby and holds the
+  only Telegram session; the scraper calls it hourly over HTTPS with a shared Bearer token and
+  pages each channel through `POST /v1/channels/fetch`. Locally the `telegram` Compose profile runs
+  the same gateway as a container.
+- One root `.env` configures the whole stack; Compose refuses to start without its five required
+  values. Only the frontend port is public: PostgreSQL and the API bind to host loopback, and the
+  frontend nginx proxies read-only `GET` requests to the API under `/api/`. Containers restart
+  automatically, logs rotate, and a `backup` service writes daily `pg_dump` files to `./backups`.
 - Docker Compose starts PostgreSQL, a versioned migration gate, then all application services.
 - PostgreSQL migration state is stored in `schema_migrations`; fresh initialization records the
   v3.5.2 baseline and the v3 pass-attempt uniqueness repair, while a legacy schema is upgraded

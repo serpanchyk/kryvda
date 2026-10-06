@@ -1,20 +1,39 @@
 # Configuration
 
 Python services use Pydantic settings with this precedence: constructor values, environment,
-local `.env`, `config.yaml`, file secrets, and defaults. Root `.env` configures Compose ports
-and shared development values. Each service and PostgreSQL has a tracked `.env.example`;
-real `.env` files are ignored.
+local `.env`, `config.yaml`, file secrets, and defaults. The single root `.env` configures every
+Compose service, including PostgreSQL; `.env.example` marks the five values a server needs
+(`POSTGRES_PASSWORD`, `LAPATHONIIA_API_KEY`, `LITELLM_MASTER_KEY`, `TELEGRAM_GATEWAY_URL`,
+`TELEGRAM_GATEWAY_TOKEN`), and Compose refuses to start without them. Each service also keeps a
+tracked `.env.example` for running it outside Compose; real `.env` files are ignored.
 
 All service logs are JSON and contain timestamp, logger, level, and message fields.
 
-The API permits browser requests only from `FRONTEND_ALLOWED_ORIGIN`, which defaults to the local
-Compose frontend at `http://localhost:5173`. Set it to the deployed frontend origin outside local
-development.
+The frontend calls the API on its own origin under `/api`; its nginx proxies `GET` requests to the
+API, so no API address is built into the bundle. `VITE_API_BASE_URL` overrides this only for
+special setups. The API's `FRONTEND_ALLOWED_ORIGIN` CORS setting matters only for such cross-origin
+use.
 
-The Telegram scraper requires `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`,
-`TELEGRAM_PHONE_NUMBER`, and `TELEGRAM_SESSION_STRING`. Local values belong in the ignored
-root `.env`; deployments inject the same values from GitHub Secrets. The session string is
-an authorized MTProto login secret and must be rotated if revoked.
+## Telegram gateway and scraper
+
+Only the Telegram gateway holds Telegram credentials: `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`,
+`TELEGRAM_SESSION_STRING`, and the shared `TELEGRAM_GATEWAY_TOKEN` (at least 32 characters).
+`TELEGRAM_FLOOD_SLEEP_THRESHOLD_SECONDS` (20 by default) bounds how long it sleeps through a
+Telegram flood wait before returning HTTP 429. In production these are Production-only Vercel
+environment variables; locally Compose passes them from the root `.env` to the
+`telegram-gateway` service of the `telegram` profile. The session string is an authorized MTProto
+login secret, must be used by one deployment only, and must be rotated if revoked.
+
+The scraper needs only `TELEGRAM_GATEWAY_URL` and the same `TELEGRAM_GATEWAY_TOKEN`. Its tunables
+are `COLLECTION_POLL_INTERVAL_SECONDS` (3600), `COLLECTION_PAGE_SIZE` (200 posts per gateway
+request, at most 500), `COLLECTION_MAX_PAGES_PER_CHANNEL` (10 requests per channel per run), and
+`TELEGRAM_GATEWAY_TIMEOUT_SECONDS` (330, above Vercel's 300-second function limit).
+
+## Operations
+
+Compose rotates every container's JSON log at 10 MB × 5 files. The `backup` service dumps
+PostgreSQL daily to `./backups` and keeps `BACKUP_RETENTION_DAYS` (14) days of dumps. PostgreSQL
+and the API are published on host loopback only; `FRONTEND_PORT` (80) is the only public port.
 
 ## LiteLLM proxy
 
@@ -52,8 +71,9 @@ response = client.chat.completions.create(
 
 ## Creating the Telegram session
 
-Set `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, and `TELEGRAM_PHONE_NUMBER` in the ignored root
-`.env`, then run this once from the repository root:
+The command belongs to the Telegram gateway package. Set `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`,
+and `TELEGRAM_PHONE_NUMBER` in the ignored root `.env`, then run this once from the repository
+root:
 
 ```bash
 uv run telegram-monitor-authorize
@@ -61,5 +81,6 @@ uv run telegram-monitor-authorize
 
 The command requests the Telegram verification code and, if enabled, the two-step verification
 password. It writes a single `TELEGRAM_SESSION_STRING=...` line only to the terminal; copy that
-value to the ignored root `.env` for Docker Compose and to the production secret store. Never
-commit it or send it in chat. Use the dedicated project account for production.
+value to the ignored root `.env` for local Compose, or to the gateway's Production environment on
+Vercel. Never commit it or send it in chat, and never use one session in both places. Use the
+dedicated project account for production.

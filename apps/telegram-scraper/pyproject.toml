@@ -8,12 +8,9 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "asyncpg>=0.30",
+    "httpx>=0.28",
     "monitoring-common",
-    "telethon>=1.40",
 ]
-
-[project.scripts]
-telegram-monitor-authorize = "telegram_monitor_scraper.authorize:main"
 
 [tool.uv.sources]
 monitoring-common = { workspace = true }

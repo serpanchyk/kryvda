@@ -4,18 +4,24 @@
 
 ```bash
 cp .env.example .env
-cp infra/postgres/.env.example infra/postgres/.env
 uv run telegram-monitor-authorize
-docker compose up --build
+docker compose up -d --build
 ```
 
-Before authorization, add `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, and
-`TELEGRAM_PHONE_NUMBER` to the ignored root `.env`. Copy the printed session-string assignment
-back into that file before starting Compose. The database seeds the approved public sources on
-its first initialization.
+All Compose settings live in the single root `.env`. Fill in its required values and enable the
+local-development block: `COMPOSE_PROFILES=telegram` starts the `telegram-gateway` service, and
+`TELEGRAM_GATEWAY_URL=http://telegram-gateway:8080` points the scraper at it. Before
+authorization, add `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, and `TELEGRAM_PHONE_NUMBER` of a
+development account; copy the printed session-string assignment back into `.env`. Never reuse the
+production gateway session locally. The database seeds the approved public sources on its first
+initialization.
 
-The API health endpoint is `http://localhost:8000/health`; the frontend is
-`http://localhost:5173`.
+The API health endpoint is `http://localhost:8000/health`; the frontend listens on
+`FRONTEND_PORT` and proxies `/api/` to the API. For `npm run dev`, Vite proxies `/api` to
+`http://localhost:8000`.
+
+Production deployment is documented in `DEPLOY.md` (department server) and
+`docs/deploy/telegram-gateway-vercel.md` (Telegram gateway).
 
 Compose runs the versioned `migrate` service before API, scraper, and AI worker startup. Fresh
 volumes are marked at v3.5.2 by their initialization scripts. For an existing legacy volume the
@@ -40,8 +46,9 @@ INTEGRATION_POSTGRES_DSN=postgresql://... uv run pytest \
   apps/ai-worker/tests/integration/test_postgres_pipeline.py
 ```
 
-Registry and candidate-review endpoints are currently unauthenticated. Keep the API behind trusted
-deployment network controls until authentication is added.
+Registry and candidate-review endpoints are currently unauthenticated. Compose publishes the API
+only on host loopback, and the frontend proxy forwards only `GET` requests, so mutations are
+possible only from the server itself until authentication is added.
 
 ## Local Checks
 

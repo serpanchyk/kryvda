@@ -13,7 +13,6 @@ def main() -> None:
     directory = Path(__file__).resolve().parents[1]
     root = directory.parents[1]
     settings = {
-        **dotenv_values(root / "infra/postgres/.env"),
         **dotenv_values(root / ".env"),
         **dotenv_values(directory / ".env"),
     }

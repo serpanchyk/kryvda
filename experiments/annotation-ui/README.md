@@ -15,8 +15,8 @@ Experimental UI для одного анотатора. PostgreSQL слугує 
 uv run python experiments/annotation-ui/src/launch_editor.py
 ```
 
-Launcher автоматично читає існуючі PostgreSQL settings з кореневої `.env` та
-`infra/postgres/.env`, якщо experimental DSN не заданий. Поточний Unix UID/GID передається
+Launcher автоматично читає існуючі PostgreSQL settings з кореневої `.env`, якщо
+experimental DSN не заданий. Поточний Unix UID/GID передається
 контейнеру, щоб створені анотації належали вам.
 
 Відкрийте http://localhost:8090. Compose є незалежним experimental stack і не запускає
