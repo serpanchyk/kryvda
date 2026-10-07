@@ -6,6 +6,7 @@ import time
 from typing import Annotated, Protocol
 
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from telegram_monitor_gateway.contract import ChannelFetchRequest, ChannelFetchResponse
@@ -101,5 +102,32 @@ def create_app(
             },
         )
         return response
+
+    return app
+
+
+def create_misconfigured_app(invalid_variables: list[str]) -> FastAPI:
+    """Build an application that explains a configuration error instead of crashing.
+
+    A crash during import surfaces on Vercel only as an opaque ``FUNCTION_INVOCATION_FAILED``;
+    this keeps ``/health`` able to name the missing variables without revealing any values.
+
+    Args:
+        invalid_variables: Names of missing or invalid environment variables.
+
+    Returns:
+        Application that answers every request with HTTP 503.
+    """
+    logger = setup_logging("telegram-monitor-gateway")
+    detail = "Missing or invalid environment variables: " + ", ".join(invalid_variables)
+    logger.error("gateway misconfigured", extra={"invalid_variables": invalid_variables})
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+    @app.api_route("/{path:path}", methods=["GET", "POST"])
+    async def misconfigured(path: str) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "misconfigured", "detail": detail},
+        )
 
     return app
