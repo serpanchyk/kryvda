@@ -156,6 +156,8 @@ graphic; the overview title names the period's main target under the same guardr
 preview dialog; the PNG is saved only after the analyst confirms. Controls marked
 `data-export-ignore` and term underlines are excluded. Interactive charts carry a keyboard data
 table that offers the same drill-down, and on phones the target map becomes a ranked quadrant list.
+Channel profiles add their own target map of the entities that channel evaluated; its points open
+entity profiles filtered to the channel.
 
 The identity is the КРИВДА nameplate with a red square full stop (`BrandLockup`); favicons and the
 app icon use a press-ink plate with a paper К (`apps/frontend/public/kryvda-mark.svg`,

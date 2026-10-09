@@ -15,7 +15,9 @@ export interface PlacedLabel {
 
 export const LABEL_HEIGHT = 13;
 const BASELINE = 10;
-const RINGS = [0, 8, 18, 30, 44, 60, 80, 104, 130];
+export const FAR_RINGS = [0, 8, 18, 30, 44, 60, 80, 104, 130];
+/** Only positions touching the point: labels that read as attached without a leader line. */
+export const ADJACENT_RINGS = [0, 5];
 const DIRECTIONS: Array<[number, number]> = [[1, 0], [-1, 0], [0, -1], [0, 1], [1, -1], [-1, -1], [1, 1], [-1, 1]];
 
 const overlaps = (a: Box, b: Box, pad = 1): boolean =>
@@ -47,12 +49,12 @@ function nearestOnBox(box: Box, x: number, y: number): [number, number] {
  * directions on growing rings; a label moved off its point gets a leader line. Subjects with no
  * free position are left out rather than drawn over other text.
  */
-export function placeLabels(subjects: LabelSubject[], obstacles: Box[], bounds: Box): PlacedLabel[] {
+export function placeLabels(subjects: LabelSubject[], obstacles: Box[], bounds: Box, rings: number[] = FAR_RINGS): PlacedLabel[] {
   const taken: Box[] = [...obstacles, ...subjects.map((subject) => circleBox(subject.cx, subject.cy, subject.r))];
   const placed: PlacedLabel[] = [];
   for (const subject of subjects) {
     let found: PlacedLabel | undefined;
-    for (const ring of RINGS) {
+    for (const ring of rings) {
       for (const direction of DIRECTIONS) {
         const box = candidate(subject, direction, ring);
         if (!inside(box, bounds) || taken.some((other) => overlaps(box, other))) continue;

@@ -648,6 +648,8 @@ export function ChannelPage() {
   const entitySort = (params.get("entity_sort") ?? "negative_volume") as RankingSort;
   const profile = useQuery({ queryKey: ["channel", id, dates, offset, entitySort], queryFn: () => apiClient.channel(id, dates, offset, entitySort) });
   const previous = usePreviousPeriod(["channel", id], dates, (range) => apiClient.channel(id, range, 0, entitySort));
+  // The map needs every entity this channel evaluated, not just the current ranking page.
+  const mapEntities = useQuery({ queryKey: ["channel-map", id, dates], queryFn: () => apiClient.channel(id, dates, 0, "evaluative_volume", 100) });
   const chooseDate = useExactDate();
   const chooseRange = useExactRange();
   const rhetoric = (params.get("rhetoric") ?? undefined) as RhetoricLabel | undefined;
@@ -670,6 +672,9 @@ export function ChannelPage() {
             { label: glossary.metric.negative.label, term: glossary.metric.negative, value: data.summary.negative_count, accent: true, delta: relativeChange(data.summary.negative_count, before?.negative_count), previous: before?.negative_count, deltaTone: "negative", trend: data.daily.map((day) => day.negative_count) },
           ]} />
           <Graphic section="Тональність у часі" subject={subject} scope={scope} title={stanceThesis(subject, data.summary, before)} dek="Стовпчики — позитивні й негативні класифікації щодо цільових сутностей, лінія — ковзна частка негативу. Натисніть на стовпчик, щоб звузити профіль до цього проміжку."><DailyChart data={data.daily} mode="stance" onDate={chooseDate} onRange={chooseRange} /></Graphic>
+          <Graphic section="Мапа мішеней" subject={subject} scope={scope} title={channelMapTitle(mapEntities.data?.entities.items)} dek="Кожна точка — сутність, яку оцінював цей канал: праворуч більше оцінок, вище — більша частка негативу, розмір — кількість тверджень. Натисніть точку, щоб відкрити профіль сутності лише з оцінками цього каналу.">
+            {mapEntities.isLoading ? <LoadState /> : mapEntities.isError ? <ErrorState onRetry={() => void mapEntities.refetch()} /> : <TargetMap items={mapEntities.data?.entities.items ?? []} href={(item) => { const next = dateParams(params); next.set("channel", id); return `/entities/${item.id}?${next.toString()}`; }} />}
+          </Graphic>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
             <Graphic section="Риторика атак" term={glossary.section.rhetoric} subject={subject} scope={scope} title={rhetoricThesis(data.rhetoric, rhetoricLabels, "Які типи атак переважають")} dek="Частка від усіх призначених риторичних міток."><DistributionBars items={data.rhetoric} labels={rhetoricLabels} group="rhetoric" selected={rhetoric} onSelect={(key) => set("rhetoric", key, "claim_offset")} /></Graphic>
             <Graphic section="Епістемічний статус" term={glossary.section.epistemicStatus} subject={subject} scope={scope} title={epistemicThesis(data.epistemic, "Як канал формулює твердження")} dek="Частка від унікальних тверджень."><DistributionBars items={data.epistemic} labels={epistemicLabels} group="epistemic" selected={epistemic} onSelect={(key) => set("epistemic", key, "claim_offset")} tone="ink" /></Graphic>
@@ -681,6 +686,14 @@ export function ChannelPage() {
       })()}
     </QueryBoundary>
   </PageLayout>;
+}
+
+/** Channel map headline: how many entities the channel attacks consistently enough to plot as negative. */
+function channelMapTitle(items: Summary[] | undefined): string {
+  const plotted = (items ?? []).filter((item) => evaluativeOf(item) >= 5);
+  if (!plotted.length) return "Кого оцінював канал";
+  const negative = plotted.filter((item) => item.negative_count / evaluativeOf(item) > 0.5).length;
+  return `${formatNumber(negative)} з ${formatNumber(plotted.length)} ${pluralUk(plotted.length, "сутності", "сутностей", "сутностей")} канал оцінює переважно негативно`;
 }
 
 function highlightPost(content: string, claims: PostClaim[]): ReactNode {

@@ -242,8 +242,8 @@ export const apiClient = {
   channels: (dates: DateRange, offset = 0, sort: RankingSort = "evaluative_volume"): Promise<Page<Summary> & { daily: Daily[] }> => get(
     `/channels${query({ ...range(dates), limit: 25, offset, sort })}`,
   ),
-  channel: (id: string, dates: DateRange, offset = 0, sort: RankingSort = "negative_volume"): Promise<ChannelProfile> => get(
-    `/channels/${id}/analytics${query({ ...range(dates), limit: 25, offset, sort })}`,
+  channel: (id: string, dates: DateRange, offset = 0, sort: RankingSort = "negative_volume", limit = 25): Promise<ChannelProfile> => get(
+    `/channels/${id}/analytics${query({ ...range(dates), limit, offset, sort })}`,
   ),
   claims: (
     dates: DateRange,

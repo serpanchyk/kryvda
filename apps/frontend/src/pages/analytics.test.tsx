@@ -12,14 +12,14 @@ import { toPng } from "html-to-image";
 import { toast } from "sonner";
 
 import { exportFileName } from "@/lib/editorial";
-import { ClaimsPage, DashboardPage, EntityPage, SystemPage } from "@/pages/analytics";
+import { ChannelPage, ClaimsPage, DashboardPage, EntityPage, SystemPage } from "@/pages/analytics";
 
 vi.mock("html-to-image", () => ({ toPng: vi.fn() }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 vi.mock("@/api/client", async () => {
   const actual = await vi.importActual<typeof import("@/api/client")>("@/api/client");
-  return { ...actual, apiClient: { ...actual.apiClient, dashboard: vi.fn(), claims: vi.fn(), entity: vi.fn(), evidence: vi.fn(), sourceActors: vi.fn(), entities: vi.fn(), post: vi.fn(), claimChannels: vi.fn(), claimSourceActors: vi.fn(), analysisHealth: vi.fn(), collectionHealth: vi.fn() } };
+  return { ...actual, apiClient: { ...actual.apiClient, dashboard: vi.fn(), claims: vi.fn(), entity: vi.fn(), evidence: vi.fn(), sourceActors: vi.fn(), entities: vi.fn(), post: vi.fn(), claimChannels: vi.fn(), claimSourceActors: vi.fn(), analysisHealth: vi.fn(), collectionHealth: vi.fn(), channel: vi.fn() } };
 });
 
 afterEach(() => cleanup());
@@ -226,6 +226,22 @@ describe("editorial analytics pages", () => {
     renderRoute("/?period=all", "/", <DashboardPage />);
     await userEvent.click(await screen.findByRole("button", { name: "Спробувати ще раз" }));
     expect(await screen.findByText("Негативні класифікації за днями")).toBeInTheDocument();
+  });
+
+  test("maps the entities one channel evaluated and links to their channel-filtered profiles", async () => {
+    const entity = (id: number, name: string, negative: number, positive: number) => ({ id, canonical_name: name, negative_count: negative, positive_count: positive, claim_count: negative + positive, post_count: 1, absent_count: 0 });
+    vi.mocked(apiClient.channel).mockResolvedValue({
+      channel: { id: 3, title: "Канал | Новини", username: "kanal", avatar_url: null, status: "active", last_published_at: null },
+      summary: { post_count: 4, claim_count: 30, positive_count: 6, negative_count: 24, absent_count: 0 },
+      entities: { items: [entity(1, "Мішень", 18, 2), entity(2, "Улюбленець", 1, 9), entity(3, "Згадка", 1, 1)], total: 3, limit: 100, offset: 0 },
+      rhetoric: [], epistemic: [], attribution: [], daily: [], incomplete_posts: 0,
+    });
+    vi.mocked(apiClient.claims).mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 });
+    renderRoute("/channels/3?period=all", "/channels/:id", <ChannelPage />);
+    expect(await screen.findByText("1 з 2 сутностей канал оцінює переважно негативно")).toBeInTheDocument();
+    expect(vi.mocked(apiClient.channel)).toHaveBeenCalledWith("3", {}, 0, "evaluative_volume", 100);
+    const links = screen.getAllByRole("link", { name: /Мішень/ });
+    expect(links.some((link) => link.getAttribute("href") === "/entities/1?period=all&channel=3")).toBe(true);
   });
 
   test("builds dated file names for exported graphics", () => {

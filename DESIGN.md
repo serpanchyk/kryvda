@@ -322,12 +322,13 @@ ink axis on one shared scale. Each row carries a zero-padded rank, the name, the
 sample size, and the negative share.
 
 ### Target Map
-Every point carries its name where space allows, placed by a collision-free layout
-(`apps/frontend/src/lib/label-layout.ts`): eight directions on growing rings, a hairline leader when
-a label moves off its point, and no label ever over a point, another label, an axis, or a quadrant
-name. Negative entities are labelled first. Quadrant names sit in the margins above and below the
-plot, never on data, and the median split is labelled with its value. Tooltips appear in place with
-no slide animation. The chart is sized from a measured width, not Recharts' responsive container.
+Points are named only where a label fits right beside its point; there are no leader lines, and a
+label never covers a point, another label, an axis, or a quadrant name. Negative entities get the
+free space first; unlabelled points stay reachable through the tooltip and «Мапа списком».
+Quadrant names sit in the margins above and below the plot, and the median split is labelled with
+its value. Tooltips appear in place with no slide animation. The chart is sized from a measured
+width, not Recharts' responsive container. The overview maps the whole pool; each channel profile
+maps only that channel's evaluations, and its points open channel-filtered entity profiles.
 
 ### Daily Chart
 Bars only, never areas. Spikes (mean + 2σ and at least 5) keep full opacity while other bars fade

@@ -10,7 +10,7 @@ import { evaluativeOf, median, quadrantOf, type Mover, type Quadrant } from "@/l
 import { formatNumber, formatPercent } from "@/lib/editorial";
 import { glossary } from "@/lib/glossary";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { placeLabels, type Box } from "@/lib/label-layout";
+import { ADJACENT_RINGS, placeLabels, type Box } from "@/lib/label-layout";
 
 type RowTarget = { href?: (item: Summary) => string; selected?: string; onSelect?: (item: Summary) => void };
 
@@ -107,8 +107,8 @@ const LABEL_FONT = "600 11px 'Fixel Text', sans-serif";
 const QUADRANT_FONT = "800 11px 'Fixel Text', sans-serif";
 
 /**
- * Quadrant names in the margins, the median marker, and a label for every point placed without
- * touching any other text or point. Rendered inside the chart so it shares the chart's scales.
+ * Quadrant names in the margins, the median marker, and labels set right beside their points
+ * wherever they fit without touching any other text or point. Rendered inside the chart so it shares the chart's scales.
  */
 function MapAnnotations({ points, split, zDomain }: { points: TargetPoint[]; split: number; zDomain: [number, number] }) {
   const xScale = useXAxisScale();
@@ -145,12 +145,11 @@ function MapAnnotations({ points, split, zDomain }: { points: TargetPoint[]; spl
     return bNeg - aNeg || b.negative - a.negative || b.x - a.x;
   });
   const subjects = ordered.map((point) => ({ id: point.id, cx: Number(xScale(point.px)), cy: Number(yScale(point.py)), r: radius(point.z), width: textWidth(point.name, LABEL_FONT, 6.2) }));
-  const placed = placeLabels(subjects, obstacles, { x0: left + 2, y0: top - 6, x1: width - 2, y1: bottom - 2 });
+  const placed = placeLabels(subjects, obstacles, { x0: left + 2, y0: top - 6, x1: width - 2, y1: bottom - 2 }, ADJACENT_RINGS);
   const names = new Map(points.map((point) => [point.id, point.name]));
   return <g pointerEvents="none" aria-hidden="true">
     {quadrants.map(({ quadrant, x, y, anchor }) => <text key={quadrant} x={x} y={y} textAnchor={anchor} fontSize={11} fontWeight={800} letterSpacing="0.12em" fill={negativeQuadrant(quadrant) ? "var(--negative)" : "var(--positive)"}>{quadrantLabel(quadrant)}</text>)}
     {medianClear ? <text x={medianX} y={top - 12} textAnchor="middle" fontSize={11} fill="var(--muted-foreground)">{medianText}</text> : null}
-    {placed.map((label) => label.leader ? <line key={`leader-${label.id}`} x1={label.leader[0]} y1={label.leader[1]} x2={label.leader[2]} y2={label.leader[3]} stroke="var(--muted-foreground)" strokeWidth={0.75} strokeOpacity={0.7} /> : null)}
     {placed.map((label) => <text key={label.id} x={label.x} y={label.y} fontSize={11} fontWeight={600} fill="var(--foreground)" stroke="var(--popover)" strokeWidth={3} paintOrder="stroke">{names.get(label.id)}</text>)}
   </g>;
 }
