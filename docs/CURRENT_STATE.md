@@ -111,6 +111,10 @@ pipeline and claim analytics; registry mutations remain outside the UI.
 
 ## Documentation
 
+Product context for UI work is recorded in `../PRODUCT.md`; the incumbent visual system (tokens,
+type, components, and rules) is recorded in `../DESIGN.md` with extensions in
+`../.impeccable/design.json`.
+
 The Kryvda investigation UI uses an editorial newsroom layout with a responsive top masthead,
 self-contained visualization sections, Kyiv Type Serif headlines, and Fixel Text data typography.
 The overview leads with negative classifications, temporal activity, attacked-entity rankings,

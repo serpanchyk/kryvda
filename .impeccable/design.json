@@ -1,0 +1,366 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-09T18:17:48+00:00",
+  "title": "Design System: Кривда",
+  "extensions": {
+    "colorMeta": {
+      "newsprint-paper": {
+        "role": "neutral",
+        "displayName": "Newsprint Paper",
+        "canonical": "oklch(95.8% 0.011 89.7)",
+        "tonalRamp": [
+          "#0d0b06",
+          "#27251f",
+          "#44423b",
+          "#64615a",
+          "#85827b",
+          "#a8a59d",
+          "#ccc9c1",
+          "#f1eee6"
+        ]
+      },
+      "galley-proof": {
+        "role": "neutral",
+        "displayName": "Galley Proof",
+        "canonical": "oklch(97.9% 0.008 91.5)",
+        "tonalRamp": [
+          "#0c0b07",
+          "#262521",
+          "#43423d",
+          "#63615c",
+          "#84827d",
+          "#a7a59f",
+          "#cbc9c3",
+          "#f0eee8"
+        ]
+      },
+      "newsprint-shade": {
+        "role": "neutral",
+        "displayName": "Newsprint Shade",
+        "canonical": "oklch(91.7% 0.014 84.6)",
+        "tonalRamp": [
+          "#0e0b05",
+          "#28251d",
+          "#464239",
+          "#656158",
+          "#868279",
+          "#a9a49b",
+          "#cdc9bf",
+          "#f3eee4"
+        ]
+      },
+      "column-rule": {
+        "role": "neutral",
+        "displayName": "Column Rule",
+        "canonical": "oklch(85.9% 0.013 82.4)",
+        "tonalRamp": [
+          "#0e0b05",
+          "#28251e",
+          "#46413a",
+          "#656159",
+          "#868279",
+          "#a9a49c",
+          "#cdc8c0",
+          "#f3eee5"
+        ]
+      },
+      "field-rule": {
+        "role": "neutral",
+        "displayName": "Field Rule",
+        "canonical": "oklch(76.9% 0.016 80.7)",
+        "tonalRamp": [
+          "#0f0a05",
+          "#29241d",
+          "#464139",
+          "#666057",
+          "#878278",
+          "#aaa49a",
+          "#cec8be",
+          "#f4eee3"
+        ]
+      },
+      "unrated-grey": {
+        "role": "neutral",
+        "displayName": "Unrated Grey",
+        "canonical": "oklch(72.1% 0.016 80.7)",
+        "tonalRamp": [
+          "#0f0a05",
+          "#29241c",
+          "#464139",
+          "#666057",
+          "#878278",
+          "#aaa49a",
+          "#cec8be",
+          "#f4eee3"
+        ]
+      },
+      "faded-ink": {
+        "role": "neutral",
+        "displayName": "Faded Ink",
+        "canonical": "oklch(52.2% 0.012 81.8)",
+        "tonalRamp": [
+          "#0e0b06",
+          "#28251f",
+          "#45413b",
+          "#65615a",
+          "#86827a",
+          "#a9a49d",
+          "#cdc8c1",
+          "#f2eee6"
+        ]
+      },
+      "press-ink": {
+        "role": "neutral",
+        "displayName": "Press Ink",
+        "canonical": "oklch(20.3% 0.006 106.9)",
+        "tonalRamp": [
+          "#0b0b09",
+          "#252522",
+          "#42423f",
+          "#61615e",
+          "#82837f",
+          "#a5a5a1",
+          "#c9c9c5",
+          "#efefea"
+        ]
+      },
+      "proofmark-red": {
+        "role": "primary",
+        "displayName": "Proofmark Red",
+        "canonical": "oklch(54.5% 0.191 24.6)",
+        "tonalRamp": [
+          "#220000",
+          "#4e0005",
+          "#810011",
+          "#b51222",
+          "#dd4444",
+          "#ff6a66",
+          "#ffafa8",
+          "#ffe6e3"
+        ]
+      },
+      "archive-blue": {
+        "role": "secondary",
+        "displayName": "Archive Blue",
+        "canonical": "oklch(47.9% 0.119 257.0)",
+        "tonalRamp": [
+          "#00003b",
+          "#00205d",
+          "#0f407f",
+          "#3161a3",
+          "#5283c8",
+          "#74a7ef",
+          "#a5ccff",
+          "#e1f0ff"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "One page thesis per screen in the page header."
+      },
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "«КРИВДА.» in the masthead and exported card footers."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Thesis of each chart card (24 px, 28 px from md)."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Claim and post headlines in lists."
+      },
+      "metric": {
+        "displayName": "Metric",
+        "purpose": "Headline counts in the metric strip, tabular figures."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Deks, list rows, filters."
+      },
+      "reading": {
+        "displayName": "Reading",
+        "purpose": "Full source-post text."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase eyebrows, filter labels, metric names."
+      }
+    },
+    "shadows": [
+      {
+        "name": "floating-layer",
+        "value": "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
+        "purpose": "Chart tooltips and popovers only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "150ms cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Colour, border and background transitions on hover and focus."
+      },
+      {
+        "name": "underline-reveal",
+        "value": "transform scaleX(0→1), origin left, 150ms",
+        "purpose": "Active and hovered masthead link underline in Proofmark Red."
+      },
+      {
+        "name": "press",
+        "value": "translateY(1px)",
+        "purpose": "Pressed buttons."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      },
+      {
+        "name": "container",
+        "value": "1480px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ink-filled action for confirming a choice.",
+      "html": "<button class=\"ds-btn-primary\">Застосувати</button>",
+      "css": ".ds-btn-primary { height: 32px; padding: 0 10px; background: var(--foreground, #171714); color: var(--background, #f4f1e9); border: 1px solid transparent; border-radius: 4px; font: 500 14px/1 'Fixel Text', sans-serif; cursor: pointer; transition: background-color .15s, transform .15s; } .ds-btn-primary:hover { background: color-mix(in srgb, #171714 80%, transparent); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(23 23 20 / .5); } .ds-btn-primary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Quiet preset or pager action.",
+      "html": "<button class=\"ds-btn-ghost\">30 днів</button>",
+      "css": ".ds-btn-ghost { height: 28px; padding: 0 10px; background: transparent; color: #171714; border: 1px solid transparent; border-radius: 3px; font: 500 12.8px/1 'Fixel Text', sans-serif; cursor: pointer; transition: background-color .15s; } .ds-btn-ghost:hover { background: #e8e3d9; } .ds-btn-ghost:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(23 23 20 / .5); }"
+    },
+    {
+      "name": "Select Trigger",
+      "kind": "input",
+      "refersTo": "select-trigger",
+      "description": "Square filter control with uppercase label.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Позиція</span><button class=\"ds-select\">Усі оцінки <svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"m6 9 6 6 6-6\"/></svg></button></label>",
+      "css": ".ds-field { display: grid; gap: 6px; width: 240px; } .ds-field-label { font: 800 11px/1.4 'Fixel Text', sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #6d6962; } .ds-select { display: flex; align-items: center; justify-content: space-between; min-height: 40px; padding: 8px 12px; background: #f4f1e9; color: #171714; border: 1px solid #d5d0c7; border-radius: 0; font: 400 14px/1.4 'Fixel Text', sans-serif; cursor: pointer; transition: border-color .15s; } .ds-select:hover { border-color: #171714; } .ds-select:focus-visible { outline: none; border-color: #c72c32; box-shadow: 0 0 0 2px rgb(199 44 50 / .2); }"
+    },
+    {
+      "name": "Search Input",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Text search for entities and claims.",
+      "html": "<input class=\"ds-input\" placeholder=\"Знайти сутність\" />",
+      "css": ".ds-input { height: 32px; width: 260px; padding: 4px 10px; background: transparent; color: #171714; border: 1px solid #b9b3a9; border-radius: 4px; font: 400 14px/1.4 'Fixel Text', sans-serif; transition: border-color .15s; } .ds-input::placeholder { color: #6d6962; } .ds-input:focus-visible { outline: none; border-color: #171714; box-shadow: 0 0 0 3px rgb(23 23 20 / .5); }"
+    },
+    {
+      "name": "Masthead",
+      "kind": "nav",
+      "refersTo": "masthead",
+      "description": "Sticky newspaper masthead with wordmark and red active underline.",
+      "html": "<header class=\"ds-mast\"><a class=\"ds-mark\">КРИВДА<span>.</span></a><nav class=\"ds-nav\"><a class=\"is-active\">Огляд</a><a>Сутності</a><a>Канали</a><a>Твердження</a></nav></header>",
+      "css": ".ds-mast { display: flex; align-items: center; gap: 32px; height: 64px; padding: 0 32px; background: rgb(244 241 233 / .95); border-bottom: 1px solid #d5d0c7; } .ds-mark { font: 900 24px/1 'Kyiv Type Serif', Georgia, serif; letter-spacing: .04em; color: #171714; } .ds-mark span { color: #c72c32; } .ds-nav { display: flex; gap: 28px; } .ds-nav a { position: relative; padding: 20px 0; font: 700 14px/1 'Fixel Text', sans-serif; color: #6d6962; cursor: pointer; transition: color .15s; } .ds-nav a:hover, .ds-nav a.is-active { color: #171714; } .ds-nav a::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: #c72c32; transform: scaleX(0); transform-origin: left; transition: transform .15s; } .ds-nav a.is-active::after, .ds-nav a:hover::after { transform: scaleX(1); }"
+    },
+    {
+      "name": "Stance Badges",
+      "kind": "chip",
+      "refersTo": "badge-negative",
+      "description": "Square outline badges coloured by evaluation.",
+      "html": "<span class=\"ds-badge ds-neg\">Негативне</span> <span class=\"ds-badge ds-pos\">Позитивне</span> <span class=\"ds-badge ds-abs\">Без оцінки</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; height: 20px; padding: 2px 8px; border: 1px solid; border-radius: 0; font: 500 12px/1 'Fixel Text', sans-serif; } .ds-neg { color: #c72c32; border-color: #c72c32; } .ds-pos { color: #2d5d9f; border-color: #2d5d9f; } .ds-abs { color: #6d6962; border-color: #aaa49a; }"
+    },
+    {
+      "name": "Story Card",
+      "kind": "card",
+      "refersTo": "chart-card",
+      "description": "Export-ready chart card with thesis headline and signed footer.",
+      "html": "<section class=\"ds-card\"><p class=\"ds-eyebrow\">Негативні класифікації · 30 днів</p><h2 class=\"ds-thesis\">Негатив щодо сутності зріс удвічі за місяць</h2><p class=\"ds-dek\">Негативні оцінки, які канали висловлюють від себе.</p><div class=\"ds-plot\"></div><footer class=\"ds-foot\"><span class=\"ds-sig\">КРИВДА<span>.</span></span><span class=\"ds-src\">Джерело: публічні Telegram-канали · 30 днів</span></footer></section>",
+      "css": ".ds-card { display: flex; flex-direction: column; max-width: 440px; padding: 20px; background: #faf8f2; border: 1px solid #d5d0c7; border-top: 2px solid #171714; color: #171714; } .ds-eyebrow { margin: 0; font: 800 11px/1.4 'Fixel Text', sans-serif; letter-spacing: .14em; text-transform: uppercase; } .ds-thesis { margin: 6px 0 0; font: 700 28px/1.25 'Kyiv Type Serif', Georgia, serif; letter-spacing: .015em; } .ds-dek { margin: 6px 0 0; font: 400 14px/24px 'Fixel Text', sans-serif; color: #6d6962; } .ds-plot { height: 96px; margin-top: 16px; background: repeating-linear-gradient(90deg, #c72c32 0 14px, transparent 14px 20px); opacity: .85; } .ds-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-top: 20px; padding-top: 12px; border-top: 1px solid #d5d0c7; } .ds-sig { font: 900 16px/1 'Kyiv Type Serif', Georgia, serif; letter-spacing: .04em; } .ds-sig span { color: #c72c32; } .ds-src { font: 400 11px/1.4 'Fixel Text', sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #6d6962; }"
+    },
+    {
+      "name": "Diverging Bar Row",
+      "kind": "custom",
+      "description": "Signature ranking row: negative left in red, positive right in blue on one axis.",
+      "html": "<a class=\"ds-div\"><span class=\"ds-div-head\"><span class=\"ds-rank\">01</span><span class=\"ds-name\">Назва сутності</span><span class=\"ds-n\">вибірка 186</span></span><span class=\"ds-div-bars\"><span class=\"ds-l\"><b>142</b><i style=\"width:76%\"></i></span><span class=\"ds-r\"><i style=\"width:24%\"></i><b>44</b></span></span></a>",
+      "css": ".ds-div { display: block; width: 420px; padding: 10px 0; border-bottom: 1px solid #d5d0c7; color: #171714; font-family: 'Fixel Text', sans-serif; cursor: pointer; transition: background-color .15s; } .ds-div:hover { background: rgb(23 23 20 / .035); } .ds-div-head { display: flex; align-items: baseline; gap: 12px; } .ds-rank { width: 24px; font-size: 14px; color: #6d6962; font-variant-numeric: tabular-nums; } .ds-name { flex: 1; font-weight: 600; } .ds-n { font-size: 12px; color: #6d6962; font-variant-numeric: tabular-nums; } .ds-div-bars { display: grid; grid-template-columns: 1fr 1fr; margin-top: 6px; font: 700 12px/1 'Fixel Text', sans-serif; font-variant-numeric: tabular-nums; } .ds-l { display: flex; justify-content: flex-end; align-items: center; gap: 6px; color: #c72c32; } .ds-r { display: flex; align-items: center; gap: 6px; border-left: 1px solid #171714; color: #2d5d9f; } .ds-l i, .ds-r i { display: block; height: 10px; } .ds-l i { background: #c72c32; } .ds-r i { background: #2d5d9f; }"
+    },
+    {
+      "name": "Metric Cell",
+      "kind": "custom",
+      "description": "Headline count with sparkline and period delta.",
+      "html": "<dl class=\"ds-metric\"><dt>Негативні класифікації</dt><dd class=\"ds-val\">1 284 <svg viewBox=\"0 0 64 20\" width=\"64\" height=\"20\"><polyline points=\"0,15 16,12 32,14 48,6 64,3\" fill=\"none\" stroke=\"#c72c32\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/></svg></dd><dd class=\"ds-delta\">▲ 18% <span>до попередніх 30 днів</span></dd></dl>",
+      "css": ".ds-metric { width: 240px; margin: 0; padding: 12px 16px 12px 0; border-top: 1px solid #d5d0c7; border-bottom: 1px solid #d5d0c7; font-family: 'Fixel Text', sans-serif; } .ds-metric dt { font: 800 11px/1.4 'Fixel Text', sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #6d6962; } .ds-val { display: flex; align-items: flex-end; justify-content: space-between; margin: 4px 0 0; font-size: 30px; font-weight: 900; color: #c72c32; font-variant-numeric: tabular-nums; } .ds-delta { margin: 2px 0 0; font-size: 12px; font-weight: 600; color: #c72c32; } .ds-delta span { font-weight: 400; color: #6d6962; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Шпальта розслідування (The Investigative Broadsheet)",
+    "overview": "Кривда looks and behaves like the front page of an investigative newspaper that has just found something. Every screen is a printed page: warm newsprint ground, heavy black serif theses set like headlines, hairline column rules instead of boxes, and one exposing red that marks what is being attacked. The tone is sharp and accusatory in its presentation, never in its numbers: a headline states the finding bluntly, while the graphic beneath it shows its sample size, its denominator, and the period it covers.\n\nDensity is that of a broadsheet, not a SaaS dashboard. Wide screens set chart cards in a three-column grid under a 1480 px masthead; each card is a self-contained story with eyebrow, thesis headline, dek, graphic, and a signed footer, so it can be torn out and posted publicly as a PNG without losing meaning. Ornament is absent; emphasis comes from weight, rules, and red.\n\nThe system is light-only: newsprint is the identity, and no dark theme is defined.",
+    "keyCharacteristics": [
+      "Newsprint paper and press ink, with red reserved for exposure and blue for its opposite.",
+      "Black-weight Kyiv Type Serif theses; every number and label in Fixel Text.",
+      "Rules, not shadows: hairline column rules and a 2 px ink rule that opens every story.",
+      "Square, nearly cornerless forms (0–4 px).",
+      "Every chart card is export-ready and signed «КРИВДА.»."
+    ],
+    "rules": [
+      {
+        "name": "The Proofmark Rule",
+        "body": "Red means negative evaluation, the brand mark, or a data error. It is never decorative; if red appears, a reader must be able to say what is being exposed.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Inks of Judgment Rule",
+        "body": "Negative is red, positive is blue, unrated is grey, and each always carries a text label. Green never encodes evaluation.",
+        "section": "colors"
+      },
+      {
+        "name": "The Thesis Rule",
+        "body": "Serif is for statements: page and card headlines that say what was found. Numbers, labels, and controls are never set in the serif.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Figures Rule",
+        "body": "Every count, share, rank, and delta uses tabular numerals so columns of evidence align.",
+        "section": "typography"
+      },
+      {
+        "name": "The Hairline Rule",
+        "body": "Stories are separated by rules, never by shadows. A card that needs a shadow to stand out needs a stronger top rule or a brighter stock instead.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do open every story with a 2 px Press Ink rule and an uppercase eyebrow that names the period.",
+      "Do write card headlines as theses that state the finding; put method and caveats in the dek.",
+      "Do show the evaluative sample size and the denominator next to every share.",
+      "Do set every number in Fixel Text with tabular figures.",
+      "Do keep every chart card export-ready: self-explanatory headline, period, source line, and the «КРИВДА.» signature; mark controls `data-export-ignore`.",
+      "Do take all visible text from the Ukrainian glossary and attach its definition as a tooltip."
+    ],
+    "donts": [
+      "Don't use Proofmark Red for decoration, generic emphasis, or positive data.",
+      "Don't encode evaluation with green, or with colour alone without a text label.",
+      "Don't put drop shadows on cards or rows; shadows belong only to floating layers.",
+      "Don't round corners beyond 4 px; badges and selects are square.",
+      "Don't draw interpolated area or smoothed line charts for daily counts.",
+      "Don't set numbers, labels, or controls in the serif.",
+      "Don't show Latin-script interface text; only «Telegram» and data such as channel names."
+    ]
+  }
+}

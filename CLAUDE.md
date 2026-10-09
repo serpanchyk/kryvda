@@ -4,6 +4,8 @@
 
 - Read `docs/CURRENT_STATE.md` first for the current runtime state; architecture lives in
   `docs/system/`, domain vocabulary in `docs/CONTEXT.md`, commands in `docs/run-project.md`.
+- Frontend design work follows `PRODUCT.md` (users, purpose, brand commitments) and `DESIGN.md`
+  (visual system tokens and rules; extensions in `.impeccable/design.json`).
 - Communicate with the user in Ukrainian unless asked otherwise.
 
 ## Local Runtime
