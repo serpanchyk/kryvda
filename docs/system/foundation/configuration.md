@@ -12,7 +12,11 @@ All service logs are JSON and contain timestamp, logger, level, and message fiel
 The frontend calls the API on its own origin under `/api`; its nginx proxies `GET` requests to the
 API, so no API address is built into the bundle. `VITE_API_BASE_URL` overrides this only for
 special setups. The API's `FRONTEND_ALLOWED_ORIGIN` CORS setting matters only for such cross-origin
-use.
+use. nginx resolves the `api` service through Docker's embedded DNS (`resolver 127.0.0.11`), so a
+recreated API container does not require a frontend restart.
+
+The API process shares one PostgreSQL connection pool across all requests, opened on first use and
+closed at shutdown. `POSTGRES_POOL_MAX_SIZE` (default 10) caps its connections.
 
 ## Telegram gateway and scraper
 

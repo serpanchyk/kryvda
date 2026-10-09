@@ -37,6 +37,8 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   frontend nginx proxies read-only `GET` requests to the API under `/api/`. Containers restart
   automatically, logs rotate, and a `backup` service writes daily `pg_dump` files to `./backups`.
 - Docker Compose starts PostgreSQL, a versioned migration gate, then all application services.
+- The API shares one bounded PostgreSQL pool (`POSTGRES_POOL_MAX_SIZE`, default 10) across all
+  requests, and the frontend nginx re-resolves the API container through Docker DNS.
 - PostgreSQL migration state is stored in `schema_migrations`; fresh initialization records the
   v3.5.2 baseline and the v3 pass-attempt uniqueness repair, while a legacy schema is upgraded
   through the v3 transition automatically.

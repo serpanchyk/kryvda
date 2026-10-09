@@ -58,11 +58,11 @@ class AnalysisHealthPool(FakePool):
         ]
 
 
-async def fake_create_pool(_: str) -> FakePool:
+async def fake_create_pool(_: str, **__: object) -> FakePool:
     return FakePool()
 
 
-async def fake_analysis_health_pool(_: str) -> AnalysisHealthPool:
+async def fake_analysis_health_pool(_: str, **__: object) -> AnalysisHealthPool:
     return AnalysisHealthPool()
 
 
@@ -381,3 +381,48 @@ async def test_registry_and_candidate_admin_endpoints(monkeypatch: object) -> No
         assert (await client.post("/alias-candidates/9/ignore")).json()[
             "backfill_jobs_enqueued"
         ] == 0
+
+
+async def test_shared_pool_opens_once_and_closes(monkeypatch: object) -> None:
+    """Concurrent first requests share one pool; closing allows a fresh pool later."""
+    import asyncio
+
+    created: list[dict[str, object]] = []
+    closed: list[bool] = []
+
+    class TrackedPool(FakePool):
+        async def close(self) -> None:
+            closed.append(True)
+
+    async def tracked_create_pool(dsn: str, **options: object) -> TrackedPool:
+        await asyncio.sleep(0)
+        created.append({"dsn": dsn, **options})
+        return TrackedPool()
+
+    monkeypatch.setattr(main.asyncpg, "create_pool", tracked_create_pool)  # type: ignore[union-attr]
+    database = main.SharedPool("postgresql://example", max_size=4)
+    first, second = await asyncio.gather(database.get(), database.get())
+    assert first is second
+    assert created == [{"dsn": "postgresql://example", "min_size": 1, "max_size": 4}]
+    await database.close()
+    await database.close()
+    assert closed == [True]
+    assert await database.get() is not first
+
+
+async def test_requests_reuse_the_shared_pool(tmp_path: Path, monkeypatch: object) -> None:
+    """Several API requests open the PostgreSQL pool only once."""
+    calls: list[str] = []
+
+    async def counting_create_pool(dsn: str, **_: object) -> FakePool:
+        calls.append(dsn)
+        return FakePool()
+
+    monkeypatch.setattr(main.asyncpg, "create_pool", counting_create_pool)  # type: ignore[union-attr]
+    image = tmp_path / "1.avatar"
+    image.write_bytes(b"avatar")
+    service = create_app(ApiSettings(channel_image_storage_path=tmp_path))
+    async with AsyncClient(transport=ASGITransport(app=service), base_url="http://test") as client:
+        for _ in range(3):
+            assert (await client.get("/channel-images/1")).status_code == 200
+    assert len(calls) == 1
