@@ -73,6 +73,26 @@ def test_resolution_matches_inflected_registry_alias() -> None:
     assert resolved[0]["monitored"] is True
 
 
+def test_resolution_leaves_foreign_state_body_mentions_unresolved() -> None:
+    aliases = [
+        {
+            "entity_id": 64,
+            "canonical_name": "Міністерство оборони України",
+            "coarse_type": "state_institution",
+            "monitored": True,
+            "alias": "Міноборони",
+            "normalized_alias": "міноборони",
+        }
+    ]
+    groups = [{"mentions": ["Міноборони"]}]
+
+    foreign = resolve_entity_groups(groups, aliases, "Міноборони рф заявило про удар.")
+    domestic = resolve_entity_groups(groups, aliases, "Міноборони заявило про закупівлю.")
+
+    assert foreign[0]["registry_entity_id"] is None
+    assert domestic[0]["registry_entity_id"] == 64
+
+
 def test_claim_ids_offsets_and_local_context_are_deterministic() -> None:
     text = "Перше речення. Шабунін відповів. Третє речення. Четверте."
     claims = assign_claim_ids(
@@ -112,6 +132,47 @@ def test_claim_ids_offsets_and_local_context_are_deterministic() -> None:
     )
     assert items[0]["target"] == "Віталій Шабунін"
     assert items[0]["local_context"].startswith("Перше")
+
+
+def test_classification_items_name_the_claim_source() -> None:
+    text = "Шабунін заявив, що ЦПК працює. Канал вважає інакше."
+    entities = [
+        {
+            "id": "e1",
+            "mentions": ["Шабунін"],
+            "canonical_name": "Віталій Шабунін",
+            "monitored": True,
+        },
+        {"id": "e2", "mentions": ["ЦПК"], "canonical_name": "ЦПК", "monitored": True},
+    ]
+    claims = [
+        {
+            "id": "c1",
+            "entity_ids": ["e1", "e2"],
+            "normalized_text": "Шабунін заявив, що ЦПК працює.",
+            "evidence_text": "Шабунін заявив, що ЦПК працює.",
+            "evidence_start": 0,
+            "evidence_end": 30,
+            "attribution": {"source_kind": "named_entity", "source_entity_id": "e1"},
+        },
+        {
+            "id": "c2",
+            "entity_ids": ["e2"],
+            "normalized_text": "Канал вважає інакше.",
+            "evidence_text": "Канал вважає інакше.",
+            "evidence_start": 31,
+            "evidence_end": 51,
+            "attribution": {"source_kind": "external_unnamed", "source_entity_id": None},
+        },
+    ]
+
+    items = classification_items(text, entities, claims)
+
+    assert [(item["claim_source"], item["source_is_target"]) for item in items] == [
+        ("Віталій Шабунін", True),
+        ("Віталій Шабунін", False),
+        ("неназване джерело", False),
+    ]
 
 
 def test_classification_batches_and_salvage_keep_only_complete_objects() -> None:

@@ -37,12 +37,14 @@ from telegram_monitor_ai_worker.pipeline import (
 )
 
 DEFAULT_ANNOTATIONS = Path("experiments/datasets/golden_v0/data/annotations.jsonl")
-DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v3_5_2/comparisons.jsonl")
-DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v3_5/comparisons.jsonl")
+DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v3_6/comparisons.jsonl")
+DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v3_5_2/comparisons.jsonl")
+# The tuned old55 partition is defined by the preserved 55-example v3.5 run, not by the baseline.
+OLD55_REFERENCE = Path("experiments/dspy/data/mamay_vs_golden_v3_5/comparisons.jsonl")
 DEFAULT_SEED = Path("infra/postgres/init/003_registry_seed.sql")
 DEFAULT_MODEL = "MamayLM-Gemma-3-27B-IT"
 DEFAULT_BASE_URL = "http://litellm:4000"
-COMPARISON_SCHEMA_VERSION = "mamay_golden_comparison_v3_5_2"
+COMPARISON_SCHEMA_VERSION = "mamay_golden_comparison_v3_6"
 
 
 class InferenceClient(Protocol):
@@ -498,7 +500,7 @@ async def analyze_annotation(
         "prefilter": {"matched_entity_ids": matched},
         "run_metadata": {
             "model": DEFAULT_MODEL,
-            "pipeline_version": "inference_v3_5_2",
+            "pipeline_version": "inference_v3_6",
             "run_timestamp": datetime.now(UTC).isoformat(),
         },
     }
@@ -530,7 +532,7 @@ async def analyze_annotation(
                     "final_parsed_payload": {"entities": fallback_groups},
                 }
             )
-        entities = resolve_entity_groups([*fallback_groups, *model_groups], aliases)
+        entities = resolve_entity_groups([*fallback_groups, *model_groups], aliases, source_text)
         claim_payload = await _run_pass(
             client,
             "claims",
@@ -567,7 +569,7 @@ async def analyze_annotation(
             classifications,
             status,
             degradations,
-            pipeline_version="inference_v3_5_2",
+            pipeline_version="inference_v3_6",
         )
     except Exception as error:
         failure = (
@@ -853,7 +855,7 @@ async def run(arguments: Iterable[str] | None = None) -> None:
             args.concurrency,
         )
         current = summarize_comparisons(args.output)
-        semantic = semantic_benchmark_report(args.output, args.annotations, args.baseline)
+        semantic = semantic_benchmark_report(args.output, args.annotations, OLD55_REFERENCE)
         comparison = (
             compare_summaries(current, summarize_comparisons(args.baseline))
             if args.baseline.exists()

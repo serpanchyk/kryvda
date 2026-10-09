@@ -81,6 +81,26 @@ class CollectionRepository:
         )
         return bool(value)
 
+    async def refresh_anchor_message_id(
+        self, channel_id: int, published_before: datetime
+    ) -> int | None:
+        """Return the newest stored message published before the refresh window.
+
+        Args:
+            channel_id: Internal monitored-channel identifier.
+            published_before: Start of the window whose posts are re-read.
+
+        Returns:
+            Message ID after which live collection re-reads posts, or None without older posts.
+        """
+        value = await self._pool.fetchval(
+            """SELECT MAX(telegram_message_id) FROM raw_posts
+               WHERE channel_id = $1 AND published_at < $2""",
+            channel_id,
+            published_before,
+        )
+        return cast(int | None, value)
+
     async def backfill_before_message_id(self, channel_id: int) -> int | None:
         value = await self._pool.fetchval(
             "SELECT backfill_before_message_id FROM collection_cursors WHERE channel_id = $1",
@@ -99,7 +119,11 @@ class CollectionRepository:
     async def persist_post(
         self, channel: MonitoredChannel, post: TelegramPost, priority: str
     ) -> bool:
-        """Persist immutable evidence and enqueue analysis only for a new text revision."""
+        """Persist immutable evidence and enqueue analysis only when the text changed.
+
+        A changed edit timestamp or attachment list without changed text records a new revision
+        but does not request another analysis of identical text.
+        """
         async with self._pool.acquire() as connection, connection.transaction():
             raw_post_id = await connection.fetchval(
                 """INSERT INTO raw_posts (channel_id, telegram_message_id, published_at, metadata)
@@ -123,6 +147,7 @@ class CollectionRepository:
                 and latest["edited_at"] == post.edited_at
             ):
                 return False
+            text_changed = latest is None or latest["content"] != post.content
             revision_number = (
                 1
                 if latest is None
@@ -147,7 +172,11 @@ class CollectionRepository:
                    JOIN registry_entities AS entity ON entity.id = alias.entity_id
                    WHERE entity.monitored"""
             )
-            if post.content.strip() and matched_registry_entity_ids(post.content, aliases):
+            if (
+                text_changed
+                and post.content.strip()
+                and matched_registry_entity_ids(post.content, aliases)
+            ):
                 await connection.execute(
                     """INSERT INTO analysis_jobs (post_revision_id, priority, trigger_kind)
                        VALUES ($1, $2, 'collection') ON CONFLICT DO NOTHING""",

@@ -169,8 +169,8 @@ class TelegramChannelReader:
             content_base64=base64.b64encode(content).decode("ascii"),
         )
 
-    @staticmethod
-    def _to_post(message: Any) -> ChannelPost:
+    @classmethod
+    def _to_post(cls, message: Any) -> ChannelPost:
         media: list[dict[str, Any]] = []
         if message.media:
             media.append({"kind": type(message.media).__name__})
@@ -183,10 +183,50 @@ class TelegramChannelReader:
                 "grouped_id": message.grouped_id,
                 "reply_to_message_id": getattr(message.reply_to, "reply_to_msg_id", None),
                 "forward": bool(message.fwd_from),
+                "forward_from": cls._forward_origin(message),
                 "views": message.views,
             },
             attachments=media,
         )
+
+    @staticmethod
+    def _forward_origin(message: Any) -> dict[str, Any] | None:
+        """Describe where a forwarded message came from, using only data already received.
+
+        Args:
+            message: Telethon message whose forward header may be present.
+
+        Returns:
+            Origin peer, original message, date, and sender labels, or None for own posts.
+        """
+        header = message.fwd_from
+        if not header:
+            return None
+        peer = getattr(header, "from_id", None)
+        peer_type: str | None = None
+        peer_id: int | None = None
+        for kind, attribute in (
+            ("channel", "channel_id"),
+            ("user", "user_id"),
+            ("chat", "chat_id"),
+        ):
+            value = getattr(peer, attribute, None)
+            if value is not None:
+                peer_type, peer_id = kind, int(value)
+                break
+        date = getattr(header, "date", None)
+        # Telethon attaches the origin chat when Telegram included it in the same response.
+        chat = getattr(getattr(message, "forward", None), "chat", None)
+        return {
+            "peer_type": peer_type,
+            "peer_id": peer_id,
+            "message_id": getattr(header, "channel_post", None),
+            "date": date.isoformat() if date is not None else None,
+            "from_name": getattr(header, "from_name", None),
+            "post_author": getattr(header, "post_author", None),
+            "title": getattr(chat, "title", None),
+            "username": getattr(chat, "username", None),
+        }
 
     @staticmethod
     def _content_type(content: bytes) -> str:

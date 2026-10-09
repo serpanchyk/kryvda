@@ -47,6 +47,21 @@ docker compose up -d --build
 
 Міграції бази даних застосовуються автоматично. Дані зберігаються між оновленнями.
 
+Якщо в описі оновлення сказано, що змінилася версія аналізу (наприклад, v3.6), після запуску
+поставте вже зібрані пости на повторний аналіз. Нові пости при цьому обробляються першими:
+
+```bash
+docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < infra/postgres/maintenance/reanalyze_before_v3_6.sql
+```
+
+Якщо розробник оновив Telegram gateway на Vercel і просить перечитати історію каналів:
+
+```bash
+docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < infra/postgres/maintenance/refresh_collected_history.sql
+```
+
 ## Перевірка стану
 
 ```bash

@@ -3,7 +3,7 @@
 ## Current State
 
 Кривда persists an agreed fixed channel pool, raw posts and
-revisions, current channel avatars, a human-maintained monitored-entity registry, inference-v3.5.1
+revisions, current channel avatars, a human-maintained monitored-entity registry, inference-v3.6
 jobs, pass diagnostics, candidates, claims and claim-target classifications. Production analysis
 uses deterministic target filtering followed by three focused Mamay passes. The API exposes
 service health, collection health, current-avatar URLs, unauthenticated registry/candidate
@@ -31,7 +31,10 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   (`DEPLOY.md`). The Telegram gateway (`apps/telegram-gateway`) runs on Vercel Hobby and holds the
   only Telegram session; the scraper calls it hourly over HTTPS with a shared Bearer token and
   pages each channel through `POST /v1/channels/fetch`. Locally the `telegram` Compose profile runs
-  the same gateway as a container.
+  the same gateway as a container. Every run re-reads the last `COLLECTION_REFRESH_HOURS` (48) of
+  posts, so later edits become new revisions (only changed text is re-analyzed) and stored metadata
+  is refreshed; post metadata includes the forward origin when Telegram provides it. A maintenance
+  script re-reads the whole one-year history once.
 - One root `.env` configures the whole stack; Compose refuses to start without its five required
   values. Only the frontend port is public: PostgreSQL and the API bind to host loopback, and the
   frontend nginx proxies read-only `GET` requests to the API under `/api/`. Containers restart
@@ -65,9 +68,18 @@ pipeline and claim analytics; registry mutations remain outside the UI.
 - The supplied 128-entry registry seed is active and monitored. Approved aliases alone drive
   filtering and resolution. Registry expansion backfills only the latest accessible revision of
   each stored post.
-- The AI worker supports bounded PostgreSQL-coordinated job/provider/classification concurrency,
-  but Compose defaults remain one job and one provider request until throughput benchmarks justify
-  an increase. API `/analysis/health` exposes queue and recent-run operational state.
+- The AI worker runs 16 jobs with at most 16 PostgreSQL-coordinated provider requests; Pass 3
+  batch concurrency stays 1. A 2026-10-09 benchmark ran 8 concurrent requests per process without
+  provider errors at about five times the single-request throughput. API `/analysis/health`
+  exposes queue and recent-run operational state.
+- Inference v3.6 rewrites the three prompts after a manual review of 200 production posts: Pass 2
+  no longer makes a speaker the target of claims that are not about it, extracts evaluative
+  editorial claims (labels, sarcasm, ironic quotes, rhetorical questions, headlines) and reads
+  `…, — X` as attribution to X; Pass 3 receives each claim's source and whether it is the target,
+  so self-presentation and neutral reports of actions are `відсутнє`. State-body aliases in a
+  foreign context (`Міноборони рф`, `МЗС КНР`) no longer admit Ukrainian registry entities. Stored
+  posts are re-analyzed through a maintenance script; a newer completed run of a revision marks the
+  previous one `superseded`, and analytics read only completed statuses.
 - `golden_v0` is an offline, DVC-tracked pilot for annotation-schema validation. The offline Mamay
   comparison generator reuses the worker's inference request boundary to pair each golden input,
   full reviewed annotation, and Mamay output for external review. Parsed outputs that fail local
@@ -113,6 +125,13 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   selected on `old55` raise `diagnostic45` negative-stance and rhetoric F1 above Mamay v3.5.2;
   positive stance and three-way epistemic status remain weaker. Production inference is unchanged
   and does not call external providers.
+- `mamay_vs_golden_v3_6` is the DVC-tracked v3.6 run over the 100 reviewed examples. Against
+  v3.5.2 it misses 8 instead of 20 attacked posts (4 false instead of 1): post-level attack F1
+  0.849 → 0.922, negative-stance recall 0.68 → 0.87, positive-stance precision 0.61 → 0.73,
+  claim coverage 0.59 → 0.62; negative-stance precision falls 0.97 → 0.92. Paired post-level
+  bootstrap 95% intervals exclude zero for attack F1, negative recall and the negative-precision
+  drop. A blind Claude Haiku comparison through subagents (not production, outside DVC) scored
+  higher on attribution and rhetoric but extracted about 30% fewer claims.
 - `registry_post_coverage` is a DVC-tracked snapshot of the number of latest accessible posts
   matching each active registry entity under the production alias policy. Its summary records the
   live queue and a throughput-based ETA; it is an operational snapshot, not a model evaluation.

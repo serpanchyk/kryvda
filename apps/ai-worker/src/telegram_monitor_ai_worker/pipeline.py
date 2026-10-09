@@ -7,6 +7,7 @@ from typing import Any, cast
 
 from monitoring_common.contracts import (
     matched_registry_entities,
+    mention_is_only_foreign_state,
     resolve_registry_mention,
     sanitize_pass_payload_with_actions,
 )
@@ -130,9 +131,15 @@ def salvage_classification_objects(raw_output: str) -> list[dict[str, Any]]:
 
 
 def resolve_entity_groups(
-    groups: Sequence[Mapping[str, Any]], aliases: Sequence[Mapping[str, Any]]
+    groups: Sequence[Mapping[str, Any]],
+    aliases: Sequence[Mapping[str, Any]],
+    source_text: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Resolve exact aliases, merge safe duplicates, and assign local IDs."""
+    """Resolve exact aliases, merge safe duplicates, and assign local IDs.
+
+    With the source text, a state-body mention that only ever names a foreign institution
+    (``Міноборони`` in ``Міноборони рф``) stays an unresolved post-local actor.
+    """
     resolved: list[dict[str, Any]] = []
     by_registry_id: dict[int, dict[str, Any]] = {}
     for group in groups:
@@ -140,6 +147,13 @@ def resolve_entity_groups(
         partitions: dict[int | None, list[str]] = {}
         for mention in mentions:
             row = resolve_registry_mention(mention, aliases)
+            if (
+                row is not None
+                and source_text is not None
+                and row.get("coarse_type") == "state_institution"
+                and mention_is_only_foreign_state(source_text, mention)
+            ):
+                row = None
             registry_id = int(row["entity_id"]) if row is not None else None
             partitions.setdefault(registry_id, []).append(mention)
         for registry_id, partition_mentions in partitions.items():
@@ -197,10 +211,17 @@ def classification_items(
     entities: Sequence[Mapping[str, Any]],
     claims: Sequence[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Build one context-rich item per monitored claim-target pair."""
+    """Build one context-rich item per monitored claim-target pair.
+
+    Each item names the claim's responsible source so Pass 3 classifies that source's stance and
+    can tell a target's self-presentation from another source's evaluation of it.
+    """
     entities_by_id = {cast(str, entity["id"]): entity for entity in entities}
     items: list[dict[str, Any]] = []
     for claim in claims:
+        attribution = cast(Mapping[str, Any], claim["attribution"])
+        source_id = attribution.get("source_entity_id")
+        claim_source = _claim_source_label(attribution, entities_by_id)
         for entity_id in cast(list[str], claim["entity_ids"]):
             entity = entities_by_id[entity_id]
             if not bool(entity["monitored"]):
@@ -209,7 +230,9 @@ def classification_items(
                 {
                     "claim_id": claim["id"],
                     "entity_id": entity_id,
-                    "target": entity["canonical_name"] or cast(list[str], entity["mentions"])[0],
+                    "target": _entity_label(entity),
+                    "claim_source": claim_source,
+                    "source_is_target": source_id == entity_id,
                     "normalized_claim": claim["normalized_text"],
                     "evidence_text": claim["evidence_text"],
                     "local_context": local_context(
@@ -220,6 +243,22 @@ def classification_items(
                 }
             )
     return items
+
+
+def _entity_label(entity: Mapping[str, Any]) -> str:
+    return cast(str, entity["canonical_name"] or cast(list[str], entity["mentions"])[0])
+
+
+def _claim_source_label(
+    attribution: Mapping[str, Any], entities_by_id: Mapping[str, Mapping[str, Any]]
+) -> str:
+    """Name the party responsible for a claim in the Ukrainian Pass 3 vocabulary."""
+    source_id = attribution.get("source_entity_id")
+    if attribution.get("source_kind") == "named_entity" and source_id in entities_by_id:
+        return _entity_label(entities_by_id[cast(str, source_id)])
+    if attribution.get("source_kind") == "external_unnamed":
+        return "неназване джерело"
+    return "канал"
 
 
 def local_context(source_text: str, evidence_start: int, evidence_end: int) -> str:
@@ -251,7 +290,7 @@ def final_payload(
     classifications: Sequence[Mapping[str, Any]],
     status: str = "completed",
     degradations: Sequence[Mapping[str, Any]] = (),
-    pipeline_version: str = "inference_v3_5_2",
+    pipeline_version: str = "inference_v3_6",
 ) -> dict[str, Any]:
     """Build the inspectable immutable v3 result document."""
     return {

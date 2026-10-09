@@ -39,6 +39,17 @@ def test_retry_recovery_migration_is_registered_and_deduplicates_revisions() -> 
     assert "'012_scheduled_analysis_retries.sql'" in fresh_init
 
 
+def test_inference_v3_6_migration_adds_superseded_runs() -> None:
+    migration = (POSTGRES_ROOT / "migrations" / "013_inference_v3_6.sql").read_text()
+    runner = (POSTGRES_ROOT / "migrate.sql").read_text()
+    fresh_init = (POSTGRES_ROOT / "init" / "013_inference_v3_6.sql").read_text()
+
+    assert "'superseded'" in migration
+    assert "SET DEFAULT 'inference_v3_6'" in migration
+    assert "\\i /database/migrations/013_inference_v3_6.sql" in runner
+    assert "'013_inference_v3_6.sql'" in fresh_init
+
+
 def test_v3_base_schema_can_retain_partial_transition_registry() -> None:
     """Allow migration 003 to rebuild analysis tables without dropping registry data."""
     content = (POSTGRES_ROOT / "init" / "002_inference_v3.sql").read_text()

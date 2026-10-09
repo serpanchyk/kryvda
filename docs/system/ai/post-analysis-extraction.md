@@ -1,11 +1,13 @@
-# Inference v3.5.1
+# Inference v3.6
 
 Production analysis is target monitoring. A Post Revision is eligible only when a Unicode-aware,
 case-insensitive match finds an approved alias of a monitored registry entity. Exact matches use
 letter/digit boundaries. A conservative deterministic Ukrainian/Russian nominal-inflection
 matcher also recognizes grammatical forms token by token. A bare inflected surname from a person
 alias is accepted only when it uniquely identifies one monitored registry entity; it does not
-perform fuzzy matching.
+perform fuzzy matching. A state-body alias whose every occurrence names a foreign institution
+(`Міноборони рф`, `МЗС КНР`, `російський Генштаб`) does not admit the Ukrainian entity, and a Pass 1
+mention that only ever occurs in such a context stays an unresolved post-local actor.
 
 The AI worker makes exactly three semantic model calls:
 
@@ -28,7 +30,9 @@ partitioned by uniquely resolvable mention, leaving ambiguous text as a post-loc
 2 receives the whole post. Its deterministic sanitizer drops only invalid or non-monitored claims,
 deduplicates retained claims, and realigns uniquely recoverable quote/dash/whitespace evidence to
 the exact source substring. `claims: []` is valid. Pass 3 receives the normalized claim, exact
-evidence, and the evidence sentences with one neighboring sentence on each side.
+evidence, the evidence sentences with one neighboring sentence on each side, the claim's
+responsible source (`claim_source`: `канал`, `неназване джерело` or the actor's name) and
+`source_is_target`, so a target's self-presentation is never read as another source's evaluation.
 
 Schemas live in `monitoring_common/contracts/schemas/inference_v3_*`. Prompts are Ukrainian and
 technical JSON keys remain English. IDs, canonical resolution, offsets, candidates, persistence,
@@ -55,10 +59,16 @@ whitespace even when the token budget was raised.
 
 Final results are stored relationally as post-local entities, atomic claims, claim/entity links,
 and claim-target classifications. `analysis_runs.final_payload` keeps an inspectable immutable
-v3.5.1 document, including completion/degradation status. The v3.5.1 prompt restricts
-`external_unnamed` to explicit unnamed-source attribution and defaults all unanchored claims to
-`channel_editorial`; it also prevents a reported actor's attack on a target from being mistaken
-for the channel's negative stance toward that target. The v3.5 rhetoric constraints remain intact.
+v3.6 document, including completion/degradation status. A later completed run of the same revision
+marks the earlier completed run `superseded`.
+
+The v3.6 prompts came from a manual review of 200 production posts and a blind comparison on the
+100-example golden set (`mamay_vs_golden_v3_6`). Pass 1 keeps named speakers and media and
+separates foreign bodies. Pass 2 does not make a speaker a claim target when the claim is not about
+it, extracts evaluative editorial claims expressed through labels, sarcasm, ironic quotation marks,
+rhetorical questions or headlines, and treats the news format `…, — X` as attribution to X. Pass 3
+classifies the stance of the claim's source: neutral reports of a target's actions or successes,
+a target's self-presentation, another actor's attack on a target and polls are `відсутнє`.
 Aggregation and product analytics are
 intentionally deferred.
 

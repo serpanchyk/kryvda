@@ -52,6 +52,46 @@ class InferenceValidationError(ValueError):
         super().__init__("; ".join(issue.message for issue in issues))
 
 
+_FOREIGN_STATE_SUFFIX = re.compile(
+    r"[\s(«\"]*(?:рф|росії|россии|російської\s+федерації|российской\s+федерации|кнр|кндр|"
+    r"китаю|китая|сша|туреччини|турции|білорусі|беларуси|ірану|ирана|польщі|польши|"
+    r"угорщини|венгрии|німеччини|германии|франції|франции|великобританії|великобритании|"
+    r"британії|британии|ізраїлю|израиля|грузії|грузии|молдови|молдовы|румунії|румынии|"
+    r"словаччини|словакии|японії|японии|індії|индии)(?!\w)",
+    re.IGNORECASE,
+)
+_FOREIGN_STATE_PREFIX = re.compile(
+    r"(?:російськ|российск|китайськ|китайск|американськ|американск|турецьк|турецк|"
+    r"білоруськ|белорусск|іранськ|иранск|польськ|польск|угорськ|венгерск|німецьк|немецк|"
+    r"французьк|французск|британськ|британск|ізраїльськ|израильск|грузинськ|грузинск)"
+    r"\w*\s+$",
+    re.IGNORECASE,
+)
+
+
+def foreign_state_context(source_text: str, start: int, end: int) -> bool:
+    """Tell whether a state-body alias occurrence names another country's institution.
+
+    ``Міноборони рф``, ``МЗС КНР`` and ``російський Генштаб`` share Ukrainian registry aliases
+    but never refer to the monitored Ukrainian body.
+    """
+    if _FOREIGN_STATE_SUFFIX.match(source_text, end) is not None:
+        return True
+    return _FOREIGN_STATE_PREFIX.search(source_text[max(0, start - 40) : start]) is not None
+
+
+def mention_is_only_foreign_state(source_text: str, mention: str) -> bool:
+    """Return True when every exact occurrence of a mention carries a foreign-state marker."""
+    starts: list[int] = []
+    position = source_text.find(mention)
+    while position != -1:
+        starts.append(position)
+        position = source_text.find(mention, position + 1)
+    return bool(starts) and all(
+        foreign_state_context(source_text, start, start + len(mention)) for start in starts
+    )
+
+
 def normalize_match_text(value: str) -> str:
     """Normalize registry matching text without performing fuzzy inference."""
     return " ".join(unicodedata.normalize("NFKC", value).casefold().split())
@@ -168,13 +208,24 @@ def _alias_surfaces(source_text: str, alias: str) -> list[tuple[int, str]]:
 def _registry_alias_occurs(source_text: str, row: Mapping[str, Any]) -> bool:
     """Apply entity-specific registry matching policy before generic morphology.
 
+    A state-body alias whose every occurrence names a foreign institution (``Міноборони рф``)
+    does not admit the Ukrainian registry entity.
+
     ``ЧЕСНО`` is an organization acronym that is also the common Ukrainian adverb/adjective
     stem.  It must therefore never enter the generic inflection expansion used for ordinary
     registry aliases.
     """
     alias = cast(str, row["alias"])
     if row.get("canonical_name") != "Рух ЧЕСНО":
-        return alias_occurs(source_text, alias)
+        if not alias_occurs(source_text, alias):
+            return False
+        if row.get("coarse_type") != "state_institution":
+            return True
+        surfaces = _alias_surfaces(source_text, alias)
+        return not surfaces or any(
+            not foreign_state_context(source_text, start, start + len(surface))
+            for start, surface in surfaces
+        )
     normalized_alias = normalize_match_text(alias)
     if normalized_alias == "чесно":
         return _exact_case_sensitive_occurs(source_text, "ЧЕСНО")
@@ -188,7 +239,14 @@ def _registry_alias_surfaces(source_text: str, row: Mapping[str, Any]) -> list[t
     """Find source spans admitted by the corresponding registry alias policy."""
     alias = cast(str, row["alias"])
     if row.get("canonical_name") != "Рух ЧЕСНО":
-        return _alias_surfaces(source_text, alias)
+        surfaces = _alias_surfaces(source_text, alias)
+        if row.get("coarse_type") != "state_institution":
+            return surfaces
+        return [
+            (start, surface)
+            for start, surface in surfaces
+            if not foreign_state_context(source_text, start, start + len(surface))
+        ]
     normalized_alias = normalize_match_text(alias)
     if normalized_alias == "чесно":
         return _exact_case_sensitive_surfaces(source_text, "ЧЕСНО")

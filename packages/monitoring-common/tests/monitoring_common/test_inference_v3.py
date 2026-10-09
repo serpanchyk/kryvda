@@ -4,7 +4,9 @@ import pytest
 from monitoring_common.contracts import (
     InferenceValidationError,
     alias_occurs,
+    foreign_state_context,
     matched_registry_entity_ids,
+    mention_is_only_foreign_state,
     normalize_match_text,
     parse_json_object,
     sanitize_pass_payload,
@@ -79,6 +81,49 @@ def test_chesno_prefilter_requires_the_organization_name() -> None:
     assert matched_registry_entity_ids("Рух ЧЕСНО опублікував заяву.", aliases) == [22]
     assert matched_registry_entity_ids("рух ЧЕСНО опублікував заяву.", aliases) == [22]
     assert matched_registry_entity_ids("У ЧЕСНО заявили про порушення.", aliases) == [22]
+
+
+STATE_BODIES = [
+    {
+        "entity_id": 64,
+        "canonical_name": "Міністерство оборони України",
+        "coarse_type": "state_institution",
+        "monitored": True,
+        "alias": "Міноборони",
+    },
+    {
+        "entity_id": 73,
+        "canonical_name": "Міністерство закордонних справ України",
+        "coarse_type": "state_institution",
+        "monitored": True,
+        "alias": "МЗС",
+    },
+]
+
+
+def test_foreign_state_bodies_do_not_admit_ukrainian_registry_entities() -> None:
+    assert (
+        matched_registry_entity_ids("Міноборони рф заявило про збиття дронів.", STATE_BODIES) == []
+    )
+    assert matched_registry_entity_ids("У Міноборони Росії заявили.", STATE_BODIES) == []
+    assert matched_registry_entity_ids("Китайське МЗС відповіло.", STATE_BODIES) == []
+    assert matched_registry_entity_ids("Заява МЗС КНР.", STATE_BODIES) == []
+    assert matched_registry_entity_ids("Міноборони повідомило про закупівлю.", STATE_BODIES) == [64]
+    assert matched_registry_entity_ids(
+        "Міноборони рф збрехало, а Міноборони України спростувало.", STATE_BODIES
+    ) == [64]
+
+
+def test_foreign_context_applies_only_to_state_bodies_and_exact_mentions() -> None:
+    person = [{**STATE_BODIES[0], "coarse_type": "person", "alias": "Рф"}]
+    text = "Міноборони рф заявило"
+
+    assert foreign_state_context(text, 0, len("Міноборони"))
+    assert not foreign_state_context("Міноборони заявило", 0, len("Міноборони"))
+    assert mention_is_only_foreign_state(text, "Міноборони")
+    assert not mention_is_only_foreign_state("Міноборони заявило", "Міноборони")
+    assert not mention_is_only_foreign_state(text, "відсутня згадка")
+    assert matched_registry_entity_ids("Рф виступив", person) == [64]
 
 
 def test_attribution_examples_preserve_editorial_and_explicit_unnamed_sources() -> None:

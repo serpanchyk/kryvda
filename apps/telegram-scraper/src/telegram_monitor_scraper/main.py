@@ -1,6 +1,7 @@
 """Telegram collection worker entry point."""
 
 import asyncio
+from datetime import timedelta
 from pathlib import Path
 
 import asyncpg
@@ -25,6 +26,8 @@ class ScraperSettings(BaseServiceSettings):
     collection_poll_interval_seconds: int = 3600
     collection_page_size: int = Field(default=200, ge=1, le=500)
     collection_max_pages_per_channel: int = Field(default=10, ge=1)
+    # Stored posts this recent are re-read each run to observe edits and current metadata.
+    collection_refresh_hours: int = Field(default=48, ge=0)
     channel_image_storage_path: Path = Path("/var/lib/telegram-monitor/channel-images")
 
 
@@ -46,6 +49,7 @@ async def run(stop_event: asyncio.Event | None = None) -> None:
         client,
         ChannelAvatarStorage(settings.channel_image_storage_path),
         settings.collection_max_pages_per_channel,
+        timedelta(hours=settings.collection_refresh_hours),
     )
     stop = stop_event or asyncio.Event()
     logger.info(

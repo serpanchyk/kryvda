@@ -24,8 +24,8 @@ Production deployment is documented in `DEPLOY.md` (department server) and
 `docs/deploy/telegram-gateway-vercel.md` (Telegram gateway).
 
 Compose runs the versioned `migrate` service before API, scraper, and AI worker startup. Fresh
-volumes are marked at v3.5.2 by their initialization scripts. For an existing legacy volume the
-service detects the missing v3 registry schema, applies migrations `003` through `010`, preserves
+volumes are marked at v3.6 by their initialization scripts. For an existing legacy volume the
+service detects the missing v3 registry schema, applies migrations `003` through `013`, preserves
 raw posts/revisions, and re-enqueues matching latest revisions. Migration `003` intentionally
 replaces obsolete analysis jobs/results; take a PostgreSQL backup before the first legacy upgrade.
 
@@ -35,9 +35,29 @@ Inspect migration output with:
 docker compose logs migrate
 ```
 
-The AI worker defaults to one job and one provider request at a time. Benchmark queue throughput
-and provider errors before raising `ANALYSIS_CONCURRENCY`, `LLM_MAX_CONCURRENCY`, or
-`ANALYSIS_CLASSIFICATION_CONCURRENCY` in `.env`.
+The AI worker runs 16 jobs and at most 16 concurrent provider requests by default
+(`ANALYSIS_CONCURRENCY`, `LLM_MAX_CONCURRENCY`). A benchmark on 2026-10-09 ran 8 concurrent
+requests per process without provider errors at about five times the single-request throughput.
+`ANALYSIS_CLASSIFICATION_CONCURRENCY` stays 1 because Pass 3 batches share the same provider slots.
+
+After an inference version change, re-analyze stored posts with the matching maintenance script.
+Live jobs keep priority; each finished run supersedes the previous result of its revision, so
+analytics never count both:
+
+```bash
+docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < infra/postgres/maintenance/reanalyze_before_v3_6.sql
+```
+
+The scraper re-reads posts from the last `COLLECTION_REFRESH_HOURS` (48 by default) on every run,
+so recent edits and current Telegram metadata are recorded. To re-read the whole one-year history
+once, for example after the gateway started returning new metadata, reset the backfill cursors;
+the history then arrives over the following hourly runs:
+
+```bash
+docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < infra/postgres/maintenance/refresh_collected_history.sql
+```
 
 Run the opt-in PostgreSQL pipeline smoke test against an isolated migrated database with:
 

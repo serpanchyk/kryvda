@@ -874,7 +874,7 @@ JOIN analysis_runs AS run ON run.post_revision_id = revision.id
 WHERE post.channel_id = $1 AND post.deleted_at IS NULL AND post.inaccessible_at IS NULL
   AND revision.id = (SELECT latest.id FROM post_revisions AS latest
       WHERE latest.raw_post_id = post.id ORDER BY latest.revision_number DESC LIMIT 1)
-  AND run.status <> 'completed' AND ($2::timestamptz IS NULL OR post.published_at >= $2)
+  AND run.status NOT IN ('completed', 'superseded') AND ($2::timestamptz IS NULL OR post.published_at >= $2)
   AND ($3::timestamptz IS NULL OR post.published_at < $3)"""
 
 _INCOMPLETE_SQL = """SELECT count(DISTINCT post.id) FROM raw_posts AS post
@@ -883,7 +883,7 @@ JOIN analysis_runs AS run ON run.post_revision_id = revision.id
 JOIN post_entities AS post_entity ON post_entity.run_id = run.id
 WHERE post_entity.registry_entity_id = $1 AND post.deleted_at IS NULL AND post.inaccessible_at IS NULL
   AND revision.id = (SELECT latest.id FROM post_revisions AS latest WHERE latest.raw_post_id = post.id ORDER BY latest.revision_number DESC LIMIT 1)
-  AND run.status <> 'completed' AND ($2::timestamptz IS NULL OR post.published_at >= $2)
+  AND run.status NOT IN ('completed', 'superseded') AND ($2::timestamptz IS NULL OR post.published_at >= $2)
   AND ($3::timestamptz IS NULL OR post.published_at < $3)"""
 
 _EVIDENCE_SQL = (

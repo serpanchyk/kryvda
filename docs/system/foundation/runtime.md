@@ -13,8 +13,11 @@ long-running service restarts automatically. The scraper runs as a single restar
 collects active approved channels hourly by default. For each channel it calls
 `POST /v1/channels/fetch` page by page, strictly sequentially: the first page returns identity and
 avatar, each page returns up to 200 live posts after the live cursor and up to 200 historical
-posts within the one-year backfill window. Live posts are caught up within a run; history arrives
-over several runs within a budget of 10 pages per channel. A Telegram flood wait longer than
+posts within the one-year backfill window. The first live page of each run starts before the last
+`COLLECTION_REFRESH_HOURS` (48 by default), so recent edits become new revisions and stored
+metadata is refreshed; only a changed text enqueues analysis. Live posts are caught up within a
+run; history arrives over several runs within a budget of 10 pages per channel. Post metadata
+records the forward origin (peer, original message, date, sender labels) when Telegram provides it. A Telegram flood wait longer than
 20 seconds returns HTTP 429 and ends the run. The gateway opens and closes one Telegram connection
 per request and never serves two requests at once, so the session is never used concurrently.
 
@@ -37,9 +40,11 @@ deterministic 0–10% jitter. Expired leases follow the same scheduled-retry lif
 jobs always lease before due backfill and scheduled retries. Raw attempts, sanitized payloads,
 validation errors, provider finish metadata and final per-pass outcomes are durable.
 
-The default worker has one job task and one PostgreSQL advisory-lock provider slot. Settings can
-raise bounded job, provider, and Pass 3 batch concurrency after measurement; advisory slots apply
-across Compose-scaled worker containers without introducing another runtime dependency. The API exposes queue and recent-run state at `/analysis/health`, including scheduled-retry count,
+The Compose worker runs 16 job tasks and 16 PostgreSQL advisory-lock provider slots; Pass 3
+batch concurrency stays 1. Advisory slots apply across Compose-scaled worker containers without
+introducing another runtime dependency. A revision may be analyzed again after an inference
+change; the newer completed run marks the earlier completed run `superseded`, and analytics read
+only completed statuses. The API exposes queue and recent-run state at `/analysis/health`, including scheduled-retry count,
 the nearest retry time, and retry counts by error kind. Terminal `failed` records are retained
 only as historical audit records or superseded work.
 

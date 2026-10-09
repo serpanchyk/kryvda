@@ -154,6 +154,16 @@ async def test_backfill_stops_at_cutoff_and_normalizes_messages() -> None:
         "grouped_id": None,
         "reply_to_message_id": 4,
         "forward": True,
+        "forward_from": {
+            "peer_type": None,
+            "peer_id": None,
+            "message_id": None,
+            "date": None,
+            "from_name": None,
+            "post_author": None,
+            "title": None,
+            "username": None,
+        },
         "views": 3,
     }
     assert client.iter_calls[-1] == {"limit": 200}
@@ -290,3 +300,39 @@ def test_reader_from_settings_builds_an_unconnected_telethon_client() -> None:
 
     assert client.flood_sleep_threshold == 20
     assert not client.is_connected()
+
+
+async def test_forwarded_post_keeps_its_origin() -> None:
+    forwarded_at = datetime(2026, 10, 1, 8, 30, tzinfo=UTC)
+    client = FakeTelegramClient(
+        [
+            message(
+                2,
+                fwd_from=SimpleNamespace(
+                    from_id=SimpleNamespace(channel_id=777),
+                    channel_post=41,
+                    date=forwarded_at,
+                    from_name=None,
+                    post_author="Автор",
+                ),
+                forward=SimpleNamespace(chat=SimpleNamespace(title="Джерело", username="source")),
+            ),
+            message(3),
+        ]
+    )
+
+    response = await reader_for(client).fetch(
+        ChannelFetchRequest(channel=PUBLIC, live_after_message_id=1, include_avatar=False)
+    )
+
+    assert response.newer_posts[0].metadata["forward_from"] == {
+        "peer_type": "channel",
+        "peer_id": 777,
+        "message_id": 41,
+        "date": "2026-10-01T08:30:00+00:00",
+        "from_name": None,
+        "post_author": "Автор",
+        "title": "Джерело",
+        "username": "source",
+    }
+    assert response.newer_posts[1].metadata["forward_from"] is None

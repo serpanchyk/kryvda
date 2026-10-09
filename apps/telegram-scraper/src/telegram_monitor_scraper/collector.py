@@ -14,6 +14,7 @@ from telegram_monitor_scraper.models import (
 from telegram_monitor_scraper.repository import CollectionRepository
 
 BACKFILL_DAYS = 365
+DEFAULT_REFRESH_WINDOW = timedelta(hours=48)
 
 
 class ChannelClient(Protocol):
@@ -28,13 +29,16 @@ class Collector:
     """Collect live posts first, then consume a bounded historical backlog.
 
     Each channel is read in pages. Live posts are always caught up within a run when the page
-    budget allows; the one-year history arrives gradually over several runs.
+    budget allows; the one-year history arrives gradually over several runs. The first live page
+    of every run starts before the refresh window, so recent edits and current Telegram metadata
+    of already-stored posts are observed again.
 
     Args:
         repository: PostgreSQL collection state.
         client: Telegram gateway client.
         avatar_storage: Shared avatar volume writer.
         max_pages_per_channel: Gateway requests allowed per channel in one run.
+        refresh_window: Age of stored posts re-read on each run; zero disables re-reading.
     """
 
     def __init__(
@@ -43,11 +47,13 @@ class Collector:
         client: ChannelClient,
         avatar_storage: ChannelAvatarStorage,
         max_pages_per_channel: int = 10,
+        refresh_window: timedelta = DEFAULT_REFRESH_WINDOW,
     ) -> None:
         self._repository = repository
         self._client = client
         self._avatar_storage = avatar_storage
         self._max_pages_per_channel = max_pages_per_channel
+        self._refresh_window = refresh_window
 
     async def collect_once(self) -> None:
         for channel in await self._repository.active_channels():
@@ -73,7 +79,7 @@ class Collector:
         cutoff = datetime.now(UTC) - timedelta(days=BACKFILL_DAYS)
         avatar_error: str | None = None
         for page in range(self._max_pages_per_channel):
-            request = await self._next_request(channel, cutoff, include_avatar=page == 0)
+            request = await self._next_request(channel, cutoff, first_page=page == 0)
             result = await self._client.fetch(channel, request)
             if page == 0:
                 await self._repository.update_channel_identity(
@@ -89,17 +95,23 @@ class Collector:
         return avatar_error
 
     async def _next_request(
-        self, channel: MonitoredChannel, cutoff: datetime, include_avatar: bool
+        self, channel: MonitoredChannel, cutoff: datetime, first_page: bool
     ) -> ChannelFetchRequest:
         live_after: int | None = None
         if await self._repository.live_cursor_exists(channel.id):
             live_after = await self._repository.latest_message_id(channel.id)
+            if first_page and self._refresh_window > timedelta(0):
+                anchor = await self._repository.refresh_anchor_message_id(
+                    channel.id, datetime.now(UTC) - self._refresh_window
+                )
+                if anchor is not None:
+                    live_after = min(live_after, anchor)
         backfill: BackfillWindow | None = None
         if not await self._repository.backfill_complete(channel.id):
             backfill = BackfillWindow(
                 await self._repository.backfill_before_message_id(channel.id), cutoff
             )
-        return ChannelFetchRequest(live_after, backfill, include_avatar)
+        return ChannelFetchRequest(live_after, backfill, first_page)
 
     async def _apply_avatar(
         self, channel: MonitoredChannel, result: ChannelFetchResult

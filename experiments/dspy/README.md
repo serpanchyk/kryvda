@@ -140,6 +140,20 @@ uv run dvc add experiments/dspy/data/mamay_vs_golden_v3_5
 uv run dvc status
 ```
 
+## Inference v3.6 comparison
+
+The runner now defaults to `mamay_vs_golden_v3_6`, compares contract health with
+`mamay_vs_golden_v3_5_2`, and always takes the tuned `old55` partition from the preserved
+55-row v3.5 run. With `--concurrency 16` the 100 examples finish in about four minutes.
+
+```bash
+docker compose run --rm --no-deps -w /workspace -v "$PWD:/workspace" \
+  -e PYTHONPATH=/workspace/apps/ai-worker/src:/workspace/packages/monitoring-common/src \
+  ai-worker python /workspace/experiments/dspy/src/mamay_golden_v2.py --concurrency 16
+uv run python experiments/dspy/src/mamay_golden_v2.py --validate-only
+uv run dvc add experiments/dspy/data/mamay_vs_golden_v3_6
+```
+
 ## Jev classification-only comparison
 
 `jev_golden_v1.py` evaluates TypeSafe's Jev typed-decision model, reached through OpenRouter's

@@ -21,6 +21,14 @@ def retry_delay(*, job_id: int, attempts: int, retry_round: int, fast_attempts: 
     return timedelta(seconds=base + (base * jitter_percent // 100))
 
 
+# A finished re-analysis replaces the earlier completed result of the same revision.
+SUPERSEDE_PREVIOUS_RUNS_SQL = """UPDATE analysis_runs SET status = 'superseded'
+   WHERE post_revision_id = (SELECT post_revision_id FROM analysis_runs WHERE id = $1)
+     AND id <> $1
+     AND status IN ('completed', 'completed_with_partial_classification',
+                    'completed_with_entity_fallback')"""
+
+
 class AnalysisJobRepository:
     """Own durable v3 jobs, pass diagnostics, candidates, and final results."""
 
@@ -83,9 +91,9 @@ class AnalysisJobRepository:
             run_id = await connection.fetchval(
                 """INSERT INTO analysis_runs
                    (job_id, post_revision_id, model_name, pipeline_version)
-                   VALUES ($1, $2, $3, 'inference_v3_5_2')
+                   VALUES ($1, $2, $3, 'inference_v3_6')
                    ON CONFLICT (job_id) DO UPDATE
-                   SET status = 'running', pipeline_version = 'inference_v3_5_2',
+                   SET status = 'running', pipeline_version = 'inference_v3_6',
                        failure_kind = NULL, failure_detail = NULL, completed_at = NULL
                    RETURNING id""",
                 row["id"],
@@ -152,6 +160,7 @@ class AnalysisJobRepository:
                           completed_at = now() WHERE id = $1""",
                 job.run_id,
             )
+            await connection.execute(SUPERSEDE_PREVIOUS_RUNS_SQL, job.run_id)
 
     async def record_attempt(
         self,
@@ -402,6 +411,7 @@ class AnalysisJobRepository:
                 run_status,
                 json.dumps(final_payload, ensure_ascii=False),
             )
+            await connection.execute(SUPERSEDE_PREVIOUS_RUNS_SQL, job.run_id)
             await connection.execute(
                 """UPDATE analysis_jobs SET status = 'completed', leased_until = NULL,
                           completed_at = now(), last_error_kind = NULL, last_error = NULL,

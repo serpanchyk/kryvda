@@ -97,4 +97,12 @@ SELECT NOT EXISTS (
 INSERT INTO schema_migrations (version) VALUES ('012_scheduled_analysis_retries.sql');
 \endif
 
+SELECT NOT EXISTS (
+    SELECT 1 FROM schema_migrations WHERE version = '013_inference_v3_6.sql'
+) AS apply_013 \gset
+\if :apply_013
+\i /database/migrations/013_inference_v3_6.sql
+INSERT INTO schema_migrations (version) VALUES ('013_inference_v3_6.sql');
+\endif
+
 COMMIT;

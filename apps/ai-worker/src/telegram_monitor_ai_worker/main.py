@@ -202,7 +202,7 @@ class AnalysisWorker:
                 final_parsed_payload={"entities": fallback_groups},
                 fallback="prefilter_entities_only",
             )
-        entities = resolve_entity_groups([*fallback_groups, *model_groups], aliases)
+        entities = resolve_entity_groups([*fallback_groups, *model_groups], aliases, job.post_text)
         approved_aliases = {
             (int(alias["entity_id"]), str(alias["normalized_alias"])) for alias in aliases
         }
@@ -724,7 +724,7 @@ async def run(
         raw_client, ProviderSlotLimiter(pool, settings.llm_max_concurrency)
     )
     worker = AnalysisWorker(AnalysisJobRepository(pool), client, settings, logger)
-    logger.info("analysis worker started", extra={"pipeline_version": "inference_v3_5_2"})
+    logger.info("analysis worker started", extra={"pipeline_version": "inference_v3_6"})
 
     async def worker_loop() -> None:
         """Lease jobs until shutdown, polling only while this worker is idle."""

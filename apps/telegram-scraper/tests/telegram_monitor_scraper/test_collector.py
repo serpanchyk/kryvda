@@ -17,6 +17,7 @@ class FakeRepository:
     def __init__(self, channels: list[MonitoredChannel] | None = None) -> None:
         self.channels = channels or [MonitoredChannel(1, "example_channel", 1, "public")]
         self.live_cursor = 0
+        self.refresh_anchor: int | None = None
         self.backfill_cursor: int | None = None
         self.complete = False
         self.cursor_exists = True
@@ -35,6 +36,11 @@ class FakeRepository:
 
     async def live_cursor_exists(self, channel_id: int) -> bool:
         return self.cursor_exists
+
+    async def refresh_anchor_message_id(
+        self, channel_id: int, published_before: datetime
+    ) -> int | None:
+        return self.refresh_anchor
 
     async def update_channel_identity(
         self, channel_id: int, peer_id: int, username: str | None, title: str | None
@@ -320,3 +326,49 @@ async def test_rate_limit_stops_the_whole_run() -> None:
     assert repository.errors == ["Telegram gateway rate limited"]
     assert len(gateway.requests) == 0
     assert repository.successes == []
+
+
+async def test_first_live_page_re_reads_the_refresh_window() -> None:
+    repository = FakeRepository()
+    repository.complete = True
+    repository.live_cursor = 5
+    repository.refresh_anchor = 3
+    gateway = FakeGateway([post(message_id) for message_id in range(1, 8)], [], page_size=3)
+    collector = Collector(repository, gateway, FakeAvatarStorage())  # type: ignore[arg-type]
+
+    await collector.collect_once()
+
+    assert [request.live_after_message_id for request in gateway.requests] == [3, 6]
+    assert repository.persisted == [(message_id, "live") for message_id in range(4, 8)]
+    assert repository.live_cursor == 7
+
+
+async def test_refresh_never_moves_live_collection_forward() -> None:
+    repository = FakeRepository()
+    repository.complete = True
+    repository.live_cursor = 5
+    repository.refresh_anchor = 9
+    gateway = FakeGateway([post(6)], [])
+    collector = Collector(repository, gateway, FakeAvatarStorage())  # type: ignore[arg-type]
+
+    await collector.collect_once()
+
+    assert gateway.requests[0].live_after_message_id == 5
+
+
+async def test_zero_refresh_window_disables_re_reading() -> None:
+    repository = FakeRepository()
+    repository.complete = True
+    repository.live_cursor = 5
+    repository.refresh_anchor = 3
+    gateway = FakeGateway([post(6)], [])
+    collector = Collector(
+        repository,
+        gateway,
+        FakeAvatarStorage(),  # type: ignore[arg-type]
+        refresh_window=timedelta(0),
+    )
+
+    await collector.collect_once()
+
+    assert gateway.requests[0].live_after_message_id == 5
