@@ -189,13 +189,18 @@ export function AttributionSource({
 export function ClaimMetadata({
   data,
   actions,
+  hidePublication = false,
+  className,
 }: {
   data: ClaimMetadataData;
   actions?: ClaimMetadataActions;
+  /** Omit channel and date where the surrounding page already states them. */
+  hidePublication?: boolean;
+  className?: string;
 }) {
   return (
-    <div className="grid gap-3 border-y border-rule py-3 text-sm sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-start">
-      <div>
+    <div className={cn("grid grid-cols-2 gap-x-4 gap-y-3 border-t border-rule pt-3 text-sm xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-start", className)}>
+      {hidePublication ? null : <div>
         <p className="eyebrow text-muted-foreground">Опубліковано</p>
         <MetadataValue action={actions?.channel}>
           {data.channel_title}
@@ -203,7 +208,7 @@ export function ClaimMetadata({
         <p className="mt-0.5 text-xs text-muted-foreground">
           {formatDateTime(data.published_at)}
         </p>
-      </div>
+      </div>}
       <div>
         <p className="eyebrow text-muted-foreground">Ціль</p>
         <MetadataValue action={actions?.entity}>
@@ -211,7 +216,7 @@ export function ClaimMetadata({
         </MetadataValue>
       </div>
       <AttributionSource data={data} action={actions?.source} />
-      <div className="flex flex-wrap items-center gap-2 sm:col-span-2 xl:col-span-3">
+      <div className="col-span-2 flex flex-wrap items-center gap-2 xl:col-span-3">
         <span className="eyebrow text-muted-foreground">Статус</span>
         <EpistemicBadge
           status={data.epistemic_status}

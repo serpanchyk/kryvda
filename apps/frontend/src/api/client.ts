@@ -183,6 +183,16 @@ export interface ChannelProfile {
   incomplete_posts: number;
 }
 
+export interface ChannelHealth {
+  id: number;
+  title: string | null;
+  username: string | null;
+  status: string;
+  last_collected_at: string | null;
+  last_error: string | null;
+  last_error_at: string | null;
+}
+
 function query(params: Record<string, string | number | undefined>): string {
   const value = new URLSearchParams();
   Object.entries(params).forEach(([key, item]) => {
@@ -254,4 +264,5 @@ export const apiClient = {
   claimSourceActors: (q?: string): Promise<SourceActorOption[]> => get(`/claims/filter-options/source-actors${query({ q })}`),
   analysisHealth: (): Promise<{ jobs: Dashboard["pipeline"]; runs: Record<string, number | string | null> }> => get("/analysis/health"),
   post: (id: string): Promise<PostDetail> => get(`/posts/${id}`),
+  collectionHealth: (): Promise<ChannelHealth[]> => get("/channels/collection-health"),
 };

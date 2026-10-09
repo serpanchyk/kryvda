@@ -174,11 +174,19 @@
   html { @apply font-sans; }
   body { @apply bg-background text-foreground antialiased; }
   ::selection { background: color-mix(in srgb, var(--negative) 22%, transparent); }
+  html { scrollbar-color: var(--input) var(--background); }
+  :where(a, button, summary, input, [tabindex], [role="button"]):focus-visible {
+    outline: 2px solid var(--negative);
+    outline-offset: 2px;
+  }
+  :where(input, textarea) { caret-color: var(--negative); }
 }
 
 @layer components {
   .font-heading { letter-spacing: 0.015em; }
   .eyebrow { @apply text-[11px] font-extrabold uppercase tracking-[0.14em]; }
+  .dateline { @apply text-[13px] leading-5 text-muted-foreground; }
+  .dateline strong { @apply font-bold text-foreground; }
   .editorial-nav-link { @apply relative font-bold text-muted-foreground transition-colors hover:text-foreground; }
   .editorial-nav-link::after { content: ""; @apply absolute inset-x-0 bottom-0 h-0.5 origin-left scale-x-0 bg-negative transition-transform; }
   .editorial-nav-link.is-active { @apply text-foreground; }

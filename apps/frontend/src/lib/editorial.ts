@@ -36,8 +36,30 @@ export const periodLabel = (params: URLSearchParams): string => {
   const value = datesFromParams(params);
   if (params.get("period") === "all") return "Увесь час";
   if (!value.start || !value.end) return "Останні 30 днів";
-  const last = new Date(new Date(value.end).getTime() - 86_400_000).toISOString();
-  return `${formatDate(value.start)} — ${formatDate(last)}`;
+  return formatPeriod(value.start, new Date(new Date(value.end).getTime() - 86_400_000).toISOString());
+};
+
+/** Inclusive period with its year, so an exported card is never ambiguous about when. */
+export const formatPeriod = (start: string, last: string): string => {
+  const from = new Date(start);
+  const to = new Date(last);
+  const year = (date: Date) => String(date.getFullYear());
+  if (from.getFullYear() === to.getFullYear()) return `${formatDate(start)} — ${formatDate(last)} ${year(to)}`;
+  return `${formatDate(start)} ${year(from)} — ${formatDate(last)} ${year(to)}`;
+};
+
+/** Channel titles often carry a tagline after «|» or «:»; theses and datelines use the name alone. */
+export const shortTitle = (title: string | null | undefined): string =>
+  (title ?? "—").split(/\s+\|\s+|:\s+/)[0].trim() || "—";
+
+/** Ukrainian plural form for a count: one, few (2–4), many. */
+export const pluralUk = (count: number, one: string, few: string, many: string): string => {
+  const tens = Math.abs(count) % 100;
+  const units = tens % 10;
+  if (tens > 10 && tens < 20) return many;
+  if (units === 1) return one;
+  if (units >= 2 && units <= 4) return few;
+  return many;
 };
 
 export const dateParams = (params: URLSearchParams): URLSearchParams => {
@@ -54,3 +76,11 @@ export const exportFileName = (title: string, today: Date = new Date()): string 
   const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   return `кривда-${slug || "графік"}-${day}.png`;
 };
+
+/** Latest day with any activity in a daily series, or undefined when the series is empty. */
+export const lastActiveDay = (daily: Array<{ date: string; claim_count: number; post_count: number }>): string | undefined =>
+  [...daily].reverse().find((day) => day.claim_count > 0 || day.post_count > 0)?.date;
+
+/** Whether a timestamp is older than the given number of days. */
+export const isStale = (value: string | null | undefined, days = 3, now: Date = new Date()): boolean =>
+  Boolean(value) && now.getTime() - new Date(value as string).getTime() > days * 86_400_000;

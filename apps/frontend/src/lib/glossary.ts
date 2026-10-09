@@ -81,6 +81,21 @@ export const glossary = {
     retry_scheduled: { label: "Повтори", definition: "Дописи, аналіз яких не вдався і заплановано повторну спробу." },
     failed: { label: "Помилки", definition: "Дописи, які не вдалося проаналізувати після всіх спроб." },
   },
+  errorKind: {
+    provider_transient: { label: "Тимчасовий збій моделі", definition: "Постачальник мовної моделі тимчасово не відповів; аналіз буде повторено автоматично." },
+    provider_error: { label: "Помилка постачальника моделі", definition: "Постачальник мовної моделі повернув помилку." },
+    provider_request_rejected: { label: "Запит відхилено", definition: "Постачальник мовної моделі відмовився обробити запит." },
+    schema_failure: { label: "Відповідь поза схемою", definition: "Модель відповіла, але відповідь не відповідає контракту аналізу." },
+    json_parse_failure: { label: "Нерозбірна відповідь", definition: "Відповідь моделі не вдалося прочитати як структуровані дані." },
+    generation_failure: { label: "Збій генерації", definition: "Модель не згенерувала придатної відповіді." },
+    reference_failure: { label: "Невідповідність доказу", definition: "Доказ у відповіді моделі не знайдено в тексті допису." },
+    unexpected_execution_error: { label: "Неочікувана помилка", definition: "Аналіз зупинився через непередбачену помилку модуля." },
+    unknown: { label: "Невідома помилка" },
+  },
+  channelStatus: {
+    active: { label: "Збирається", definition: "Канал доступний, нові дописи збираються за розкладом." },
+    unavailable: { label: "Недоступний", definition: "Канал зараз недоступний для збору." },
+  },
 } satisfies Record<string, Record<string, Term>>;
 
 export type GlossaryGroup = keyof typeof glossary;

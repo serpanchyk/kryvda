@@ -1,3 +1,4 @@
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { CartesianGrid, Cell, LabelList, ReferenceLine, Scatter, ScatterChart, XAxis, YAxis, ZAxis } from "recharts";
 
@@ -7,6 +8,7 @@ import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { evaluativeOf, median, quadrantOf, type Mover, type Quadrant } from "@/lib/charts";
 import { formatNumber, formatPercent } from "@/lib/editorial";
 import { glossary } from "@/lib/glossary";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type RowTarget = { href?: (item: Summary) => string; selected?: string; onSelect?: (item: Summary) => void };
 
@@ -21,8 +23,8 @@ export function DivergingBars({ items, label, ...target }: { items: Summary[]; l
   const max = Math.max(...items.flatMap((item) => [item.negative_count, item.positive_count]), 1);
   return <div>
     <div className="grid grid-cols-2 border-b border-ink pb-1.5 text-xs font-semibold">
-      <span className="pr-2 text-right text-negative">◀ <TermLabel term={glossary.stance.негативне}>Негативні</TermLabel></span>
-      <span className="pl-2 text-positive"><TermLabel term={glossary.stance.позитивне}>Позитивні</TermLabel> ▶</span>
+      <span className="flex items-center justify-end gap-1 pr-2 text-negative"><ArrowLeft className="size-3" aria-hidden="true" /><TermLabel term={glossary.stance.негативне}>Негативні</TermLabel></span>
+      <span className="flex items-center gap-1 pl-2 text-positive"><TermLabel term={glossary.stance.позитивне}>Позитивні</TermLabel><ArrowRight className="size-3" aria-hidden="true" /></span>
     </div>
     {items.map((item, index) => {
       const evaluative = evaluativeOf(item);
@@ -35,12 +37,12 @@ export function DivergingBars({ items, label, ...target }: { items: Summary[]; l
         </span>
         <span className="mt-1.5 grid grid-cols-2 items-center text-xs font-bold tabular-nums">
           <span className="flex items-center justify-end gap-1.5 pr-px">
-            <span className="text-negative">{formatNumber(item.negative_count)}</span>
+            <span className={item.negative_count ? "text-negative" : "font-normal text-muted-foreground"}>{formatNumber(item.negative_count)}</span>
             <span className="block h-2.5 bg-negative" style={{ width: `${(item.negative_count / max) * 80}%` }} />
           </span>
           <span className="flex items-center gap-1.5 border-l border-ink pl-px">
             <span className="block h-2.5 bg-positive" style={{ width: `${(item.positive_count / max) * 80}%` }} />
-            <span className="text-positive">{formatNumber(item.positive_count)}</span>
+            <span className={item.positive_count ? "text-positive" : "font-normal text-muted-foreground"}>{formatNumber(item.positive_count)}</span>
           </span>
         </span>
         <span className="mt-1 block pl-9 text-xs text-muted-foreground">
@@ -68,27 +70,74 @@ function TargetTooltip({ active, payload }: { active?: boolean; payload?: Array<
   </div>;
 }
 
+const quadrantOrder: Quadrant[] = ["targets", "pinpoint", "favourites", "periphery"];
+const negativeQuadrant = (quadrant: Quadrant) => quadrant === "targets" || quadrant === "pinpoint";
+
+/** Greedy label placement: the largest points are labelled first, crowded neighbours stay unlabelled. */
+function labelledPoints(points: Array<Omit<TargetPoint, "label">>, minimum: number, maxX: number, limit = 6): Set<number> {
+  const span = Math.log10(Math.max(maxX * 1.2, minimum * 2)) - Math.log10(minimum);
+  const position = (point: Omit<TargetPoint, "label">) => ({ x: (Math.log10(point.x) - Math.log10(minimum)) / span, y: point.y });
+  const chosen: Array<{ id: number; x: number; y: number }> = [];
+  for (const point of [...points].sort((a, b) => b.x - a.x)) {
+    const at = position(point);
+    if (chosen.every((other) => Math.abs(other.x - at.x) > 0.16 || Math.abs(other.y - at.y) > 0.09)) chosen.push({ id: point.id, ...at });
+    if (chosen.length === limit) break;
+  }
+  return new Set(chosen.map((point) => point.id));
+}
+
+/** The same four quadrants as a ranked list: the phone layout and the keyboard route to every point. */
+function QuadrantList({ points }: { points: TargetPoint[] }) {
+  return <div className="grid gap-x-6 sm:grid-cols-2">
+    {quadrantOrder.map((quadrant) => {
+      const members = points.filter((point) => point.quadrant === quadrant).sort((a, b) => b.x * b.y - a.x * a.y || b.x - a.x).slice(0, 5);
+      return <section key={quadrant} className="border-t border-rule py-3">
+        <h3 className={`text-xs font-extrabold uppercase tracking-[0.12em] ${negativeQuadrant(quadrant) ? "text-negative" : "text-positive"}`}><TermLabel term={glossary.quadrant[quadrant]} /></h3>
+        {members.length ? <ol className="mt-2 space-y-1.5">
+          {members.map((point) => <li key={point.id}><NavLink to={point.href} className="flex items-baseline justify-between gap-3 text-sm hover:text-negative">
+            <span className="min-w-0 truncate font-semibold">{point.name}</span>
+            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatPercent(point.y)} нег. · {formatNumber(point.x)}</span>
+          </NavLink></li>)}
+        </ol> : <p className="mt-2 text-sm text-muted-foreground">Немає сутностей.</p>}
+      </section>;
+    })}
+  </div>;
+}
+
+function PointLabel(props: { x?: number | string; y?: number | string; width?: number | string; height?: number | string; value?: unknown; index?: number; points: TargetPoint[] }) {
+  const { points, index = 0 } = props;
+  const point = points[index];
+  if (!point?.label) return null;
+  const x = Number(props.x ?? 0) + Number(props.width ?? 0) / 2;
+  const top = Number(props.y ?? 0);
+  const below = point.y >= 0.85;
+  return <text x={x} y={below ? top + Number(props.height ?? 0) + 13 : top - 6} textAnchor="middle" fontSize={10.5} fontWeight={600} fill="var(--foreground)" stroke="var(--popover)" strokeWidth={3} paintOrder="stroke">{point.label}</text>;
+}
+
 /** Entities placed by evaluative volume (log) against negative share, split into four quadrants. */
 export function TargetMap({ items, href, minimum = 5 }: { items: Summary[]; href: (item: Summary) => string; minimum?: number }) {
   const navigate = useNavigate();
+  const mobile = useIsMobile();
   const eligible = items.filter((item) => evaluativeOf(item) >= minimum);
   const split = median(eligible.map(evaluativeOf));
-  const labelled = new Set([...eligible].sort((a, b) => evaluativeOf(b) - evaluativeOf(a)).slice(0, 6).map((item) => item.id));
-  const points: TargetPoint[] = eligible.map((item) => {
+  const base = eligible.map((item) => {
     const x = evaluativeOf(item);
     const y = x ? item.negative_count / x : 0;
-    return { id: item.id, name: item.canonical_name ?? "—", x, y, z: item.claim_count, label: labelled.has(item.id) ? shortName(item.canonical_name ?? "") : "", href: href(item), quadrant: quadrantOf(x, y, split) };
+    return { id: item.id, name: item.canonical_name ?? "—", x, y, z: item.claim_count, href: href(item), quadrant: quadrantOf(x, y, split) };
   });
-  if (!points.length) return <p className="border-y border-rule py-12 text-center text-sm text-muted-foreground">Замало оцінок, щоб побудувати мапу.</p>;
-  const maxX = Math.max(...points.map((point) => point.x));
+  if (!base.length) return <p className="border-y border-rule py-12 text-center text-sm text-muted-foreground">Замало оцінок, щоб побудувати мапу.</p>;
+  const maxX = Math.max(...base.map((point) => point.x));
+  const labelled = labelledPoints(base, minimum, maxX);
+  const points: TargetPoint[] = base.map((point) => ({ ...point, label: labelled.has(point.id) ? shortName(point.name) : "" }));
+  if (mobile) return <QuadrantList points={points} />;
   const ticks = logTicks.filter((tick) => tick >= minimum && tick <= maxX * 1.5);
-  const corners: Array<[Quadrant, string]> = [["pinpoint", "left-12 top-3"], ["targets", "right-2 top-3 text-right"], ["periphery", "bottom-[4.5rem] left-12"], ["favourites", "bottom-[4.5rem] right-2 text-right"]];
-  return <div className="relative">
-    {corners.map(([quadrant, position]) => <span key={quadrant} className={`pointer-events-none absolute z-10 text-[11px] font-extrabold uppercase tracking-[0.12em] ${quadrant === "targets" || quadrant === "pinpoint" ? "text-negative/70" : "text-positive/70"} ${position}`}>
+  const corners: Array<[Quadrant, string]> = [["pinpoint", "left-12 top-2"], ["targets", "right-2 top-2 text-right"], ["periphery", "bottom-[5.5rem] left-12"], ["favourites", "bottom-[5.5rem] right-2 text-right"]];
+  return <div className="relative min-w-0">
+    {corners.map(([quadrant, position]) => <span key={quadrant} className={`pointer-events-none absolute z-10 bg-popover/90 px-1 text-[11px] font-extrabold uppercase tracking-[0.12em] ${negativeQuadrant(quadrant) ? "text-negative" : "text-positive"} ${position}`}>
       <span className="pointer-events-auto"><TermLabel term={glossary.quadrant[quadrant]} /></span>
     </span>)}
-    <ChartContainer className="aspect-auto h-[28rem] w-full" config={{}}>
-      <ScatterChart margin={{ top: 40, right: 16, bottom: 8, left: 0 }}>
+    <ChartContainer className="aspect-auto h-[28rem] w-full min-w-0" config={{}}>
+      <ScatterChart margin={{ top: 40, right: 24, bottom: 8, left: 0 }}>
         <CartesianGrid stroke="var(--rule)" strokeDasharray="2 4" />
         <XAxis type="number" dataKey="x" scale="log" domain={[minimum, Math.max(maxX * 1.2, minimum * 2)]} ticks={ticks} tickFormatter={(value: number) => formatNumber(value)} tickLine={false} axisLine={false} name={glossary.metric.evaluative.label} />
         <YAxis type="number" dataKey="y" domain={[0, 1]} ticks={[0, 0.25, 0.5, 0.75, 1]} tickFormatter={(value: number) => `${Math.round(value * 100)}%`} tickLine={false} axisLine={false} width={44} />
@@ -98,11 +147,15 @@ export function TargetMap({ items, href, minimum = 5 }: { items: Summary[]; href
         <ChartTooltip cursor={false} content={<TargetTooltip />} />
         <Scatter data={points} isAnimationActive={false} className="cursor-pointer" onClick={(point: { payload?: TargetPoint }) => { if (point?.payload?.href) navigate(point.payload.href); }}>
           {points.map((point) => <Cell key={point.id} fill={point.y >= 0.5 ? "var(--negative)" : "var(--positive)"} fillOpacity={0.62} stroke={point.y >= 0.5 ? "var(--negative)" : "var(--positive)"} />)}
-          <LabelList dataKey="label" position="top" offset={8} style={{ fill: "var(--foreground)", fontSize: 10.5, fontWeight: 600 }} />
+          <LabelList dataKey="label" content={(props) => <PointLabel {...props} points={points} />} />
         </Scatter>
       </ScatterChart>
     </ChartContainer>
     <p className="mt-1 text-center text-xs text-muted-foreground"><TermLabel term={glossary.metric.evaluative}>Кількість оціночних класифікацій</TermLabel> (логарифмічна шкала) · вертикально — <TermLabel term={glossary.metric.negativeShare}>частка негативу</TermLabel></p>
+    <details className="mt-3" data-export-ignore="true">
+      <summary className="cursor-pointer text-xs font-semibold text-muted-foreground hover:text-foreground">Мапа списком</summary>
+      <div className="mt-2"><QuadrantList points={points} /></div>
+    </details>
   </div>;
 }
 

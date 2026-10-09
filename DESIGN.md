@@ -53,6 +53,11 @@ typography:
     fontSize: "17px"
     fontWeight: 400
     lineHeight: 2rem
+  dateline:
+    fontFamily: "Fixel Text, sans-serif"
+    fontSize: "13px"
+    fontWeight: 400
+    lineHeight: 1.25rem
   label:
     fontFamily: "Fixel Text, sans-serif"
     fontSize: "11px"
@@ -93,10 +98,11 @@ components:
     padding: "8px 12px"
     height: "40px"
   input-field:
+    backgroundColor: "{colors.newsprint-paper}"
     textColor: "{colors.press-ink}"
-    rounded: "{rounded.lg}"
-    padding: "4px 10px"
-    height: "32px"
+    rounded: "{rounded.none}"
+    padding: "8px 12px"
+    height: "40px"
   badge-negative:
     textColor: "{colors.proofmark-red}"
     rounded: "{rounded.none}"
@@ -136,9 +142,14 @@ headline states the finding bluntly, while the graphic beneath it shows its samp
 denominator, and the period it covers.
 
 Density is that of a broadsheet, not a SaaS dashboard. Wide screens set chart cards in a
-three-column grid under a 1480 px masthead; each card is a self-contained story with eyebrow,
-thesis headline, dek, graphic, and a signed footer, so it can be torn out and posted publicly as a
-PNG without losing meaning. Ornament is absent; emphasis comes from weight, rules, and red.
+three-column grid under a 1480 px masthead; each card is a self-contained story with a thesis
+headline, a dateline (section, subject, period with year, active filters), a dek, the graphic, and
+a signed footer, so it can be torn out and posted publicly as a PNG without losing meaning.
+Ornament is absent; emphasis comes from weight, rules, and red.
+
+The mark is a slab-serif К printed in two inks with its red leg knocked out of register: a
+crooked print for a crooked truth (кривда). It appears with the КРИВДА wordmark in the masthead
+and in every exported card's footer, and alone as the favicon (`apps/frontend/public`).
 
 The system is light-only: newsprint is the identity, and no dark theme is defined.
 
@@ -147,7 +158,7 @@ The system is light-only: newsprint is the identity, and no dark theme is define
 - Black-weight Kyiv Type Serif theses; every number and label in Fixel Text.
 - Rules, not shadows: hairline column rules and a 2 px ink rule that opens every story.
 - Square, nearly cornerless forms (0–4 px).
-- Every chart card is export-ready and signed «КРИВДА.».
+- Every chart card is export-ready, carries its own context, and is signed with the mark.
 
 ## Colors
 
@@ -155,8 +166,8 @@ A two-ink newspaper palette on warm unbleached paper, with one alarm colour and 
 
 ### Primary
 - **Proofmark Red** (`proofmark-red`): the exposing mark. Negative classifications in every chart,
-  bar, badge, and number; the full stop in the «КРИВДА.» wordmark; the active masthead
-  underline; focus rings on interactive metadata; the rule beside quoted evidence; data errors.
+  bar, badge, and number; the misregistered leg of the К mark; the active masthead underline;
+  focus outlines; the hairline beside quoted evidence; stale data and data errors.
 
 ### Secondary
 - **Archive Blue** (`archive-blue`): positive classifications only, always opposite red on a shared
@@ -191,18 +202,27 @@ a front-page headline, while Fixel Text keeps data, labels, and controls neutral
 ### Hierarchy
 - **Display** (900, 30 → 36 → 48 px by breakpoint, 1.02): one page thesis per screen in the
   page header, stated as a finding.
-- **Wordmark** (900, 24 px, 0.04em tracking): «КРИВДА» with a red full stop, in the masthead and
+- **Wordmark** (900, 24 px, 0.04em tracking): «КРИВДА» beside the К mark, in the masthead and
   every exported card footer (16 px there).
-- **Headline** (700, 24 px, 28 px from md, 1.25): the thesis of each chart card.
+- **Headline** (700, 24 px, 28 px from md, 1.25): the thesis of each chart card, generated from
+  the data and falling back to a neutral description below the sample guardrails.
+- **Dateline** (400, 13 px, 20 px leading): under every headline; section in bold ink, then subject,
+  period with year, and scope, separated by thin rules.
 - **Title** (700, 18–20 px, 1.375): claim and post headlines in lists; hover turns red.
 - **Metric** (Fixel 900, 30 px, tabular figures): headline counts in the metric strip.
 - **Body** (400, 14 px, 24 px leading): deks, list rows, filters; deks cap at roughly 42rem.
 - **Reading** (400, 17 px, 32 px leading): full source-post text, under a 2 px ink rule.
-- **Label** (800, 11 px, 0.14em, uppercase): eyebrows over headlines, filter labels, metric names.
+- **Label** (800, 11 px, 0.14em, uppercase): filter labels and metric names only; never above a
+  headline.
 
 ### Named Rules
 **The Thesis Rule.** Serif is for statements: page and card headlines that say what was found.
-Numbers, labels, and controls are never set in the serif.
+Numbers, labels, and controls are never set in the serif. A headline names a finding only when its
+guardrail passes (`apps/frontend/src/lib/theses.ts`: at least 10 evaluations, 5 classifications, or
+a 20-evaluation, 60%-negative leader for "main target"); otherwise it describes the graphic.
+
+**The Dateline Rule.** Context goes under the headline, not above it. No kicker or eyebrow sits
+over a heading; the dateline carries section, subject, period with year, and active filters.
 
 **The Tabular Figures Rule.** Every count, share, rank, and delta uses tabular numerals so columns
 of evidence align.
@@ -240,7 +260,7 @@ shadow to stand out needs a stronger top rule or a brighter stock instead.
 
 Square-cut, like set type. Radii are tiny (2, 3, 4 px) and many surfaces are deliberately square:
 select fields, badges, skeletons, chart cards, legend swatches, and bar marks have no rounding.
-Buttons and text inputs take 4 px at most. Bars are flat rectangles; evaluative strips are 4–10 px
+Buttons take 4 px at most; inputs are square like selects. Bars are flat rectangles; evaluative strips are 4–10 px
 tall.
 
 ## Components
@@ -267,14 +287,18 @@ Quiet and typographic; the data carries the voice.
 - **Shadow Strategy:** none (see Elevation).
 - **Border:** hairline Column Rule with a 2 px Press Ink top rule.
 - **Internal Padding:** 16 px, 20 px from `md`.
-- **Anatomy:** eyebrow with period → serif thesis headline → muted dek → graphic → footer with the
-  «КРИВДА.» signature and «Джерело: публічні Telegram-канали · {період}» in uppercase label type.
+- **Anatomy:** serif thesis headline → dateline (section · subject · period with year · scope) →
+  muted dek → graphic (with a keyboard data table where it is interactive) → footer with the mark,
+  the wordmark, and «Джерело: погоджений пул публічних Telegram-каналів · класифікація мовною
+  моделлю».
+- **Export:** the download button renders the PNG first and opens a preview dialog listing the
+  headline, context, and file name; nothing is saved until the analyst confirms.
 
 ### Inputs / Fields
 - **Select trigger:** square, Newsprint Paper fill, hairline Column Rule border, 40 px tall; hover
   inks the border; focus turns the border red with a 2 px soft red ring.
-- **Text input:** 4 px radius, Field Rule stroke, transparent fill, 32 px tall; focus inks the
-  border with a 3 px ink ring.
+- **Text input:** identical to the select trigger: square, Newsprint Paper fill, hairline Column Rule
+  border, 40 px tall, red focus.
 - **Filter label:** uppercase label type in Faded Ink above every control.
 
 ### Navigation (Masthead)
@@ -304,8 +328,11 @@ or week.
 ## Do's and Don'ts
 
 ### Do:
-- **Do** open every story with a 2 px Press Ink rule and an uppercase eyebrow that names the period.
-- **Do** write card headlines as theses that state the finding; put method and caveats in the dek.
+- **Do** open every story with a 2 px Press Ink rule and a thesis headline, with the dateline under it.
+- **Do** write card headlines as theses that state the finding, guarded by the sample thresholds;
+  put method and caveats in the dek.
+- **Do** show absolute values beside percentage changes, and absolute changes alone below a base of 10.
+- **Do** flag stale sources in red where freshness matters (last post or claim more than 3 days old).
 - **Do** show the evaluative sample size and the denominator next to every share.
 - **Do** set every number in Fixel Text with tabular figures.
 - **Do** keep every chart card export-ready: self-explanatory headline, period, source line, and
@@ -320,3 +347,5 @@ or week.
 - **Don't** draw interpolated area or smoothed line charts for daily counts.
 - **Don't** set numbers, labels, or controls in the serif.
 - **Don't** show Latin-script interface text; only «Telegram» and data such as channel names.
+- **Don't** set a kicker or eyebrow label above any heading.
+- **Don't** use Unicode glyphs (▲ ◀ ▶) as icons; use the Lucide set.

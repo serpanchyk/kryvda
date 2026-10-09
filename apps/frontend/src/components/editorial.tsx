@@ -1,7 +1,8 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toPng } from "html-to-image";
-import { CalendarDays, ChevronLeft, ChevronRight, Download, Menu, X } from "lucide-react";
-import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Dialog } from "@base-ui/react/dialog";
+import { ArrowDown, ArrowUp, CalendarDays, ChevronLeft, ChevronRight, Download, Menu, RotateCw, X } from "lucide-react";
+import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { uk } from "date-fns/locale";
@@ -38,6 +39,33 @@ const navigation = [
   { to: "/system", label: "Система" },
 ];
 
+/**
+ * The Кривда mark: a slab-serif К printed in two inks, its red leg knocked out of
+ * register. A crooked print, as кривда is a crooked truth.
+ */
+export function BrandMark({ className = "size-7" }: { className?: string }) {
+  return <svg viewBox="8 11 54 43" className={className} aria-hidden="true">
+    <g fill="var(--foreground)">
+      <rect x="9" y="12" width="23" height="6" />
+      <rect x="9" y="46" width="23" height="6" />
+      <rect x="14" y="12" width="12" height="40" />
+      <polygon points="26,28 42,12 53,12 26,39" />
+      <rect x="40" y="12" width="16" height="6" />
+    </g>
+    <g fill="var(--negative)" style={{ mixBlendMode: "multiply" }}>
+      <polygon points="31,33 40,27 58,52 45,52" />
+      <rect x="42" y="47" width="19" height="6" />
+    </g>
+  </svg>;
+}
+
+export function BrandLockup({ size = "md" }: { size?: "sm" | "md" }) {
+  return <span className="inline-flex items-center gap-2">
+    <BrandMark className={size === "sm" ? "h-4 w-5" : "h-6 w-7"} />
+    <span className={`font-heading font-black tracking-[0.04em] ${size === "sm" ? "text-base" : "text-2xl"}`}>КРИВДА</span>
+  </span>;
+}
+
 function EditorialNav({ mobile = false }: { mobile?: boolean }) {
   const [params] = useSearchParams();
   return <nav className={mobile ? "grid gap-1" : "hidden items-center gap-7 md:flex"} aria-label="Основна навігація">
@@ -59,17 +87,18 @@ function EditorialNav({ mobile = false }: { mobile?: boolean }) {
 
 export function Shell() {
   return <div className="min-h-dvh bg-background text-foreground">
+    <a href="#main" className="sr-only z-50 bg-ink px-4 py-2 font-semibold text-paper focus:not-sr-only focus:fixed focus:left-4 focus:top-4">Перейти до змісту</a>
     <header className="sticky top-0 z-40 border-b border-rule bg-background/95 backdrop-blur-sm">
       <div className="mx-auto flex h-16 max-w-[1480px] items-center gap-8 px-4 md:px-8">
-        <NavLink to="/" className="font-heading text-2xl font-black tracking-[0.04em]">КРИВДА<span className="text-negative">.</span></NavLink>
+        <NavLink to="/" aria-label="Кривда — огляд"><BrandLockup /></NavLink>
         <EditorialNav />
         <div className="ml-auto hidden md:block"><DateRangeControl /></div>
         <Sheet>
-          <SheetTrigger render={<button type="button" className="ml-auto grid size-9 place-items-center md:hidden" aria-label="Відкрити меню" />}><Menu /></SheetTrigger>
-          <SheetContent side="right" className="w-[88vw] max-w-sm bg-background p-0">
-            <SheetHeader className="border-b border-rule px-6 py-5"><SheetTitle className="font-heading text-xl font-black">КРИВДА.</SheetTitle></SheetHeader>
+          <SheetTrigger render={<button type="button" className="-mr-2 ml-auto grid size-11 place-items-center md:hidden" aria-label="Відкрити меню" />}><Menu /></SheetTrigger>
+          <SheetContent side="right" className="w-[88vw] max-w-sm bg-background p-0" showCloseButton={false}>
+            <SheetHeader className="border-b border-rule px-6 py-5"><SheetTitle><BrandLockup /></SheetTitle></SheetHeader>
             <div className="space-y-6 p-6"><DateRangeControl /><EditorialNav mobile /></div>
-            <SheetClose render={<button type="button" className="absolute right-4 top-4 grid size-8 place-items-center" aria-label="Закрити меню" />}><X /></SheetClose>
+            <SheetClose render={<button type="button" className="absolute right-3 top-3 grid size-11 place-items-center" aria-label="Закрити меню" />}><X /></SheetClose>
           </SheetContent>
         </Sheet>
       </div>
@@ -112,10 +141,10 @@ export function DateRangeControl() {
     apply(from, to);
   };
   return <Popover>
-    <PopoverTrigger className="inline-flex h-9 items-center border-b border-ink/40 px-1 text-sm font-semibold hover:border-negative">
-      <CalendarDays className="mr-2 size-4" />{periodLabel(params)}
+    <PopoverTrigger className="inline-flex h-9 items-center border-b border-ink/40 px-1 text-sm font-semibold tabular-nums hover:border-negative" aria-label={`Період: ${periodLabel(params)}. Змінити період`}>
+      <CalendarDays className="mr-2 size-4" aria-hidden="true" />{periodLabel(params)}
     </PopoverTrigger>
-    <PopoverContent className="w-auto rounded-sm border-rule bg-paper p-3" align="end">
+    <PopoverContent className="w-auto rounded-none border-rule bg-paper p-3" align="end">
       <div className="mb-3 flex flex-wrap gap-1">
         {[7, 30, 90].map((days) => <Button key={days} size="sm" variant="ghost" onClick={() => preset(days)}>{days} днів</Button>)}
         <Button size="sm" variant="ghost" onClick={() => preset()}>Увесь час</Button>
@@ -125,19 +154,35 @@ export function DateRangeControl() {
   </Popover>;
 }
 
-export function PageHeader({ eyebrow, title, dek, aside }: { eyebrow: string; title: string; dek: string; aside?: ReactNode }) {
+function usePageTitle(title: string) {
+  useEffect(() => {
+    document.title = `${title} — Кривда`;
+    return () => { document.title = "Кривда"; };
+  }, [title]);
+}
+
+/** A dateline set under a headline: what this is, about whom, when, and under which filters. */
+export function Dateline({ parts, className = "" }: { parts: ReactNode[]; className?: string }) {
+  const shown = parts.filter((part) => part !== undefined && part !== null && part !== false && part !== "");
+  if (!shown.length) return null;
+  return <p className={`dateline ${className}`}>{shown.map((part, index) => <span key={index}>{index ? <span aria-hidden="true" className="px-1.5 text-rule">/</span> : null}{part}</span>)}</p>;
+}
+
+export function PageHeader({ title, dateline = [], dek, aside, period = true }: { title: string; dateline?: ReactNode[]; dek: string; aside?: ReactNode; period?: boolean }) {
+  usePageTitle(title);
   return <header className="grid gap-4 border-b-2 border-ink pb-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-    <div className="max-w-4xl">
-      <p className="eyebrow">{eyebrow}</p>
-      <h1 className="mt-2 font-heading text-3xl font-black leading-[1.02] tracking-[0.015em] sm:text-4xl lg:text-5xl">{title}</h1>
-      <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground md:text-base">{dek}</p>
+    <div className="min-w-0 max-w-4xl">
+      <h1 className="font-heading text-3xl font-black leading-[1.02] tracking-[0.015em] text-balance sm:text-4xl lg:text-5xl">{title}</h1>
+      <Dateline className="mt-3" parts={dateline} />
+      <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground md:text-base">{dek}</p>
+      {period ? <div className="mt-3 md:hidden"><DateRangeControl /></div> : null}
     </div>
     {aside}
   </header>;
 }
 
 export function PageLayout({ children }: { children: ReactNode }) {
-  return <main className="mx-auto max-w-[1480px] space-y-8 px-4 py-6 md:px-8 md:py-10">{children}</main>;
+  return <main id="main" tabIndex={-1} className="mx-auto min-w-0 max-w-[1480px] space-y-8 px-4 py-6 outline-none md:px-8 md:py-10">{children}</main>;
 }
 
 export function FilterField({ label, children }: { label: string; children: ReactNode }) {
@@ -147,11 +192,16 @@ export function FilterField({ label, children }: { label: string; children: Reac
   </div>;
 }
 
-export function TermLabel({ term, children, className = "" }: { term: Term; children?: ReactNode; className?: string }) {
+/**
+ * A glossary term with its definition. Interactive terms are focusable buttons; inside another
+ * control (a row button or link) pass `plain` so the definition rides on the native title instead.
+ */
+export function TermLabel({ term, children, className = "", plain = false }: { term: Term; children?: ReactNode; className?: string; plain?: boolean }) {
   const text = children ?? term.label;
   if (!term.definition) return <span className={className}>{text}</span>;
+  if (plain) return <span className={className} title={term.definition}>{text}</span>;
   return <Tooltip>
-    <TooltipTrigger render={<span className={`term-label cursor-help underline decoration-muted-foreground/50 decoration-dotted underline-offset-[3px] ${className}`} />}>{text}</TooltipTrigger>
+    <TooltipTrigger render={<button type="button" className={`term-label cursor-help text-left underline decoration-muted-foreground/50 decoration-dotted underline-offset-[3px] ${className}`} />}>{text}</TooltipTrigger>
     <TooltipContent className="max-w-xs text-left leading-5">{term.definition}</TooltipContent>
   </Tooltip>;
 }
@@ -172,28 +222,39 @@ export interface Metric {
   hint?: string;
   term?: Term;
   delta?: number | null;
+  previous?: number;
   deltaTone?: "negative" | "neutral";
   trend?: number[];
 }
 
 const metricColumns: Record<number, string> = { 3: "lg:grid-cols-3", 4: "lg:grid-cols-4", 5: "lg:grid-cols-5" };
 
-function MetricDelta({ delta, tone, comparison }: { delta: number; tone: "negative" | "neutral"; comparison: string }) {
+/** Small bases make percentages shout, so below ten the change is shown in absolute terms. */
+function MetricDelta({ delta, previous, value, tone, comparison }: { delta: number; previous?: number; value: number; tone: "negative" | "neutral"; comparison: string }) {
   const rising = delta > 0;
-  const colour = tone === "negative" ? (rising ? "text-negative" : "text-positive") : "text-muted-foreground";
-  return <dd className={`mt-0.5 text-xs font-semibold ${colour}`}>{delta === 0 ? "без змін" : `${rising ? "▲" : "▼"} ${formatPercent(Math.abs(delta))}`} <span className="font-normal text-muted-foreground">{comparison}</span></dd>;
+  const colour = tone === "negative" && rising ? "text-negative" : "text-muted-foreground";
+  const Icon = rising ? ArrowUp : ArrowDown;
+  const small = previous !== undefined && previous < 10;
+  const amount = small ? `${rising ? "+" : "−"}${formatNumber(Math.abs(value - (previous ?? 0)))}` : formatPercent(Math.abs(delta));
+  if (delta === 0) return <dd className="mt-0.5 text-xs text-muted-foreground">без змін {comparison}</dd>;
+  return <dd className={`mt-0.5 flex flex-wrap items-center gap-x-1 text-xs font-semibold ${colour}`}>
+    <Icon className="size-3" aria-hidden="true" /><span className="sr-only">{rising ? "зростання" : "зниження"}</span>
+    <span className="tabular-nums">{amount}</span>
+    {previous !== undefined ? <span className="font-normal tabular-nums text-muted-foreground">(було {formatNumber(previous)})</span> : null}
+    <span className="font-normal text-muted-foreground">{comparison}</span>
+  </dd>;
 }
 
 export function MetricStrip({ items, comparison }: { items: Metric[]; comparison?: string }) {
   return <dl className={`grid grid-cols-2 border-y border-rule ${metricColumns[items.length] ?? "lg:grid-cols-4"}`}>
-    {items.map((item) => <div key={item.label} className="border-b border-rule py-3 pr-4 odd:border-r even:pl-4 lg:border-b-0 lg:border-r lg:px-5 lg:first:pl-0 lg:last:border-r-0 lg:even:pl-5">
+    {items.map((item) => <div key={item.label} className="min-w-0 border-b border-rule py-3 pr-4 odd:border-r even:pl-4 lg:border-b-0 lg:border-r lg:px-5 lg:first:pl-0 lg:last:border-r-0 lg:even:pl-5">
       <dt className="eyebrow text-muted-foreground"><TermLabel term={item.term ?? { label: item.label }}>{item.label}</TermLabel></dt>
       <dd className="mt-1 flex items-end justify-between gap-3">
-        <span className={`font-sans text-3xl font-black tabular-nums ${item.accent ? "text-negative" : "text-foreground"}`}>{formatNumber(item.value)}</span>
+        <span className={`font-sans text-3xl font-black tabular-nums ${item.accent && item.value ? "text-negative" : "text-foreground"}`}>{formatNumber(item.value)}</span>
         {item.trend ? <Sparkline values={item.trend} tone={item.accent ? "negative" : "ink"} /> : null}
       </dd>
       {item.hint ? <dd className="mt-0.5 text-xs text-muted-foreground">{item.hint}</dd> : null}
-      {comparison && item.delta != null ? <MetricDelta delta={item.delta} tone={item.deltaTone ?? "neutral"} comparison={comparison} /> : null}
+      {comparison && item.delta != null ? <MetricDelta delta={item.delta} previous={item.previous} value={item.value} tone={item.deltaTone ?? "neutral"} comparison={comparison} /> : null}
     </div>)}
   </dl>;
 }
@@ -202,43 +263,79 @@ function isExportIgnored(node: HTMLElement): boolean {
   return node instanceof HTMLElement && node.dataset.exportIgnore === "true";
 }
 
-export function Graphic({ eyebrow, term, title, dek, period, children, footer = true, action, className = "" }: { eyebrow: string; term?: Term; title: string; dek?: string; period?: string; children: ReactNode; footer?: boolean; action?: ReactNode; className?: string }) {
+export const SOURCE_LINE = "Джерело: погоджений пул публічних Telegram-каналів · класифікація мовною моделлю";
+
+function ExportPreview({ image, fileName, title, dateline, onClose }: { image: string | null; fileName: string; title: string; dateline: string; onClose: () => void }) {
+  const save = () => {
+    if (!image) return;
+    const link = document.createElement("a");
+    link.download = fileName;
+    link.href = image;
+    link.click();
+    toast.success("Зображення збережено.");
+    onClose();
+  };
+  return <Dialog.Root open={Boolean(image)} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog.Portal>
+      <Dialog.Backdrop className="fixed inset-0 z-50 bg-ink/40 transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0" />
+      <Dialog.Popup className="fixed inset-x-4 top-1/2 z-50 mx-auto max-h-[92dvh] max-w-3xl -translate-y-1/2 overflow-y-auto border-t-2 border-ink bg-popover p-5 shadow-lg md:p-6">
+        <Dialog.Title className="font-heading text-2xl font-bold leading-tight">Перевірте картку перед публікацією</Dialog.Title>
+        <Dialog.Description className="mt-2 text-sm leading-6 text-muted-foreground">Зображення піде у публічний простір без контексту застосунку. Переконайтеся, що заголовок, суб’єкт, період і фільтри відповідають тому, що ви хочете показати.</Dialog.Description>
+        <dl className="mt-4 grid gap-1 border-y border-rule py-3 text-sm sm:grid-cols-[8rem_minmax(0,1fr)]">
+          <dt className="text-muted-foreground">Заголовок</dt><dd className="font-semibold">{title}</dd>
+          <dt className="text-muted-foreground">Контекст</dt><dd>{dateline}</dd>
+          <dt className="text-muted-foreground">Файл</dt><dd className="break-all">{fileName}</dd>
+        </dl>
+        {image ? <img src={image} alt={`Попередній перегляд картки «${title}»`} className="mt-4 w-full border border-rule" /> : null}
+        <div className="mt-5 flex flex-wrap justify-end gap-3">
+          <Dialog.Close render={<Button variant="ghost" size="lg" />}>Скасувати</Dialog.Close>
+          <Button size="lg" onClick={save}><Download aria-hidden="true" />Зберегти PNG</Button>
+        </div>
+      </Dialog.Popup>
+    </Dialog.Portal>
+  </Dialog.Root>;
+}
+
+/**
+ * One story: a thesis headline, a dateline (section, subject, period, scope), a dek, the graphic,
+ * and, when exportable, a signed footer. Everything a public reader needs travels inside the card.
+ */
+export function Graphic({ section, term, title, dek, subject, scope, period, children, exportable = true, action, className = "" }: { section: string; term?: Term; title: string; dek?: string; subject?: string; scope?: string; period?: string; children: ReactNode; exportable?: boolean; action?: ReactNode; className?: string }) {
   const [params] = useSearchParams();
   const card = useRef<HTMLElement>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const label = period ?? periodLabel(params);
-  const save = async () => {
+  const datelineText = [section, subject, label, scope].filter(Boolean).join(" / ");
+  const capture = async () => {
     const node = card.current;
     if (!node) return;
     node.classList.add("is-exporting");
     try {
-      const url = await toPng(node, { pixelRatio: 2, backgroundColor: getComputedStyle(node).backgroundColor, filter: (item) => !isExportIgnored(item) });
-      const link = document.createElement("a");
-      link.download = exportFileName(title);
-      link.href = url;
-      link.click();
+      setPreview(await toPng(node, { pixelRatio: 2, backgroundColor: getComputedStyle(node).backgroundColor, filter: (item) => !isExportIgnored(item) }));
     } catch {
       toast.error("Не вдалося зберегти зображення.");
     } finally {
       node.classList.remove("is-exporting");
     }
   };
-  return <section ref={card} className={`${footer ? "editorial-card" : "editorial-graphic"} ${className}`}>
+  return <section ref={card} className={`${exportable ? "editorial-card" : "editorial-graphic"} ${className}`}>
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0 max-w-3xl flex-1 basis-64">
-        <p className="eyebrow">{term ? <TermLabel term={term}>{eyebrow}</TermLabel> : eyebrow}{footer ? ` · ${label}` : ""}</p>
-        <h2 className="mt-1.5 font-heading text-2xl font-bold leading-tight tracking-[0.015em] md:text-[28px]">{title}</h2>
+        <h2 className="font-heading text-2xl font-bold leading-tight tracking-[0.015em] text-balance md:text-[28px]">{title}</h2>
+        <Dateline className="mt-2" parts={[<strong key="section">{term ? <TermLabel term={term}>{section}</TermLabel> : section}</strong>, subject, exportable ? label : undefined, scope]} />
         {dek && <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted-foreground">{dek}</p>}
       </div>
-      {action || footer ? <div className="flex shrink-0 items-start gap-3" data-export-ignore="true">
+      {action || exportable ? <div className="flex max-w-full shrink-0 flex-wrap items-start gap-3" data-export-ignore="true">
         {action}
-        {footer ? <button type="button" onClick={save} aria-label="Зберегти зображення" title="Зберегти зображення" className="grid size-8 place-items-center border border-rule text-muted-foreground transition-colors hover:border-ink hover:text-foreground"><Download className="size-4" /></button> : null}
+        {exportable ? <button type="button" onClick={capture} aria-label="Зберегти зображення" title="Зберегти зображення" className="grid size-9 place-items-center border border-rule text-muted-foreground transition-colors hover:border-ink hover:text-foreground"><Download className="size-4" aria-hidden="true" /></button> : null}
       </div> : null}
     </div>
-    <div className="mt-4 flex-1">{children}</div>
-    {footer && <div className="mt-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-rule pt-3">
-      <span className="font-heading text-base font-black tracking-[0.04em]">КРИВДА<span className="text-negative">.</span></span>
-      <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Джерело: публічні Telegram-канали · {label}</span>
+    <div className="mt-4 min-w-0 flex-1">{children}</div>
+    {exportable && <div className="mt-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 border-t border-rule pt-3">
+      <BrandLockup size="sm" />
+      <span className="text-xs leading-4 text-muted-foreground">{SOURCE_LINE}</span>
     </div>}
+    {exportable ? <ExportPreview image={preview} fileName={exportFileName(title)} title={title} dateline={datelineText} onClose={() => setPreview(null)} /> : null}
   </section>;
 }
 
@@ -267,6 +364,27 @@ function DailyTooltip({ active, payload, mode, granularity }: { active?: boolean
   </div>;
 }
 
+/** Keyboard and screen-reader route to the same data and drill-down the bars offer to a pointer. */
+function DailyTable({ points, mode, granularity, onPick }: { points: DailyPoint[]; mode: ChartMode; granularity: Granularity; onPick?: (date: string) => void }) {
+  const columns: Array<[string, (point: DailyPoint) => number]> = mode === "volume"
+    ? [["Твердження", (point) => point.claim_count], ["Дописи", (point) => point.post_count]]
+    : mode === "stance"
+      ? [["Негативні", (point) => point.negative_count], ["Позитивні", (point) => point.positive_count]]
+      : [["Негативні", (point) => point.negative_count], ["Усі твердження", (point) => point.claim_count]];
+  return <details className="mt-3 text-sm" data-export-ignore="true">
+    <summary className="cursor-pointer text-xs font-semibold text-muted-foreground hover:text-foreground">Дані графіка таблицею</summary>
+    <div className="mt-2 max-h-64 overflow-y-auto border-y border-rule">
+      <table className="w-full text-left tabular-nums">
+        <thead className="sticky top-0 bg-popover text-xs text-muted-foreground"><tr><th scope="col" className="py-1.5 font-semibold">{granularity === "week" ? "Тиждень з" : "День"}</th>{columns.map(([name]) => <th key={name} scope="col" className="py-1.5 text-right font-semibold">{name}</th>)}</tr></thead>
+        <tbody>{points.map((point) => <tr key={point.date} className="border-t border-rule">
+          <th scope="row" className="py-1 font-normal">{onPick ? <button type="button" className="underline decoration-rule underline-offset-2 hover:text-negative" onClick={() => onPick(point.date)} aria-label={`Звузити сторінку до ${granularity === "week" ? "тижня з" : ""} ${formatDate(point.date)}`}>{formatDate(point.date)}</button> : formatDate(point.date)}{point.spike ? <span className="ml-2 text-xs font-bold text-negative">{glossary.metric.spike.label.toLocaleLowerCase("uk-UA")}</span> : null}</th>
+          {columns.map(([name, value]) => <td key={name} className="py-1 text-right">{formatNumber(value(point))}</td>)}
+        </tr>)}</tbody>
+      </table>
+    </div>
+  </details>;
+}
+
 export function DailyChart({ data, mode = "negative", onDate, onRange }: { data: Daily[]; mode?: ChartMode; onDate?: (date: string) => void; onRange?: (date: string, days: number) => void }) {
   const [chosen, setChosen] = useState<Granularity | null>(null);
   const granularity = chosen ?? defaultGranularity(data.length);
@@ -282,38 +400,40 @@ export function DailyChart({ data, mode = "negative", onDate, onRange }: { data:
     positive_count: { label: "Позитивні", color: "var(--positive)" },
     claim_count: { label: "Твердження", color: "var(--foreground)" },
   };
+  const interactive = Boolean(onDate || onRange);
   const pick = (date: string) => {
     if (granularity === "week") (onRange ?? ((value: string) => onDate?.(value)))(date, 7);
     else onDate?.(date);
   };
-  return <div>
+  return <div className="min-w-0">
     <div className="mb-3 flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-xs font-semibold">
       <div className="flex flex-wrap gap-x-5 gap-y-1">
-        {keys.map((key) => <span key={key} className="inline-flex items-center gap-2"><i className={`size-2.5 ${dailyTones[key]}`} />{dailyLabels[key]}</span>)}
-        {hasSpikes ? <span className="inline-flex items-center gap-2"><i className={`size-2.5 ${dailyTones[measured]}`} /><TermLabel term={glossary.metric.spike}>сплеск (яскравіше)</TermLabel></span> : null}
+        {keys.map((key) => <span key={key} className="inline-flex items-center gap-2"><i className={`size-2.5 ${dailyTones[key]} ${hasSpikes ? "opacity-45" : ""}`} />{dailyLabels[key]}</span>)}
+        {hasSpikes ? <span className="inline-flex items-center gap-2"><i className={`size-2.5 ${dailyTones[measured]}`} /><TermLabel term={glossary.metric.spike}>сплеск</TermLabel></span> : null}
         {mode === "stance" ? <span className="inline-flex items-center gap-2"><i className="h-0.5 w-4 bg-ink" /><TermLabel term={glossary.metric.rollingShare}>{granularity === "week" ? "Частка негативу" : glossary.metric.rollingShare.label}</TermLabel></span> : null}
       </div>
       {data.length > 14 ? <div className="flex gap-3" data-export-ignore="true" role="group" aria-label="Крок графіка">
         {(["day", "week"] as const).map((value) => <button key={value} type="button" aria-pressed={granularity === value} onClick={() => setChosen(value)} className={granularity === value ? "border-b-2 border-negative font-bold" : "font-normal text-muted-foreground hover:text-foreground"}>{value === "day" ? "Дні" : "Тижні"}</button>)}
       </div> : null}
     </div>
-    <ChartContainer className="aspect-auto h-64 w-full" config={config}>
+    <ChartContainer className="aspect-auto h-64 w-full min-w-0" config={config}>
       <ComposedChart data={points} margin={{ left: 0, right: 4, top: 8, bottom: 0 }} barCategoryGap={points.length > 90 ? 0 : "18%"} onClick={(state) => {
         const date = state?.activeLabel;
-        if (typeof date === "string") pick(date);
+        if (interactive && typeof date === "string") pick(date);
       }}>
         <CartesianGrid vertical={false} stroke="var(--rule)" strokeDasharray="2 4" />
         <XAxis dataKey="date" tickFormatter={formatDate} tickLine={false} axisLine={false} minTickGap={42} />
-        <YAxis yAxisId="count" tickLine={false} axisLine={false} width={40} allowDecimals={false} tickFormatter={(value: number) => formatNumber(value)} />
-        {mode === "stance" ? <YAxis yAxisId="share" orientation="right" domain={[0, 1]} ticks={[0, 0.5, 1]} tickFormatter={shareTick} tickLine={false} axisLine={false} width={40} /> : null}
+        <YAxis yAxisId="count" tickLine={false} axisLine={false} width={36} allowDecimals={false} tickFormatter={(value: number) => formatNumber(value)} />
+        {mode === "stance" ? <YAxis yAxisId="share" orientation="right" domain={[0, 1]} ticks={[0, 0.5, 1]} tickFormatter={shareTick} tickLine={false} axisLine={false} width={36} /> : null}
         <ChartTooltip cursor={{ fill: "var(--foreground)", fillOpacity: 0.06 }} content={<DailyTooltip mode={mode} granularity={granularity} />} />
-        {keys.map((key) => <Bar key={key} yAxisId="count" dataKey={key} stackId={mode === "stance" ? "stance" : undefined} fill={`var(--color-${key})`} maxBarSize={28} isAnimationActive={false} className={onDate || onRange ? "cursor-pointer" : ""}>
+        {keys.map((key) => <Bar key={key} yAxisId="count" dataKey={key} stackId={mode === "stance" ? "stance" : undefined} fill={`var(--color-${key})`} maxBarSize={28} isAnimationActive={false} className={interactive ? "cursor-pointer" : ""}>
           {points.map((point) => <Cell key={point.date} fillOpacity={hasSpikes && !point.spike ? 0.45 : key === "claim_count" ? 0.85 : 1} />)}
         </Bar>)}
         {spikes && spikes.mean > 0 ? <ReferenceLine yAxisId="count" y={spikes.mean} stroke="var(--foreground)" strokeDasharray="4 4" strokeOpacity={0.55} label={{ value: `середнє ${formatNumber(Math.round(spikes.mean))}`, position: "insideTopRight", fill: "var(--muted-foreground)", fontSize: 11 }} /> : null}
         {mode === "stance" ? <Line yAxisId="share" dataKey="share" type="linear" stroke="var(--foreground)" strokeWidth={1.75} dot={false} connectNulls={false} isAnimationActive={false} /> : null}
       </ComposedChart>
     </ChartContainer>
+    <DailyTable points={points} mode={mode} granularity={granularity} onPick={interactive ? pick : undefined} />
   </div>;
 }
 
@@ -327,18 +447,18 @@ export function DistributionBars<K extends string>({ items, labels, group, selec
 }) {
   const sorted = [...items].sort((a, b) => b.count - a.count);
   const max = Math.max(...sorted.map((item) => item.count), 1);
+  const rowClass = "grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-4 border-b border-rule py-2.5 text-left text-sm";
   return <div className="border-t border-rule">
-    {sorted.map((item) => <button
-      key={item.key}
-      type="button"
-      aria-pressed={selected === item.key}
-      onClick={() => onSelect?.(selected === item.key ? undefined : item.key)}
-      className={`grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-4 border-b border-rule py-2.5 text-left text-sm hover:bg-ink/[0.035] ${selected === item.key ? "bg-negative/[0.06]" : ""}`}
-    >
-      <span className="font-semibold">{group ? <TermLabel term={{ ...termOf(group, item.key), label: labels[item.key] }} /> : labels[item.key]}</span>
-      <span className="font-bold tabular-nums">{formatNumber(item.count)} <span className="ml-1.5 font-normal text-muted-foreground">{formatPercent(item.share)}</span></span>
-      <span className="col-span-2 mt-1.5 h-1 bg-neutral/25"><span className={`block h-full ${tone === "red" ? "bg-negative" : "bg-ink"}`} style={{ width: `${(item.count / max) * 100}%` }} /></span>
-    </button>)}
+    {sorted.map((item) => {
+      const label = group ? <TermLabel plain={Boolean(onSelect)} term={{ ...termOf(group, item.key), label: labels[item.key] }} /> : labels[item.key];
+      const body = <>
+        <span className="font-semibold">{label}</span>
+        <span className="font-bold tabular-nums">{formatNumber(item.count)} <span className="ml-1.5 font-normal text-muted-foreground">{formatPercent(item.share)}</span></span>
+        <span className="col-span-2 mt-1.5 h-1 bg-neutral/25"><span className={`block h-full ${tone === "red" ? "bg-negative" : "bg-ink"}`} style={{ width: `${(item.count / max) * 100}%` }} /></span>
+      </>;
+      if (!onSelect) return <div key={item.key} className={rowClass}>{body}</div>;
+      return <button key={item.key} type="button" aria-pressed={selected === item.key} onClick={() => onSelect(selected === item.key ? undefined : item.key)} className={`${rowClass} hover:bg-ink/[0.035] ${selected === item.key ? "bg-negative/[0.06]" : ""}`}>{body}</button>;
+    })}
   </div>;
 }
 
@@ -347,13 +467,15 @@ export function EvaluativeBalanceStrip({ item }: { item: Pick<Summary, "positive
   const negativeShare = item.negative_share ?? (evaluative ? item.negative_count / evaluative : 0);
   const positiveShare = evaluative ? item.positive_count / evaluative : 0;
   return <div>
-    <div className="flex h-2 overflow-hidden bg-neutral/20" aria-label="Порівняння позитивних і негативних оцінок">
+    <div className="flex h-2 overflow-hidden bg-neutral/20" role="img" aria-label={evaluative ? `Негативні ${formatPercent(negativeShare)}, позитивні ${formatPercent(positiveShare)} з ${formatNumber(evaluative)} оцінок` : "Оцінок немає"}>
       <span className="bg-negative" style={{ width: `${negativeShare * 100}%` }} />
       <span className="bg-positive" style={{ width: `${positiveShare * 100}%` }} />
     </div>
-    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-      <span className="text-negative">Негативні {formatPercent(negativeShare)}</span>
-      <span className="text-positive">Позитивні {formatPercent(positiveShare)}</span>
+    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground" aria-hidden="true">
+      {evaluative ? <>
+        <span className="text-negative">Негативні {formatPercent(negativeShare)}</span>
+        <span className="text-positive">Позитивні {formatPercent(positiveShare)}</span>
+      </> : null}
       <span>{`${glossary.metric.sample.label} ${formatNumber(evaluative)}`}</span>
       {item.absent_count ? <span>{formatNumber(item.absent_count)} без оцінки</span> : null}
     </div>
@@ -370,22 +492,29 @@ export function Pager({ page, param = "offset" }: { page: Page<unknown>; param?:
     next.set(param, String(Math.max(0, offset)));
     setParams(next);
   };
-  return <div className="mt-5 flex items-center justify-between border-t border-rule pt-4 text-sm text-muted-foreground">
-    <span>{page.total ? `Показано ${page.offset + 1}–${end} із ${page.total}` : "Немає результатів"}</span>
-    <div className="flex items-center gap-3">
-      <Button size="icon-sm" variant="ghost" disabled={!page.offset} onClick={() => change(page.offset - PAGE_SIZE)} aria-label="Попередня сторінка"><ChevronLeft /></Button>
-      <span className="tabular-nums">{Math.floor(page.offset / PAGE_SIZE) + 1}</span>
-      <Button size="icon-sm" variant="ghost" disabled={end >= page.total} onClick={() => change(page.offset + PAGE_SIZE)} aria-label="Наступна сторінка"><ChevronRight /></Button>
+  const pages = Math.max(1, Math.ceil(page.total / PAGE_SIZE));
+  return <div className="mt-5 flex items-center justify-between gap-3 border-t border-rule pt-4 text-sm text-muted-foreground">
+    <span aria-live="polite" className="tabular-nums">{page.total ? `Показано ${page.offset + 1}–${end} із ${formatNumber(page.total)}` : "Немає результатів"}</span>
+    <div className="flex items-center gap-2">
+      <Button size="icon" variant="ghost" disabled={!page.offset} onClick={() => change(0)} aria-label="Перша сторінка" className="hidden sm:inline-flex"><ChevronLeft /><ChevronLeft className="-ml-3" /></Button>
+      <Button size="icon" variant="ghost" disabled={!page.offset} onClick={() => change(page.offset - PAGE_SIZE)} aria-label="Попередня сторінка"><ChevronLeft /></Button>
+      <span className="tabular-nums">{Math.floor(page.offset / PAGE_SIZE) + 1} з {formatNumber(pages)}</span>
+      <Button size="icon" variant="ghost" disabled={end >= page.total} onClick={() => change(page.offset + PAGE_SIZE)} aria-label="Наступна сторінка"><ChevronRight /></Button>
+      <Button size="icon" variant="ghost" disabled={end >= page.total} onClick={() => change((pages - 1) * PAGE_SIZE)} aria-label="Остання сторінка" className="hidden sm:inline-flex"><ChevronRight /><ChevronRight className="-ml-3" /></Button>
     </div>
   </div>;
 }
 
 export function LoadState() {
-  return <div className="space-y-4 py-8" aria-label="Завантаження"><Skeleton className="h-5 w-32 rounded-none" /><Skeleton className="h-16 w-3/4 rounded-none" /><Skeleton className="h-64 w-full rounded-none" /></div>;
+  return <div className="space-y-4 py-8" role="status" aria-live="polite"><span className="sr-only">Завантаження даних…</span><Skeleton className="h-5 w-32 rounded-none" /><Skeleton className="h-16 w-3/4 rounded-none" /><Skeleton className="h-64 w-full rounded-none" /></div>;
 }
 
-export function ErrorState({ message = "Не вдалося завантажити дані." }: { message?: string }) {
-  return <div className="border-y border-negative py-10"><p className="eyebrow text-negative">Помилка даних</p><p className="mt-2 font-heading text-2xl font-bold">{message}</p></div>;
+export function ErrorState({ message = "Не вдалося завантажити дані.", onRetry }: { message?: string; onRetry?: () => void }) {
+  return <div className="border-y-2 border-negative py-8" role="alert">
+    <p className="font-heading text-2xl font-bold">{message}</p>
+    <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Сервер аналітики не відповів або відповів помилкою. Вибраний період і фільтри збережено в адресі сторінки, тож повторна спроба нічого не скине.</p>
+    {onRetry ? <Button className="mt-4" size="lg" onClick={onRetry}><RotateCw aria-hidden="true" />Спробувати ще раз</Button> : null}
+  </div>;
 }
 
 export function EmptyState({ children = "За вибраний період даних немає." }: { children?: ReactNode }) {
@@ -410,11 +539,13 @@ export function useExactDate() {
   return (date: string) => pick(date, 1);
 }
 
+/** Returns to the list the reader came from, or through history when they arrived directly. */
 export function BackLink() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [hovered, setHovered] = useState(false);
-  return <button type="button" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} onClick={() => navigate(-1)} className="eyebrow inline-flex items-center gap-2 border-b border-transparent pb-1 hover:border-ink">
-    <ChevronLeft className={`size-3 transition-transform ${hovered ? "-translate-x-1" : ""}`} /> Назад до аналізу <span className="sr-only">з {location.pathname}</span>
-  </button>;
+  const from = typeof location.state === "object" && location.state && "from" in location.state ? String(location.state.from) : undefined;
+  const className = "group eyebrow inline-flex items-center gap-2 border-b border-transparent pb-1 hover:border-ink";
+  const content = <><ChevronLeft className="size-3 transition-transform group-hover:-translate-x-1" aria-hidden="true" /> Назад до вибірки</>;
+  if (from) return <Link to={from} className={className}>{content}</Link>;
+  return <button type="button" onClick={() => navigate(-1)} className={className}>{content}</button>;
 }

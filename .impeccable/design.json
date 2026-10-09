@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-09T18:17:48+00:00",
+  "generatedAt": "2026-10-09T19:10:57+00:00",
   "title": "Design System: Кривда",
   "extensions": {
     "colorMeta": {
@@ -267,15 +267,15 @@
       "refersTo": "input-field",
       "description": "Text search for entities and claims.",
       "html": "<input class=\"ds-input\" placeholder=\"Знайти сутність\" />",
-      "css": ".ds-input { height: 32px; width: 260px; padding: 4px 10px; background: transparent; color: #171714; border: 1px solid #b9b3a9; border-radius: 4px; font: 400 14px/1.4 'Fixel Text', sans-serif; transition: border-color .15s; } .ds-input::placeholder { color: #6d6962; } .ds-input:focus-visible { outline: none; border-color: #171714; box-shadow: 0 0 0 3px rgb(23 23 20 / .5); }"
+      "css": ".ds-input { height: 40px; width: 260px; padding: 8px 12px; background: #f4f1e9; color: #171714; border: 1px solid #d5d0c7; border-radius: 0; font: 400 14px/1.4 'Fixel Text', sans-serif; transition: border-color .15s; } .ds-input:hover { border-color: #171714; } .ds-input::placeholder { color: #6d6962; } .ds-input:focus-visible { outline: none; border-color: #c72c32; box-shadow: 0 0 0 2px rgb(199 44 50 / .2); }"
     },
     {
       "name": "Masthead",
       "kind": "nav",
       "refersTo": "masthead",
       "description": "Sticky newspaper masthead with wordmark and red active underline.",
-      "html": "<header class=\"ds-mast\"><a class=\"ds-mark\">КРИВДА<span>.</span></a><nav class=\"ds-nav\"><a class=\"is-active\">Огляд</a><a>Сутності</a><a>Канали</a><a>Твердження</a></nav></header>",
-      "css": ".ds-mast { display: flex; align-items: center; gap: 32px; height: 64px; padding: 0 32px; background: rgb(244 241 233 / .95); border-bottom: 1px solid #d5d0c7; } .ds-mark { font: 900 24px/1 'Kyiv Type Serif', Georgia, serif; letter-spacing: .04em; color: #171714; } .ds-mark span { color: #c72c32; } .ds-nav { display: flex; gap: 28px; } .ds-nav a { position: relative; padding: 20px 0; font: 700 14px/1 'Fixel Text', sans-serif; color: #6d6962; cursor: pointer; transition: color .15s; } .ds-nav a:hover, .ds-nav a.is-active { color: #171714; } .ds-nav a::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: #c72c32; transform: scaleX(0); transform-origin: left; transition: transform .15s; } .ds-nav a.is-active::after, .ds-nav a:hover::after { transform: scaleX(1); }"
+      "html": "<header class=\"ds-mast\"><a class=\"ds-mark\"><svg viewBox=\"8 11 54 43\" width=\"28\" height=\"24\" aria-hidden=\"true\"><g fill=\"#171714\"><rect x=\"9\" y=\"12\" width=\"23\" height=\"6\"/><rect x=\"9\" y=\"46\" width=\"23\" height=\"6\"/><rect x=\"14\" y=\"12\" width=\"12\" height=\"40\"/><polygon points=\"26,28 42,12 53,12 26,39\"/><rect x=\"40\" y=\"12\" width=\"16\" height=\"6\"/></g><g fill=\"#c72c32\" style=\"mix-blend-mode:multiply\"><polygon points=\"31,33 40,27 58,52 45,52\"/><rect x=\"42\" y=\"47\" width=\"19\" height=\"6\"/></g></svg>КРИВДА</a><nav class=\"ds-nav\"><a class=\"is-active\">Огляд</a><a>Сутності</a><a>Канали</a><a>Твердження</a></nav></header>",
+      "css": ".ds-mast { display: flex; align-items: center; gap: 32px; height: 64px; padding: 0 32px; background: rgb(244 241 233 / .95); border-bottom: 1px solid #d5d0c7; } .ds-mark { display: inline-flex; align-items: center; gap: 8px; font: 900 24px/1 'Kyiv Type Serif', Georgia, serif; letter-spacing: .04em; color: #171714; } .ds-nav { display: flex; gap: 28px; } .ds-nav a { position: relative; padding: 20px 0; font: 700 14px/1 'Fixel Text', sans-serif; color: #6d6962; cursor: pointer; transition: color .15s; } .ds-nav a:hover, .ds-nav a.is-active { color: #171714; } .ds-nav a::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: #c72c32; transform: scaleX(0); transform-origin: left; transition: transform .15s; } .ds-nav a.is-active::after, .ds-nav a:hover::after { transform: scaleX(1); }"
     },
     {
       "name": "Stance Badges",
@@ -289,9 +289,9 @@
       "name": "Story Card",
       "kind": "card",
       "refersTo": "chart-card",
-      "description": "Export-ready chart card with thesis headline and signed footer.",
-      "html": "<section class=\"ds-card\"><p class=\"ds-eyebrow\">Негативні класифікації · 30 днів</p><h2 class=\"ds-thesis\">Негатив щодо сутності зріс удвічі за місяць</h2><p class=\"ds-dek\">Негативні оцінки, які канали висловлюють від себе.</p><div class=\"ds-plot\"></div><footer class=\"ds-foot\"><span class=\"ds-sig\">КРИВДА<span>.</span></span><span class=\"ds-src\">Джерело: публічні Telegram-канали · 30 днів</span></footer></section>",
-      "css": ".ds-card { display: flex; flex-direction: column; max-width: 440px; padding: 20px; background: #faf8f2; border: 1px solid #d5d0c7; border-top: 2px solid #171714; color: #171714; } .ds-eyebrow { margin: 0; font: 800 11px/1.4 'Fixel Text', sans-serif; letter-spacing: .14em; text-transform: uppercase; } .ds-thesis { margin: 6px 0 0; font: 700 28px/1.25 'Kyiv Type Serif', Georgia, serif; letter-spacing: .015em; } .ds-dek { margin: 6px 0 0; font: 400 14px/24px 'Fixel Text', sans-serif; color: #6d6962; } .ds-plot { height: 96px; margin-top: 16px; background: repeating-linear-gradient(90deg, #c72c32 0 14px, transparent 14px 20px); opacity: .85; } .ds-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-top: 20px; padding-top: 12px; border-top: 1px solid #d5d0c7; } .ds-sig { font: 900 16px/1 'Kyiv Type Serif', Georgia, serif; letter-spacing: .04em; } .ds-sig span { color: #c72c32; } .ds-src { font: 400 11px/1.4 'Fixel Text', sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #6d6962; }"
+      "description": "Export-ready chart card: thesis headline, dateline, signed footer.",
+      "html": "<section class=\"ds-card\"><h2 class=\"ds-thesis\">Негатив щодо сутності зріс з 4 до 19</h2><p class=\"ds-dateline\"><b>Тональність у часі</b> / Назва сутності / 9 вер. — 9 жовт. 2026 / усі канали та джерела</p><p class=\"ds-dek\">Стовпчики — позитивні й негативні класифікації.</p><div class=\"ds-plot\"></div><footer class=\"ds-foot\"><span class=\"ds-sig\">КРИВДА</span><span class=\"ds-src\">Джерело: погоджений пул публічних Telegram-каналів · класифікація мовною моделлю</span></footer></section>",
+      "css": ".ds-card { display: flex; flex-direction: column; max-width: 440px; padding: 20px; background: #faf8f2; border: 1px solid #d5d0c7; border-top: 2px solid #171714; color: #171714; } .ds-dateline { margin: 8px 0 0; font: 400 13px/20px 'Fixel Text', sans-serif; color: #6d6962; } .ds-dateline b { color: #171714; } .ds-thesis { margin: 0; font: 700 28px/1.25 'Kyiv Type Serif', Georgia, serif; letter-spacing: .015em; } .ds-dek { margin: 6px 0 0; font: 400 14px/24px 'Fixel Text', sans-serif; color: #6d6962; } .ds-plot { height: 96px; margin-top: 16px; background: repeating-linear-gradient(90deg, #c72c32 0 14px, transparent 14px 20px); opacity: .85; } .ds-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-top: 20px; padding-top: 12px; border-top: 1px solid #d5d0c7; } .ds-sig { font: 900 16px/1 'Kyiv Type Serif', Georgia, serif; letter-spacing: .04em; }  .ds-src { font: 400 12px/1.4 'Fixel Text', sans-serif; color: #6d6962; }"
     },
     {
       "name": "Diverging Bar Row",
@@ -310,13 +310,13 @@
   ],
   "narrative": {
     "northStar": "Шпальта розслідування (The Investigative Broadsheet)",
-    "overview": "Кривда looks and behaves like the front page of an investigative newspaper that has just found something. Every screen is a printed page: warm newsprint ground, heavy black serif theses set like headlines, hairline column rules instead of boxes, and one exposing red that marks what is being attacked. The tone is sharp and accusatory in its presentation, never in its numbers: a headline states the finding bluntly, while the graphic beneath it shows its sample size, its denominator, and the period it covers.\n\nDensity is that of a broadsheet, not a SaaS dashboard. Wide screens set chart cards in a three-column grid under a 1480 px masthead; each card is a self-contained story with eyebrow, thesis headline, dek, graphic, and a signed footer, so it can be torn out and posted publicly as a PNG without losing meaning. Ornament is absent; emphasis comes from weight, rules, and red.\n\nThe system is light-only: newsprint is the identity, and no dark theme is defined.",
+    "overview": "Кривда looks and behaves like the front page of an investigative newspaper that has just found\nsomething. Every screen is a printed page: warm newsprint ground, heavy black serif theses set\nlike headlines, hairline column rules instead of boxes, and one exposing red that marks what is\nbeing attacked. The tone is sharp and accusatory in its presentation, never in its numbers: a\nheadline states the finding bluntly, while the graphic beneath it shows its sample size, its\ndenominator, and the period it covers.\n\nDensity is that of a broadsheet, not a SaaS dashboard. Wide screens set chart cards in a\nthree-column grid under a 1480 px masthead; each card is a self-contained story with a thesis\nheadline, a dateline (section, subject, period with year, active filters), a dek, the graphic, and\na signed footer, so it can be torn out and posted publicly as a PNG without losing meaning.\nOrnament is absent; emphasis comes from weight, rules, and red.\n\nThe mark is a slab-serif К printed in two inks with its red leg knocked out of register: a\ncrooked print for a crooked truth (кривда). It appears with the КРИВДА wordmark in the masthead\nand in every exported card's footer, and alone as the favicon (`apps/frontend/public`).\n\nThe system is light-only: newsprint is the identity, and no dark theme is defined.",
     "keyCharacteristics": [
       "Newsprint paper and press ink, with red reserved for exposure and blue for its opposite.",
       "Black-weight Kyiv Type Serif theses; every number and label in Fixel Text.",
       "Rules, not shadows: hairline column rules and a 2 px ink rule that opens every story.",
       "Square, nearly cornerless forms (0–4 px).",
-      "Every chart card is export-ready and signed «КРИВДА.»."
+      "Every chart card is export-ready, carries its own context, and is signed with the mark."
     ],
     "rules": [
       {
@@ -331,7 +331,12 @@
       },
       {
         "name": "The Thesis Rule",
-        "body": "Serif is for statements: page and card headlines that say what was found. Numbers, labels, and controls are never set in the serif.",
+        "body": "Serif is for statements: page and card headlines that say what was found. Numbers, labels, and controls are never set in the serif. A headline names a finding only when its guardrail passes (`apps/frontend/src/lib/theses.ts`: at least 10 evaluations, 5 classifications, or a 20-evaluation, 60%-negative leader for \"main target\"); otherwise it describes the graphic.",
+        "section": "typography"
+      },
+      {
+        "name": "The Dateline Rule",
+        "body": "Context goes under the headline, not above it. No kicker or eyebrow sits over a heading; the dateline carries section, subject, period with year, and active filters.",
         "section": "typography"
       },
       {
@@ -346,8 +351,10 @@
       }
     ],
     "dos": [
-      "Do open every story with a 2 px Press Ink rule and an uppercase eyebrow that names the period.",
-      "Do write card headlines as theses that state the finding; put method and caveats in the dek.",
+      "Do open every story with a 2 px Press Ink rule and a thesis headline, with the dateline under it.",
+      "Do write card headlines as theses that state the finding, guarded by the sample thresholds; put method and caveats in the dek.",
+      "Do show absolute values beside percentage changes, and absolute changes alone below a base of 10.",
+      "Do flag stale sources in red where freshness matters (last post or claim more than 3 days old).",
       "Do show the evaluative sample size and the denominator next to every share.",
       "Do set every number in Fixel Text with tabular figures.",
       "Do keep every chart card export-ready: self-explanatory headline, period, source line, and the «КРИВДА.» signature; mark controls `data-export-ignore`.",
@@ -360,7 +367,9 @@
       "Don't round corners beyond 4 px; badges and selects are square.",
       "Don't draw interpolated area or smoothed line charts for daily counts.",
       "Don't set numbers, labels, or controls in the serif.",
-      "Don't show Latin-script interface text; only «Telegram» and data such as channel names."
+      "Don't show Latin-script interface text; only «Telegram» and data such as channel names.",
+      "Don't set a kicker or eyebrow label above any heading.",
+      "Don't use Unicode glyphs (▲ ◀ ▶) as icons; use the Lucide set."
     ]
   }
 }

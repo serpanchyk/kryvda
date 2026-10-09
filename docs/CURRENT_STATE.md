@@ -147,10 +147,22 @@ filter their evidence or claims. Entity analytics excludes the technical `від
 from its evaluative totals. Rhetoric shares count assigned labels, while epistemic and attribution
 shares count distinct claims; the interface labels these denominators explicitly.
 
-Every chart section is a shareable card: a thesis headline, the active period in its eyebrow, and a
-branded `КРИВДА.` footer with source and period. A `Зберегти зображення` control exports the card at
-2x pixel ratio through `html-to-image`, excluding controls marked `data-export-ignore` and hiding
-term underlines. Layout density favours three-column card grids on wide screens.
+Every chart section is a shareable card: a data-driven thesis headline, a dateline under it
+(section, subject, period with year, active filters), and a footer with the Кривда mark and a
+source line naming the agreed channel pool and language-model classification. Headlines state a
+finding only above sample guardrails (`apps/frontend/src/lib/theses.ts`) and otherwise describe the
+graphic; the overview title names the period's main target under the same guardrail. A
+`Зберегти зображення` control renders the card at 2x pixel ratio through `html-to-image` and opens a
+preview dialog; the PNG is saved only after the analyst confirms. Controls marked
+`data-export-ignore` and term underlines are excluded. Interactive charts carry a keyboard data
+table that offers the same drill-down, and on phones the target map becomes a ranked quadrant list.
+
+The Кривда mark is a slab-serif К whose red leg is printed out of register; it ships as
+`apps/frontend/public/kryvda-mark.svg`, `favicon.ico`, and `apple-touch-icon.png` and as the
+`BrandMark` component. Entity and channel profiles flag sources whose last claim or post is more
+than three days old. Failed requests show a retry action that keeps URL-backed filters. `/system`
+is a non-exportable operational page with the queue, retry reasons, last runs, and per-channel
+collection freshness from `/channels/collection-health`.
 
 The overview opens with a metric strip whose counts carry a sparkline and the relative change
 against the equally long previous period (fetched as a second request; unavailable for «Увесь

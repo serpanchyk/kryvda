@@ -15,11 +15,11 @@ import { exportFileName } from "@/lib/editorial";
 import { ClaimsPage, DashboardPage, EntityPage, SystemPage } from "@/pages/analytics";
 
 vi.mock("html-to-image", () => ({ toPng: vi.fn() }));
-vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 vi.mock("@/api/client", async () => {
   const actual = await vi.importActual<typeof import("@/api/client")>("@/api/client");
-  return { ...actual, apiClient: { ...actual.apiClient, dashboard: vi.fn(), claims: vi.fn(), entity: vi.fn(), evidence: vi.fn(), sourceActors: vi.fn(), entities: vi.fn(), post: vi.fn(), claimChannels: vi.fn(), claimSourceActors: vi.fn(), analysisHealth: vi.fn() } };
+  return { ...actual, apiClient: { ...actual.apiClient, dashboard: vi.fn(), claims: vi.fn(), entity: vi.fn(), evidence: vi.fn(), sourceActors: vi.fn(), entities: vi.fn(), post: vi.fn(), claimChannels: vi.fn(), claimSourceActors: vi.fn(), analysisHealth: vi.fn(), collectionHealth: vi.fn() } };
 });
 
 afterEach(() => cleanup());
@@ -97,7 +97,8 @@ describe("editorial analytics pages", () => {
     expect(screen.getByText("Відкрити пошук тверджень →")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Твердження" })).toHaveAttribute("href", "/claims?period=all");
     expect(screen.getByRole("link", { name: "Сутності" })).toHaveAttribute("href", "/entities?period=all");
-    expect(screen.getByRole("link", { name: /Віталій Шабунін/ })).toHaveAttribute("href", "/entities/4?period=all");
+    expect(screen.getAllByRole("link", { name: /Віталій Шабунін/ })[0]).toHaveAttribute("href", "/entities/4?period=all");
+    expect(document.title).toBe("Хто і як стає мішенню негативних тверджень — Кривда");
   });
 
   test("switches dashboard rankings and shows evaluative sample sizes", async () => {
@@ -113,11 +114,13 @@ describe("editorial analytics pages", () => {
     });
     vi.mocked(apiClient.claims).mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 });
     renderRoute("/", "/", <DashboardPage />);
-    expect(await screen.findByText("Великий обсяг")).toBeInTheDocument();
+    expect((await screen.findAllByText("Великий обсяг")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("вибірка 50").length).toBeGreaterThan(0);
     expect(screen.getByText(/3 без оцінки/)).toBeInTheDocument();
+    expect(screen.getByText("Найбільше негативу — Великий обсяг: 30 негативних класифікацій")).toBeInTheDocument();
     await userEvent.click(screen.getAllByRole("button", { name: "За негативним балансом" })[0]);
-    const entityLinks = screen.getAllByRole("link", { name: /Великий обсяг|Стабільний негатив/ });
+    const ranking = screen.getByText("Рейтинг сутностей").closest("section") as HTMLElement;
+    const entityLinks = within(ranking).getAllByRole("link", { name: /Великий обсяг|Стабільний негатив/ });
     expect(entityLinks[0]).toHaveAccessibleName(/Стабільний негатив/);
     expect(screen.queryByText("0.6")).not.toBeInTheDocument();
   });
@@ -184,17 +187,24 @@ describe("editorial analytics pages", () => {
     vi.mocked(toPng).mockResolvedValueOnce("data:image/png;base64,AA").mockRejectedValueOnce(new Error("canvas"));
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
     renderRoute("/?period=all", "/", <DashboardPage />);
-    expect(await screen.findByText(/Пік — .*: 2 негативних класифікацій/)).toBeInTheDocument();
+    const title = "Негативні класифікації за днями";
+    expect(await screen.findByText(title)).toBeInTheDocument();
     const [save] = screen.getAllByRole("button", { name: "Зберегти зображення" });
     await userEvent.click(save);
     const [node, options] = vi.mocked(toPng).mock.calls[0];
     expect(node.tagName).toBe("SECTION");
-    expect(within(node).getByText("Коли зростала кількість негативних тверджень")).toBeInTheDocument();
+    expect(within(node).getByText(title)).toBeInTheDocument();
+    expect(within(node).getByText(/Увесь час/)).toBeInTheDocument();
+    expect(within(node).getByText(/класифікація мовною моделлю/)).toBeInTheDocument();
     expect(options).toEqual(expect.objectContaining({ pixelRatio: 2 }));
-    expect(options?.filter?.(within(node).getByRole("button", { name: "Зберегти зображення" }).parentElement as HTMLElement)).toBe(false);
-    expect(options?.filter?.(within(node).getByText("Коли зростала кількість негативних тверджень"))).toBe(true);
+    expect(options?.filter?.(within(node).getByRole("button", { name: "Зберегти зображення", hidden: true }).parentElement as HTMLElement)).toBe(false);
+    expect(options?.filter?.(within(node).getByText(title))).toBe(true);
+    expect(click).not.toHaveBeenCalled();
+    expect(await screen.findByText("Перевірте картку перед публікацією")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Зберегти PNG" }));
     expect(click).toHaveBeenCalledTimes(1);
-    await userEvent.click(save);
+    expect(toast.success).toHaveBeenCalledWith("Зображення збережено.");
+    await userEvent.click(screen.getAllByRole("button", { name: "Зберегти зображення" })[0]);
     expect(toast.error).toHaveBeenCalledWith("Не вдалося зберегти зображення.");
     click.mockRestore();
   });
@@ -211,6 +221,13 @@ describe("editorial analytics pages", () => {
     expectNoLatin();
   });
 
+  test("offers a retry when the analytics request fails", async () => {
+    vi.mocked(apiClient.dashboard).mockRejectedValueOnce(new Error("down")).mockResolvedValueOnce(dashboardData([]));
+    renderRoute("/?period=all", "/", <DashboardPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Спробувати ще раз" }));
+    expect(await screen.findByText("Негативні класифікації за днями")).toBeInTheDocument();
+  });
+
   test("builds dated file names for exported graphics", () => {
     expect(exportFileName("Коли зростала кількість?", new Date(2026, 8, 30))).toBe("кривда-коли-зростала-кількість-2026-09-30.png");
     expect(exportFileName("!!!", new Date(2026, 0, 2))).toBe("кривда-графік-2026-01-02.png");
@@ -225,8 +242,9 @@ describe("editorial analytics pages", () => {
     expect(screen.getByText("2 → 12 негативних класифікацій")).toBeInTheDocument();
     expect(screen.queryByText("+1")).not.toBeInTheDocument();
     expect(screen.getAllByText("до попереднього періоду").length).toBeGreaterThan(0);
-    expect(screen.getByText("▼ 50%", { exact: false })).toBeInTheDocument();
-    expect(screen.getByText("Хто в полі атаки")).toBeInTheDocument();
+    expect(screen.getByText("(було 14)")).toBeInTheDocument();
+    expect(screen.getByText("Зростання: негатив зріс з 2 до 12")).toBeInTheDocument();
+    expect(screen.getByText("2 сутності у полі оцінок")).toBeInTheDocument();
     expectNoLatin();
   });
 
@@ -236,7 +254,7 @@ describe("editorial analytics pages", () => {
     vi.mocked(apiClient.dashboard).mockResolvedValue(data);
     renderRoute("/?period=all", "/", <DashboardPage />);
     expect(await screen.findByText("Порівняння недоступне для періоду «Увесь час».")).toBeInTheDocument();
-    expect(screen.getByText(/Пік — 11 вер\.: 40/)).toBeInTheDocument();
+    expect(screen.getByText(/Пік атак — 11 вер\.: 40 негативних класифікацій/)).toBeInTheDocument();
     const weeks = screen.getByRole("button", { name: "Тижні" });
     expect(weeks).toHaveAttribute("aria-pressed", "false");
     await userEvent.click(weeks);
@@ -251,10 +269,16 @@ describe("editorial analytics pages", () => {
   });
 
   test("keeps the analysis system page in Ukrainian", async () => {
-    vi.mocked(apiClient.analysisHealth).mockResolvedValue({ jobs: { ...pipeline, pending_live: 3, pending_backfill: 4 }, runs: {} });
+    vi.mocked(apiClient.analysisHealth).mockResolvedValue({ jobs: { ...pipeline, pending_live: 3, pending_backfill: 4, failed: 2, retry_by_error_kind: { schema_failure: 2, something_new: 1 } }, runs: {} });
+    vi.mocked(apiClient.collectionHealth).mockResolvedValue([{ id: 1, title: "Канал", username: "kanal", status: "active", last_collected_at: "2026-01-01T00:00:00Z", last_error: "Timeout", last_error_at: null }]);
     renderRoute("/system", "/system", <SystemPage />);
     expect(await screen.findByText("Нові дописи")).toBeInTheDocument();
     expect(screen.getByText("Архівні дописи")).toBeInTheDocument();
+    expect(screen.getByText("Відповідь поза схемою")).toBeInTheDocument();
+    expect(screen.getByText("Невідома помилка")).toBeInTheDocument();
+    expect(await screen.findByText("1 канал не оновлювався понад добу")).toBeInTheDocument();
+    expect(screen.getByText(/2 дописи не вдалося проаналізувати/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Зберегти зображення" })).not.toBeInTheDocument();
     expectNoLatin();
   });
 });
