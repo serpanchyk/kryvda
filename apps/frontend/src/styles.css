@@ -149,6 +149,7 @@
   --accent-foreground: #171714;
   --destructive: #c72c32;
   --border: #d5d0c7;
+  --rule: var(--border);
   --input: #b9b3a9;
   --ring: #171714;
   --negative: #c72c32;

@@ -405,7 +405,7 @@ export function DailyChart({ data, mode = "negative", onDate, onRange }: { data:
         <XAxis dataKey="date" tickFormatter={formatDate} tickLine={false} axisLine={false} minTickGap={42} />
         <YAxis yAxisId="count" tickLine={false} axisLine={false} width={36} allowDecimals={false} tickFormatter={(value: number) => formatNumber(value)} />
         {mode === "stance" ? <YAxis yAxisId="share" orientation="right" domain={[0, 1]} ticks={[0, 0.5, 1]} tickFormatter={shareTick} tickLine={false} axisLine={false} width={36} /> : null}
-        <ChartTooltip cursor={{ fill: "var(--foreground)", fillOpacity: 0.06 }} content={<DailyTooltip mode={mode} granularity={granularity} />} />
+        <ChartTooltip cursor={{ fill: "var(--foreground)", fillOpacity: 0.06 }} isAnimationActive={false} offset={16} content={<DailyTooltip mode={mode} granularity={granularity} />} />
         {keys.map((key) => <Bar key={key} yAxisId="count" dataKey={key} stackId={mode === "stance" ? "stance" : undefined} fill={`var(--color-${key})`} maxBarSize={28} isAnimationActive={false} className={interactive ? "cursor-pointer" : ""}>
           {points.map((point) => <Cell key={point.date} fillOpacity={hasSpikes && !point.spike ? 0.45 : key === "claim_count" ? 0.85 : 1} />)}
         </Bar>)}
