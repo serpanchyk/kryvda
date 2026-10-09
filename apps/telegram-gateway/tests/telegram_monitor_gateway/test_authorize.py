@@ -27,13 +27,30 @@ class FakeTelegramClient:
     async def is_user_authorized(self) -> bool:
         return self.authorized
 
-    async def send_code_request(self, phone_number: str) -> None:
+    async def send_code_request(self, phone_number: str) -> object:
         self.code_requested_for = phone_number
+        self.code_requests = getattr(self, "code_requests", 0) + 1
+        return SentCode(SentCodeTypeApp(), SentCodeTypeSms(), 60)
 
     async def sign_in(self, *args: Any, **kwargs: Any) -> None:
         self.sign_in_calls.append((args, kwargs))
         if self.require_password and len(self.sign_in_calls) == 1:
             raise NeedsPassword()
+
+
+class SentCodeTypeApp:
+    """Stand-in for Telethon's in-app code delivery type."""
+
+
+class SentCodeTypeSms:
+    """Stand-in for Telethon's SMS code delivery type."""
+
+
+class SentCode:
+    def __init__(self, kind: object, next_type: object | None, timeout: int | None) -> None:
+        self.type = kind
+        self.next_type = next_type
+        self.timeout = timeout
 
 
 class NeedsPassword(Exception):
@@ -98,3 +115,26 @@ def test_main_writes_only_session_assignment(
     authorize.main()
 
     assert capsys.readouterr().out == "TELEGRAM_SESSION_STRING=serialized\n"
+
+
+def test_delivery_description_names_the_channel_and_resend() -> None:
+    message = authorize.describe_delivery(SentCode(SentCodeTypeApp(), SentCodeTypeSms(), 60))
+
+    assert "застосунок Telegram" in message
+    assert "SMS-повідомленням (не раніше ніж через 60 с)" in message
+    assert authorize.describe_delivery(SentCode(SentCodeTypeSms(), None, None)) == (
+        "Код надіслано SMS-повідомленням."
+    )
+
+
+@pytest.mark.asyncio
+async def test_empty_code_requests_another_delivery(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = FakeTelegramClient()
+    answers = iter(["", "12345"])
+    monkeypatch.setattr(authorize, "TelegramClient", lambda *_: client)
+    monkeypatch.setattr(authorize.StringSession, "save", lambda _: "serialized")
+    monkeypatch.setattr(authorize.getpass, "getpass", lambda _: next(answers))
+
+    assert await authorize.create_session(settings()) == "serialized"
+    assert client.code_requests == 2
+    assert client.sign_in_calls[0][0] == ("+380000000000", "12345")
