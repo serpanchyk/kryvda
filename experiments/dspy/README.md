@@ -139,3 +139,32 @@ uv run python experiments/dspy/src/mamay_golden_v2.py --validate-only
 uv run dvc add experiments/dspy/data/mamay_vs_golden_v3_5
 uv run dvc status
 ```
+
+## Jev classification-only comparison
+
+`jev_golden_v1.py` evaluates TypeSafe's Jev typed-decision model, reached through OpenRouter's
+`/api/alpha/decisions` endpoint as `~typesafe/jev-latest`, on the 100 reviewed `golden_v0`
+examples. It isolates classification from extraction: each request carries the reviewed claims,
+their attribution with the named author, and the production Pass 3 local context. Jev answers only
+typed questions, so claim coverage and attribution in its report are inputs, not Jev metrics.
+
+Every claim receives an extended five-way epistemic choice and a presentation choice. Every
+monitored claim-target pair receives a three-way stance choice and one probability per extended
+rhetoric label, including `grant_discrediting`, `call_for_punishment`, and the separate `ridicule`
+and `derogatory_labeling` labels that production collapses or drops. `summary.json` contains:
+
+- `production_taxonomy_all_reviewed_pairs`: the standard semantic report over every reviewed pair;
+- `head_to_head`: Mamay v3.5.2 against Jev on exactly the pairs and claims Mamay aligned, plus
+  `jev_calibrated_held_out`, whose negative-stance and rhetoric thresholds are selected on `old55`
+  and reported on `diagnostic45`;
+- `extended_taxonomy`: per-label rhetoric, five-way epistemic, and presentation metrics.
+
+The run sends post text to an external provider and needs `OPENROUTER_API_KEY`. It is resumable
+by `example_id`; `--validate-only` recomputes the summary without network calls.
+
+```bash
+OPENROUTER_API_KEY=... uv run python experiments/dspy/src/jev_golden_v1.py
+uv run python experiments/dspy/src/jev_golden_v1.py --validate-only
+uv run dvc add experiments/dspy/data/jev_vs_golden_v1
+uv run dvc status
+```

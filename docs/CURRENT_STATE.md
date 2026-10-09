@@ -107,6 +107,12 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   the current perspective's negative stance. The 100-example report is canonical-only and labels
   its tuned partitions `old55`, `diagnostic45`, and `all100`; `mixed` stance and `denied`
   epistemics remain `unresolved_legacy` and are excluded from their respective metrics.
+- `jev_vs_golden_v1` is a DVC-tracked, classification-only run of TypeSafe's Jev typed-decision
+  model through OpenRouter over the 100 reviewed examples, using reviewed claims as input. On
+  Mamay's aligned pairs, Jev's default choices under-call negative stance, while thresholds
+  selected on `old55` raise `diagnostic45` negative-stance and rhetoric F1 above Mamay v3.5.2;
+  positive stance and three-way epistemic status remain weaker. Production inference is unchanged
+  and does not call external providers.
 - `registry_post_coverage` is a DVC-tracked snapshot of the number of latest accessible posts
   matching each active registry entity under the production alias policy. Its summary records the
   live queue and a throughput-based ETA; it is an operational snapshot, not a model evaluation.

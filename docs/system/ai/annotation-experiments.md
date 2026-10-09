@@ -30,6 +30,12 @@ summary; it intentionally does not calculate a numeric delta against the 55-post
 Its canonical-only semantic report partitions the tuned data as `old55`, `diagnostic45`, and
 `all100`; the 45 diagnostic examples are not described as held-out after this tuning.
 
+`jev_vs_golden_v1` is a DVC-tracked, classification-only comparison of TypeSafe's Jev typed
+decisions (through OpenRouter) on the same 100 examples. Reviewed claims and attribution are
+inputs; it scores stance, rhetoric, epistemic status, and presentation in both the production and
+the extended `golden_v0` taxonomy, and compares Jev with Mamay v3.5.2 on Mamay's aligned pairs. It
+is an external-provider experiment, not a production dependency.
+
 DSPy work begins only after the annotation schema is stable. Its evaluation uses component metrics
 for entity extraction/resolution, stance, claims, attribution/modality, and rhetorical features,
 with a documented weighted aggregate.
