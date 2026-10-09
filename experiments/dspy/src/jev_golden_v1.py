@@ -130,6 +130,135 @@ AUTHOR_LABELS = {
     "unknown": "невідоме джерело",
 }
 
+# v2 answers the v1 failure modes observed on old55 only: Jev under-called an author's own attack
+# (the Mamay-oriented "another actor's attack" rule leaked onto named authors), missed insinuation,
+# and read "X стверджує" in the normalized claim as uncertainty.
+GUIDELINES_V2 = """Ти класифікуєш уже витягнуті твердження (claims) з Telegram-постів для
+моніторингу інформаційних атак на антикорупційних акторів. Оцінюй лише текст поста.
+
+Кожен claim має author — того, чию позицію він передає: редакцію каналу, названого актора або
+неназване джерело. Питання про ставлення стосуються саме author, а не каналу загалом.
+- Якщо author сам звинувачує, критикує, висміює чи дискредитує TARGET, це негативне ставлення
+  author, навіть коли author не канал. "Постернак стверджує, що в НАБУ можна безкарно
+  збагачуватися" означає, що Постернак негативно ставиться до НАБУ.
+- Якщо author лише переказує, що хтось інший атакує TARGET, і сам до атаки не приєднується,
+  ставлення author до TARGET відсутнє. "Канал повідомляє, що депутат X критикує НАБУ" не означає,
+  що канал оцінює НАБУ.
+- Негативне ставлення буває непрямим: натяк через зіставлення фактів ("отримав посаду у фонді
+  наступного дня після звільнення"), іронія, лапки, оцінні слова, добір дискредитувальних фактів.
+- Нейтральна новина про подію з TARGET (затримання, суд, розслідування, заява) без оцінних слів
+  чи натяків не є ставленням.
+
+Поле claim — нормалізований переказ. Слова "стверджує", "повідомляє", "заявляє" в ньому лише
+вказують на author і нічого не кажуть про впевненість. Для епістемічного статусу й presentation
+орієнтуйся на evidence і context, тобто на оригінальне формулювання поста."""
+
+RHETORIC_CRITERIA_V2 = {
+    "corruption_accusation": (
+        "звинувачення в корупції, хабарях, відкатах, розкраданні, незаконному збагаченні чи "
+        "конфлікті інтересів заради вигоди ('отримав хабар', 'збагатився на закупівлях'); сама "
+        "згадка гранту, зарплати чи великої суми не рахується"
+    ),
+    "criminality_accusation": (
+        "звинувачення у злочині, шахрайстві, незаконних діях, кримінальній участі чи покриванні "
+        "злочинців"
+    ),
+    "delegitimization": (
+        "атака на легітимність, компетентність, незалежність чи право TARGET виконувати свою роль "
+        "('імітує роботу', 'кишеньковий орган', 'провалив', 'не має права')"
+    ),
+    "hypocrisy_claim": (
+        "контраст між заявленими принципами чи критикою TARGET і його власною поведінкою "
+        "('борці з корупцією самі...', 'декларують X, але роблять Y')"
+    ),
+    "ridicule": "глузування, сарказм, іронічні лапки, принизлива метафора чи жарт над TARGET",
+    "derogatory_labeling": (
+        "образливий ярлик чи прізвисько для TARGET ('грантоїди', 'соросята', 'корупціонери')"
+    ),
+    "foreign_control_accusation": (
+        "TARGET нібито діє в інтересах чи під контролем іноземних держав, фондів чи кураторів "
+        "('працює на Сороса', 'зовнішнє управління', 'агенти впливу')"
+    ),
+    "grant_discrediting": (
+        "дискредитація TARGET через гранти чи іноземне фінансування ('живуть на гранти', "
+        "'відпрацьовують гроші донорів', 'грантоїди'), фінансування як доказ продажності"
+    ),
+    "call_for_punishment": (
+        "заклик чи вимога покарати TARGET: звільнити, посадити, ліквідувати, заборонити, "
+        "перевірити чи запровадити санкції"
+    ),
+}
+EPISTEMIC_CRITERIA_V2 = {
+    "asserted": (
+        "author подає proposition як факт, зокрема власні звинувачення чи оцінки без маркерів "
+        "сумніву ('X вкрав', 'суд встановив', 'джерела повідомляють, що X зробив Y')"
+    ),
+    "alleged": (
+        "саме формулювання evidence маркує непевність: 'нібито', 'ймовірно', 'за версією "
+        "слідства', 'підозрюють', 'можливо причетний'"
+    ),
+    "denied": "evidence заперечує чи спростовує proposition ('це неправда', 'не причетний')",
+    "hypothetical": "умовний, прогнозований чи можливий сценарій ('якщо', 'може', 'буде')",
+    "questioned": "proposition подано як питання, зокрема риторичне",
+}
+
+
+@dataclass(frozen=True)
+class PromptSet:
+    """One versioned question design; responses record which version produced them."""
+
+    guidelines: str
+    rhetoric: Mapping[str, str]
+    epistemic: Mapping[str, str]
+    decomposed_stance: bool
+    rhetoric_template: str
+    rhetoric_as_choice: bool = False
+
+
+PROMPTS = {
+    "v1": PromptSet(
+        GUIDELINES,
+        RHETORIC_CRITERIA,
+        EPISTEMIC_CRITERIA,
+        decomposed_stance=False,
+        rhetoric_template="Ймовірність, що author claim {claim} застосовує щодо {target} прийом: "
+        "{description}.",
+    ),
+    "v2": PromptSet(
+        GUIDELINES_V2,
+        RHETORIC_CRITERIA_V2,
+        EPISTEMIC_CRITERIA_V2,
+        decomposed_stance=True,
+        rhetoric_template="Чи claim {claim} у своєму evidence і context застосовує проти {target} "
+        "прийом: {description}?",
+    ),
+    # v3 and v4 address v2 rhetoric false positives on old55: labels spilled from neighbouring
+    # context sentences onto every claim, while golden_v0 records only the salient device.
+    "v3": PromptSet(
+        GUIDELINES_V2,
+        RHETORIC_CRITERIA_V2,
+        EPISTEMIC_CRITERIA_V2,
+        decomposed_stance=True,
+        rhetoric_template="Чи саме proposition claim {claim} та його evidence, а не сусідні "
+        "речення з context, явно застосовує проти {target} прийом: {description}? Познач лише "
+        "прийом, що є суттю цього claim.",
+    ),
+    "v4": PromptSet(
+        GUIDELINES_V2,
+        RHETORIC_CRITERIA_V2,
+        EPISTEMIC_CRITERIA_V2,
+        decomposed_stance=True,
+        rhetoric_template="Головний риторичний прийом, який claim {claim}, тобто лише його "
+        "evidence, а не сусідні речення з context, застосовує проти {target}.",
+        rhetoric_as_choice=True,
+    ),
+}
+NO_RHETORIC = "none"
+NO_RHETORIC_CRITERION = (
+    "жодного явного прийому: нейтральний факт, переказ без оцінки чи оцінка без конкретного прийому"
+)
+SECOND_RHETORIC_PROBABILITY = 0.25
+
 
 class DecisionClient(Protocol):
     """Typed-decision boundary used by the generator."""
@@ -210,7 +339,9 @@ def author_label(attribution: Mapping[str, Any], names: Mapping[str, str]) -> st
     return AUTHOR_LABELS.get(str(kind), "невідоме джерело")
 
 
-def build_questions(golden: CanonicalGolden, names: Mapping[str, str]) -> dict[str, Any]:
+def build_questions(
+    golden: CanonicalGolden, names: Mapping[str, str], prompts: PromptSet = PROMPTS["v1"]
+) -> dict[str, Any]:
     """Return every typed question for one example, keyed by claim and target."""
     questions: dict[str, Any] = {}
     targets: dict[str, list[str]] = {}
@@ -220,7 +351,7 @@ def build_questions(golden: CanonicalGolden, names: Mapping[str, str]) -> dict[s
         questions[f"{claim.id}{SEPARATOR}epistemic"] = {
             "type": "choice",
             "instructions": f"Епістемічний статус claim {claim.id}.",
-            "criteria": EPISTEMIC_CRITERIA,
+            "criteria": prompts.epistemic,
         }
         questions[f"{claim.id}{SEPARATOR}presentation"] = {
             "type": "choice",
@@ -230,19 +361,43 @@ def build_questions(golden: CanonicalGolden, names: Mapping[str, str]) -> dict[s
         for entity_id in targets.get(claim.id, []):
             target = names.get(entity_id, entity_id)
             prefix = f"{claim.id}{SEPARATOR}{entity_id}{SEPARATOR}"
-            questions[f"{prefix}stance"] = {
-                "type": "choice",
-                "instructions": (
-                    f"Stance current perspective (author) claim {claim.id} щодо TARGET={target}."
-                ),
-                "criteria": STANCE_CRITERIA,
-            }
-            for label, description in RHETORIC_CRITERIA.items():
-                questions[f"{prefix}rhetoric{SEPARATOR}{label}"] = {
+            if prompts.decomposed_stance:
+                questions[f"{prefix}own_negative"] = {
                     "type": "noul",
                     "instructions": (
-                        f"Ймовірність, що author claim {claim.id} застосовує щодо {target} "
-                        f"прийом: {description}."
+                        f"Чи author claim {claim.id} сам негативно оцінює, звинувачує, критикує, "
+                        f"висміює чи дискредитує {target}, прямо або натяком, а не лише переказує "
+                        "чужу атаку?"
+                    ),
+                }
+                questions[f"{prefix}own_positive"] = {
+                    "type": "noul",
+                    "instructions": (
+                        f"Чи author claim {claim.id} сам позитивно оцінює, хвалить, захищає чи "
+                        f"підтримує {target}?"
+                    ),
+                }
+            else:
+                questions[f"{prefix}stance"] = {
+                    "type": "choice",
+                    "instructions": (
+                        f"Stance current perspective (author) claim {claim.id} щодо "
+                        f"TARGET={target}."
+                    ),
+                    "criteria": STANCE_CRITERIA,
+                }
+            if prompts.rhetoric_as_choice:
+                questions[f"{prefix}rhetoric_main"] = {
+                    "type": "choice",
+                    "instructions": prompts.rhetoric_template.format(claim=claim.id, target=target),
+                    "criteria": dict(prompts.rhetoric) | {NO_RHETORIC: NO_RHETORIC_CRITERION},
+                }
+                continue
+            for label, description in prompts.rhetoric.items():
+                questions[f"{prefix}rhetoric{SEPARATOR}{label}"] = {
+                    "type": "noul",
+                    "instructions": prompts.rhetoric_template.format(
+                        claim=claim.id, target=target, description=description
                     ),
                 }
     return questions
@@ -253,13 +408,14 @@ def build_requests(
     names: Mapping[str, str],
     model: str,
     max_questions: int,
+    prompts: PromptSet = PROMPTS["v1"],
 ) -> list[dict[str, Any]]:
     """Split one example into bounded requests that never divide a claim's questions."""
     if max_questions < 1:
         raise ValueError("max_questions must be at least one")
     claims_by_id = {claim.id: claim for claim in golden.claims}
     by_claim: dict[str, dict[str, Any]] = {}
-    for key, question in build_questions(golden, names).items():
+    for key, question in build_questions(golden, names, prompts).items():
         by_claim.setdefault(key.split(SEPARATOR, 1)[0], {})[key] = question
     chunks: list[dict[str, Any]] = []
     for claim_id, questions in by_claim.items():
@@ -287,7 +443,7 @@ def build_requests(
         requests.append(
             {
                 "model": model,
-                "state": {"guidelines": GUIDELINES, "claims": state_claims},
+                "state": {"guidelines": prompts.guidelines, "claims": state_claims},
                 "questions": questions,
             }
         )
@@ -299,14 +455,18 @@ async def analyze_record(
     client: DecisionClient,
     model: str,
     max_questions: int,
+    prompt_version: str = "v1",
 ) -> dict[str, Any]:
     """Return one auditable row with every raw request and response."""
     golden = load_golden(record)
-    requests = build_requests(golden, entity_names(record), model, max_questions)
+    requests = build_requests(
+        golden, entity_names(record), model, max_questions, PROMPTS[prompt_version]
+    )
     responses: list[dict[str, Any]] = []
     row: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "input": {"example_id": golden.example_id},
+        "prompt_version": prompt_version,
         "requests": requests,
         "responses": responses,
     }
@@ -328,6 +488,7 @@ async def generate_responses(
     model: str = DEFAULT_MODEL,
     max_questions: int = 80,
     concurrency: int = 4,
+    prompt_version: str = "v1",
 ) -> tuple[int, int]:
     """Append missing example rows and return written/failed counts."""
     if concurrency < 1:
@@ -342,7 +503,7 @@ async def generate_responses(
     async def process(record: Mapping[str, Any]) -> None:
         nonlocal failed
         async with semaphore:
-            row = await analyze_record(record, client, model, max_questions)
+            row = await analyze_record(record, client, model, max_questions, prompt_version)
         async with lock:
             with output_path.open("a", encoding="utf-8") as output:
                 output.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -369,6 +530,7 @@ def decode_answers(
 ) -> tuple[dict[tuple[str, str], PairDecision], dict[str, ClaimDecision]]:
     """Convert raw typed answers into pair-level and claim-level decisions."""
     stances: dict[tuple[str, str], Mapping[str, Any]] = {}
+    own: dict[tuple[str, str], dict[str, float]] = {}
     rhetoric: dict[tuple[str, str], dict[str, float]] = {}
     claim_fields: dict[str, dict[str, str]] = {}
     for key, answer in answers.items():
@@ -377,6 +539,10 @@ def decode_answers(
             claim_fields.setdefault(parts[0], {})[parts[1]] = answer["choice"]
         elif len(parts) == 3 and parts[2] == "stance":
             stances[(parts[0], parts[1])] = answer
+        elif len(parts) == 3 and parts[2] == "rhetoric_main":
+            rhetoric[(parts[0], parts[1])] = main_rhetoric(answer)
+        elif len(parts) == 3 and parts[2] in {"own_negative", "own_positive"}:
+            own.setdefault((parts[0], parts[1]), {})[parts[2]] = float(answer["noul"])
         elif len(parts) == 4 and parts[2] == "rhetoric":
             rhetoric.setdefault((parts[0], parts[1]), {})[parts[3]] = float(answer["noul"])
     pairs = {
@@ -389,12 +555,51 @@ def decode_answers(
         )
         for pair, answer in stances.items()
     }
+    for pair, values in own.items():
+        pairs[pair] = decomposed_stance(
+            values.get("own_negative", 0.0), values.get("own_positive", 0.0), rhetoric.get(pair, {})
+        )
     claims = {
         claim_id: ClaimDecision(fields["epistemic"], fields["presentation"])
         for claim_id, fields in claim_fields.items()
         if "epistemic" in fields and "presentation" in fields
     }
     return pairs, claims
+
+
+def main_rhetoric(answer: Mapping[str, Any]) -> dict[str, float]:
+    """Select the main device and at most one runner-up, fixed before scoring."""
+    if answer["choice"] == NO_RHETORIC:
+        return {}
+    probabilities = {
+        label: float(value)
+        for label, value in answer["probabilities"].items()
+        if label != NO_RHETORIC
+    }
+    ranked = sorted(probabilities, key=lambda label: -probabilities[label])
+    selected = [answer["choice"]] + [
+        label
+        for label in ranked
+        if label != answer["choice"] and probabilities[label] >= SECOND_RHETORIC_PROBABILITY
+    ][:1]
+    return {label: 1.0 for label in selected}
+
+
+def decomposed_stance(
+    negative: float, positive: float, rhetoric: Mapping[str, float]
+) -> PairDecision:
+    """Combine the author's own negative and positive evaluation probabilities into a stance."""
+    if negative >= DEFAULT_THRESHOLD and negative >= positive:
+        stance = "негативне"
+    elif positive >= DEFAULT_THRESHOLD:
+        stance = "позитивне"
+    else:
+        stance = "відсутнє"
+    return PairDecision(
+        stance,
+        {"негативне": negative, "позитивне": positive, "відсутнє": 1 - max(negative, positive)},
+        dict(rhetoric),
+    )
 
 
 def production_rhetoric(
@@ -781,15 +986,28 @@ def validate_rows(
         if row["status"] != "completed":
             raise ValueError(f"{row['input']['example_id']} did not complete")
         golden = load_golden(expected[row["input"]["example_id"]])
-        questions = set(build_questions(golden, entity_names(expected[golden.example_id])))
+        prompts = PROMPTS[row.get("prompt_version", "v1")]
+        questions = set(build_questions(golden, entity_names(expected[golden.example_id]), prompts))
         if questions != set(merged_answers(row)):
             raise ValueError(f"{golden.example_id} is missing typed answers")
+
+
+def select_examples(
+    annotations: Sequence[dict[str, Any]], partition: str, old55: set[str]
+) -> list[dict[str, Any]]:
+    """Restrict a run to a benchmark partition so prompt iteration never sees diagnostic45."""
+    if partition == "all":
+        return list(annotations)
+    in_old55 = partition == "old55"
+    return [record for record in annotations if (record["example_id"] in old55) == in_old55]
 
 
 def parse_args(arguments: Iterable[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate Jev decisions on golden_v0 claims")
     parser.add_argument("--annotations", type=Path, default=DEFAULT_ANNOTATIONS)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path, default=None, help="Defaults by prompt version")
+    parser.add_argument("--prompt-version", choices=sorted(PROMPTS), default="v1")
+    parser.add_argument("--examples", choices=("all", "old55", "diagnostic45"), default="all")
     parser.add_argument("--mamay", type=Path, default=DEFAULT_MAMAY)
     parser.add_argument("--old55", type=Path, default=DEFAULT_OLD55)
     parser.add_argument("--model", default=DEFAULT_MODEL)
@@ -805,7 +1023,15 @@ def parse_args(arguments: Iterable[str] | None = None) -> argparse.Namespace:
 async def run(arguments: Iterable[str] | None = None) -> None:
     """Run, validate, and summarise the resumable Jev comparison artifact."""
     args = parse_args(arguments)
-    annotations = load_annotations(args.annotations)[: args.limit]
+    if args.output is None:
+        args.output = (
+            DEFAULT_OUTPUT.parents[1]
+            / f"jev_vs_golden_{args.prompt_version}"
+            / (DEFAULT_OUTPUT.name)
+        )
+    annotations = select_examples(
+        load_annotations(args.annotations), args.examples, completed_example_ids(args.old55)
+    )[: args.limit]
     if not args.validate_only:
         api_key = os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
@@ -820,6 +1046,7 @@ async def run(arguments: Iterable[str] | None = None) -> None:
                 args.model,
                 args.max_questions,
                 args.concurrency,
+                args.prompt_version,
             )
         finally:
             await client.close()

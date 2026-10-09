@@ -34,7 +34,9 @@ Its canonical-only semantic report partitions the tuned data as `old55`, `diagno
 decisions (through OpenRouter) on the same 100 examples. Reviewed claims and attribution are
 inputs; it scores stance, rhetoric, epistemic status, and presentation in both the production and
 the extended `golden_v0` taxonomy, and compares Jev with Mamay v3.5.2 on Mamay's aligned pairs. It
-is an external-provider experiment, not a production dependency.
+is an external-provider experiment, not a production dependency. Prompt versions `v2` to `v4` were
+iterated on `old55` only and stored as `jev_vs_golden_v2` (`old55`), `jev_vs_golden_v3`, and
+`jev_vs_golden_v4`; `diagnostic45` was scored once per final version.
 
 DSPy work begins only after the annotation schema is stable. Its evaluation uses component metrics
 for entity extraction/resolution, stance, claims, attribution/modality, and rhetorical features,

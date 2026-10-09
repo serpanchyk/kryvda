@@ -174,11 +174,29 @@ and `derogatory_labeling` labels that production collapses or drops. `summary.js
 - `extended_taxonomy`: per-label rhetoric, five-way epistemic, and presentation metrics.
 
 The run sends post text to an external provider and needs `OPENROUTER_API_KEY`. It is resumable
-by `example_id`; `--validate-only` recomputes the summary without network calls.
+by `example_id`; `--validate-only` recomputes the summary without network calls. Every row records
+its `prompt_version`, and the default output is `jev_vs_golden_<prompt-version>`.
 
 ```bash
-OPENROUTER_API_KEY=... uv run python experiments/dspy/src/jev_golden_v1.py
-uv run python experiments/dspy/src/jev_golden_v1.py --validate-only
-uv run dvc add experiments/dspy/data/jev_vs_golden_v1
+OPENROUTER_API_KEY=... uv run python experiments/dspy/src/jev_golden_v1.py --prompt-version v4
+uv run python experiments/dspy/src/jev_golden_v1.py --prompt-version v4 --validate-only
+uv run dvc add experiments/dspy/data/jev_vs_golden_v4
 uv run dvc status
 ```
+
+### Prompt versions
+
+Prompts were iterated with `--examples old55` only; `diagnostic45` was scored once per final
+version, and each version's role was fixed before that run.
+
+- `v1` (100 examples) ports the Mamay Pass 3 rules and asks for a three-way stance choice. Jev
+  under-called an author's own attack, missed insinuation, and read "X стверджує" in normalized
+  claims as uncertainty.
+- `v2` (`old55` only) evaluates stance from the claim author's perspective through two
+  probabilities, own negative and own positive evaluation, combined at 0.5. It adds insinuation
+  and author-relative epistemic criteria and rhetoric examples.
+- `v3` (100 examples) restricts each of the nine rhetoric probabilities to the claim's own
+  evidence. It is the candidate for the extended rhetoric labels.
+- `v4` (100 examples) replaces the nine rhetoric probabilities with one main-device choice that
+  includes `none`; the decoder keeps the choice and one runner-up with probability at least 0.25.
+  It is the candidate for the production taxonomy.

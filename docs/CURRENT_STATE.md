@@ -119,12 +119,12 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   the current perspective's negative stance. The 100-example report is canonical-only and labels
   its tuned partitions `old55`, `diagnostic45`, and `all100`; `mixed` stance and `denied`
   epistemics remain `unresolved_legacy` and are excluded from their respective metrics.
-- `jev_vs_golden_v1` is a DVC-tracked, classification-only run of TypeSafe's Jev typed-decision
-  model through OpenRouter over the 100 reviewed examples, using reviewed claims as input. On
-  Mamay's aligned pairs, Jev's default choices under-call negative stance, while thresholds
-  selected on `old55` raise `diagnostic45` negative-stance and rhetoric F1 above Mamay v3.5.2;
-  positive stance and three-way epistemic status remain weaker. Production inference is unchanged
-  and does not call external providers.
+- `jev_vs_golden_v1` to `jev_vs_golden_v4` are DVC-tracked, classification-only runs of
+  TypeSafe's Jev typed-decision model through OpenRouter, using reviewed `golden_v0` claims as
+  input. Prompts were iterated on `old55` only. With prompt `v4` and no tuned thresholds, Jev matches
+  Mamay v3.5.2 stance on Mamay's aligned `diagnostic45` pairs and exceeds it on rhetoric and
+  claim-target attack detection; post-level attack detection remains slightly lower. Production
+  inference is unchanged and does not call external providers.
 - `mamay_vs_golden_v3_6` is the DVC-tracked v3.6 run over the 100 reviewed examples. Against
   v3.5.2 it misses 8 instead of 20 attacked posts (4 false instead of 1): post-level attack F1
   0.849 → 0.922, negative-stance recall 0.68 → 0.87, positive-stance precision 0.61 → 0.73,

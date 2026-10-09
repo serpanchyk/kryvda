@@ -10,6 +10,7 @@ import httpx
 import pytest
 from golden_schema import load_golden
 from jev_golden_v1 import (
+    PROMPTS,
     SEPARATOR,
     ClaimDecision,
     OpenRouterDecisionClient,
@@ -20,13 +21,16 @@ from jev_golden_v1 import (
     build_requests,
     calibrated_stance,
     decode_answers,
+    decomposed_stance,
     entity_names,
     extended_report,
     extended_rhetoric_gold,
     generate_responses,
+    main_rhetoric,
     negative_stance_auc,
     production_prediction,
     production_rhetoric,
+    select_examples,
     usage_summary,
     validate_rows,
 )
@@ -313,3 +317,75 @@ async def test_openrouter_client_raises_client_errors_without_retry() -> None:
     finally:
         await client.close()
     assert calls == 1
+
+
+def test_v4_questions_decompose_stance_and_ask_one_main_device() -> None:
+    golden = load_golden(record())
+    questions = build_questions(golden, entity_names(record()), PROMPTS["v4"])
+    prefix = f"c1{SEPARATOR}e1{SEPARATOR}"
+    assert {f"{prefix}own_negative", f"{prefix}own_positive", f"{prefix}rhetoric_main"} <= set(
+        questions
+    )
+    assert f"{prefix}stance" not in questions
+    assert "none" in questions[f"{prefix}rhetoric_main"]["criteria"]
+    assert len(questions) == 2 * 2 + 2 * 3
+    request = build_requests(golden, entity_names(record()), "jev", 100, PROMPTS["v4"])[0]
+    assert request["state"]["guidelines"] == PROMPTS["v4"].guidelines
+
+
+def test_v4_answers_decode_into_stance_and_main_rhetoric() -> None:
+    prefix = f"c1{SEPARATOR}e1{SEPARATOR}"
+    pairs, _ = decode_answers(
+        {
+            f"{prefix}own_negative": {"type": "noul", "noul": 0.8},
+            f"{prefix}own_positive": {"type": "noul", "noul": 0.1},
+            f"{prefix}rhetoric_main": {
+                "type": "choice",
+                "choice": "grant_discrediting",
+                "probabilities": {"grant_discrediting": 0.6, "ridicule": 0.3, "none": 0.1},
+            },
+        }
+    )
+    decision = pairs[("c1", "e1")]
+    assert decision.stance == "негативне"
+    assert decision.rhetoric == {"grant_discrediting": 1.0, "ridicule": 1.0}
+    assert decision.stance_probabilities["відсутнє"] == pytest.approx(0.2)
+
+
+@pytest.mark.parametrize(
+    ("negative", "positive", "expected"),
+    [
+        (0.7, 0.6, "негативне"),
+        (0.4, 0.6, "позитивне"),
+        (0.4, 0.3, "відсутнє"),
+        (0.6, 0.9, "позитивне"),
+    ],
+)
+def test_decomposed_stance(negative: float, positive: float, expected: str) -> None:
+    assert decomposed_stance(negative, positive, {}).stance == expected
+
+
+def test_main_rhetoric_respects_none_and_runner_up_floor() -> None:
+    assert main_rhetoric({"choice": "none", "probabilities": {"none": 0.9}}) == {}
+    answer = {
+        "choice": "ridicule",
+        "probabilities": {"ridicule": 0.7, "delegitimization": 0.2, "none": 0.1},
+    }
+    assert main_rhetoric(answer) == {"ridicule": 1.0}
+
+
+def test_select_examples_partitions_by_old55() -> None:
+    records = [record("a"), record("b")]
+    assert [item["example_id"] for item in select_examples(records, "old55", {"a"})] == ["a"]
+    assert [item["example_id"] for item in select_examples(records, "diagnostic45", {"a"})] == ["b"]
+    assert len(select_examples(records, "all", set())) == 2
+
+
+async def test_rows_record_and_validate_their_prompt_version(tmp_path: Path) -> None:
+    output = tmp_path / "responses.jsonl"
+    await generate_responses(
+        [record()], output, FakeClient(), logging.getLogger("test"), prompt_version="v4"
+    )
+    rows = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+    assert rows[0]["prompt_version"] == "v4"
+    validate_rows(rows, [record()])

@@ -1,0 +1,6 @@
+outs:
+- md5: 6a738b711d30023a33baaa5fcf256b6a.dir
+  size: 13793024
+  nfiles: 2
+  hash: md5
+  path: jev_vs_golden_v3
