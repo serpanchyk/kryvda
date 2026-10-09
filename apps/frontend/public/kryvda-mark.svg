@@ -1,15 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <title>Кривда</title>
-  <rect width="64" height="64" fill="#F4F1E9"/>
-  <g fill="#171714">
-    <rect x="9" y="12" width="23" height="6"/>
-    <rect x="9" y="46" width="23" height="6"/>
-    <rect x="14" y="12" width="12" height="40"/>
-    <polygon points="26,28 42,12 53,12 26,39"/>
-    <rect x="40" y="12" width="16" height="6"/>
-  </g>
-  <g fill="#C72C32" style="mix-blend-mode:multiply">
-    <polygon points="31,33 40,27 58,52 45,52"/>
-    <rect x="42" y="47" width="19" height="6"/>
-  </g>
+  <rect width="64" height="64" fill="#171714"/>
+  <path transform="translate(8.2 49) scale(0.048 -0.048)" fill="#F4F1E9" d="M25 188H105V512H25V700H392V512H304V434H401L454 512H452V700H744V512H686L581 367L703 188H755V0H443V188H446L392 266H304V188H391V0H25Z"/>
+  <rect x="46" y="40" width="9" height="9" fill="#C72C32"/>
 </svg>

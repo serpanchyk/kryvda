@@ -148,7 +148,7 @@ from its evaluative totals. Rhetoric shares count assigned labels, while epistem
 shares count distinct claims; the interface labels these denominators explicitly.
 
 Every chart section is a shareable card: a data-driven thesis headline, a dateline under it
-(section, subject, period with year, active filters), and a footer with the Кривда mark and a
+(section, subject, period with year, active filters), and a footer with the КРИВДА nameplate and a
 source line naming the agreed channel pool and language-model classification. Headlines state a
 finding only above sample guardrails (`apps/frontend/src/lib/theses.ts`) and otherwise describe the
 graphic; the overview title names the period's main target under the same guardrail. A
@@ -157,9 +157,9 @@ preview dialog; the PNG is saved only after the analyst confirms. Controls marke
 `data-export-ignore` and term underlines are excluded. Interactive charts carry a keyboard data
 table that offers the same drill-down, and on phones the target map becomes a ranked quadrant list.
 
-The Кривда mark is a slab-serif К whose red leg is printed out of register; it ships as
-`apps/frontend/public/kryvda-mark.svg`, `favicon.ico`, and `apple-touch-icon.png` and as the
-`BrandMark` component. Entity and channel profiles flag sources whose last claim or post is more
+The identity is the КРИВДА nameplate with a red square full stop (`BrandLockup`); favicons and the
+app icon use a press-ink plate with a paper К (`apps/frontend/public/kryvda-mark.svg`,
+`favicon.ico`, `apple-touch-icon.png`). Entity and channel profiles flag sources whose last claim or post is more
 than three days old. Failed requests show a retry action that keeps URL-backed filters. `/system`
 is a non-exportable operational page with the queue, retry reasons, last runs, and per-channel
 collection freshness from `/channels/collection-health`.

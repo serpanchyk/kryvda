@@ -147,9 +147,10 @@ headline, a dateline (section, subject, period with year, active filters), a dek
 a signed footer, so it can be torn out and posted publicly as a PNG without losing meaning.
 Ornament is absent; emphasis comes from weight, rules, and red.
 
-The mark is a slab-serif К printed in two inks with its red leg knocked out of register: a
-crooked print for a crooked truth (кривда). It appears with the КРИВДА wordmark in the masthead
-and in every exported card's footer, and alone as the favicon (`apps/frontend/public`).
+The identity is a newspaper nameplate: КРИВДА in Kyiv Type Serif Black closed by a red square
+full stop. Where a square mark is needed (favicon, app icon) it becomes a press-ink plate with a
+paper К outlined from the same face and the red square at its baseline
+(`apps/frontend/public/kryvda-mark.svg`).
 
 The system is light-only: newsprint is the identity, and no dark theme is defined.
 
@@ -166,7 +167,7 @@ A two-ink newspaper palette on warm unbleached paper, with one alarm colour and 
 
 ### Primary
 - **Proofmark Red** (`proofmark-red`): the exposing mark. Negative classifications in every chart,
-  bar, badge, and number; the misregistered leg of the К mark; the active masthead underline;
+  bar, badge, and number; the square full stop of the nameplate; the active masthead underline;
   focus outlines; the hairline beside quoted evidence; stale data and data errors.
 
 ### Secondary
@@ -202,8 +203,8 @@ a front-page headline, while Fixel Text keeps data, labels, and controls neutral
 ### Hierarchy
 - **Display** (900, 30 → 36 → 48 px by breakpoint, 1.02): one page thesis per screen in the
   page header, stated as a finding.
-- **Wordmark** (900, 24 px, 0.04em tracking): «КРИВДА» beside the К mark, in the masthead and
-  every exported card footer (16 px there).
+- **Wordmark** (900, 24 px, 0.04em tracking): «КРИВДА» closed by a red square full stop, in the
+  masthead and every exported card footer (16 px there).
 - **Headline** (700, 24 px, 28 px from md, 1.25): the thesis of each chart card, generated from
   the data and falling back to a neutral description below the sample guardrails.
 - **Dateline** (400, 13 px, 20 px leading): under every headline; section in bold ink, then subject,
@@ -288,8 +289,8 @@ Quiet and typographic; the data carries the voice.
 - **Border:** hairline Column Rule with a 2 px Press Ink top rule.
 - **Internal Padding:** 16 px, 20 px from `md`.
 - **Anatomy:** serif thesis headline → dateline (section · subject · period with year · scope) →
-  muted dek → graphic (with a keyboard data table where it is interactive) → footer with the mark,
-  the wordmark, and «Джерело: погоджений пул публічних Telegram-каналів · класифікація мовною
+  muted dek → graphic (with a keyboard data table where it is interactive) → footer with the
+  nameplate and «Джерело: погоджений пул публічних Telegram-каналів · класифікація мовною
   моделлю».
 - **Export:** the download button renders the PNG first and opens a preview dialog listing the
   headline, context, and file name; nothing is saved until the analyst confirms.
@@ -336,7 +337,7 @@ or week.
 - **Do** show the evaluative sample size and the denominator next to every share.
 - **Do** set every number in Fixel Text with tabular figures.
 - **Do** keep every chart card export-ready: self-explanatory headline, period, source line, and
-  the «КРИВДА.» signature; mark controls `data-export-ignore`.
+  the КРИВДА nameplate; mark controls `data-export-ignore`.
 - **Do** take all visible text from the Ukrainian glossary and attach its definition as a tooltip.
 
 ### Don't:

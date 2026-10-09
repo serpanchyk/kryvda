@@ -39,30 +39,10 @@ const navigation = [
   { to: "/system", label: "Система" },
 ];
 
-/**
- * The Кривда mark: a slab-serif К printed in two inks, its red leg knocked out of
- * register. A crooked print, as кривда is a crooked truth.
- */
-export function BrandMark({ className = "size-7" }: { className?: string }) {
-  return <svg viewBox="8 11 54 43" className={className} aria-hidden="true">
-    <g fill="var(--foreground)">
-      <rect x="9" y="12" width="23" height="6" />
-      <rect x="9" y="46" width="23" height="6" />
-      <rect x="14" y="12" width="12" height="40" />
-      <polygon points="26,28 42,12 53,12 26,39" />
-      <rect x="40" y="12" width="16" height="6" />
-    </g>
-    <g fill="var(--negative)" style={{ mixBlendMode: "multiply" }}>
-      <polygon points="31,33 40,27 58,52 45,52" />
-      <rect x="42" y="47" width="19" height="6" />
-    </g>
-  </svg>;
-}
-
+/** The nameplate: КРИВДА set in Kyiv Type Serif Black, closed by a red square full stop. */
 export function BrandLockup({ size = "md" }: { size?: "sm" | "md" }) {
-  return <span className="inline-flex items-center gap-2">
-    <BrandMark className={size === "sm" ? "h-4 w-5" : "h-6 w-7"} />
-    <span className={`font-heading font-black tracking-[0.04em] ${size === "sm" ? "text-base" : "text-2xl"}`}>КРИВДА</span>
+  return <span className={`inline-flex items-baseline font-heading font-black tracking-[0.04em] ${size === "sm" ? "text-base" : "text-2xl"}`}>
+    КРИВДА<span aria-hidden="true" className={`ml-[0.08em] inline-block bg-negative ${size === "sm" ? "size-[0.3em]" : "size-[0.26em]"}`} />
   </span>;
 }
 
