@@ -47,8 +47,7 @@ DSPy work begins only after the annotation schema is stable. Its evaluation uses
 for entity extraction/resolution, stance, claims, attribution/modality, and rhetorical features,
 with a documented weighted aggregate.
 
-`golden_v0` is being extended to 500 examples with an `extension400` partition annotated by Claude
-subagents. Posts are selected read-only from PostgreSQL with the production registry matcher,
+`golden_v0` holds 500 examples; its `extension400` partition was annotated by Claude subagents. Posts are selected read-only from PostgreSQL with the production registry matcher,
 square-root channel quotas, a 65% share of anti-corruption core actors, and an 8% per-entity cap.
 Annotators write exact quotes rather than offsets; `golden_v0_anchor.py` resolves them to spans
 and applies the editor's import and full-record checks, and the import itself goes through the

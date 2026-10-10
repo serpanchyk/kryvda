@@ -40,7 +40,7 @@ the deterministic legacy adapter. The v3.5.2 100-example report labels its tuned
 `old55`, `diagnostic45`, and `all100`; `diagnostic45` is not held-out. Claude-annotated extension
 examples listed in `golden_v0/data/annotation_provenance.jsonl` never join those partitions:
 reports add `extension400` and a combined `all` section, and the Jev runner accepts
-`--examples extension400`. The Mamay runner still runs every annotation by default. Inspect the
+`--examples extension400`. The Mamay runner still runs every annotation (now 500) by default. Inspect the
 migration without changing its source data:
 
 ```bash

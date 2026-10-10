@@ -10,7 +10,13 @@ import pytest
 from golden_schema import GoldenV0Adapter
 from golden_v0_anchor import AnchorError, check_directory, locate, to_anchor, to_payload
 from golden_v0_extension import normalized_text, select_posts, write_batches
-from golden_v0_extension_import import agreement, import_batches, materialize
+from golden_v0_extension_import import (
+    agreement,
+    import_batches,
+    materialize,
+    normalize_entities,
+    renormalize_imported,
+)
 
 TEXT = "НАБУ знову провалилося. Канал вважає, що НАБУ працює на грантодавців."
 POST = {
@@ -174,3 +180,76 @@ def test_import_completes_records_and_records_provenance(tmp_path: Path) -> None
     assert [row["partition"] for row in provenance] == ["pilot100", "extension400"]
     with pytest.raises(ValueError, match="already in the editor"):
         import_batches([batch], data, "2026-10-10T00:00:00+00:00")
+
+
+def test_normalize_entities_merges_variants_and_types() -> None:
+    first, second, third = anchor(), anchor(), anchor()
+    first["annotations"]["entities"][0].update(canonical_name="Росія", entity_type="organization")
+    second["annotations"]["entities"][0].update(canonical_name="Новий Актор", entity_type="person")
+    third["annotations"]["entities"][0].update(
+        canonical_name="Новий Актор", entity_type="political_actor"
+    )
+    extra = anchor()
+    extra["annotations"]["entities"][0].update(canonical_name="Новий Актор", entity_type="person")
+    zelensky = anchor()
+    zelensky["annotations"]["entities"][0].update(
+        canonical_name="Володимир Зеленський", entity_type="political_actor"
+    )
+    registry = [
+        {"canonical_name": "Російська Федерація", "entity_type": "political_actor"},
+        {"canonical_name": "Володимир Зеленський", "entity_type": "political_actor"},
+        {"canonical_name": "Володимир Зеленський", "entity_type": "person"},
+    ]
+    normalize_entities([first, second, third, extra, zelensky], registry)
+    assert first["annotations"]["entities"][0]["canonical_name"] == "Російська Федерація"
+    assert first["annotations"]["entities"][0]["entity_type"] == "political_actor"
+    assert {a["annotations"]["entities"][0]["entity_type"] for a in (second, third)} == {"person"}
+    assert zelensky["annotations"]["entities"][0]["entity_type"] == "person"
+
+
+def test_renormalize_imported_re_resolves_variant_names(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    data.mkdir()
+    variant = anchor()
+    variant["annotations"]["entities"][0].update(
+        canonical_name="Росія", entity_type="political_actor"
+    )
+    record = materialize(variant, POST, "golden_v0-002")
+    record["annotations"]["entities"][0]["registry_entity_id"] = "local-1"
+    registry = [
+        {
+            "id": "local-1",
+            "canonical_name": "Росія",
+            "aliases": ["НАБУ"],
+            "entity_type": "political_actor",
+            "status": "candidate",
+        },
+        {
+            "id": "local-2",
+            "canonical_name": "Російська Федерація",
+            "aliases": ["РФ"],
+            "entity_type": "political_actor",
+            "status": "candidate",
+        },
+    ]
+    (data / "editor.json").write_text(
+        json.dumps(
+            {
+                "records": {"7": {"version": 1, "status": "completed", "record": record}},
+                "registry": registry,
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert renormalize_imported(data) == []
+    (data / "annotation_provenance.jsonl").write_text(
+        json.dumps({"example_id": "golden_v0-002", "partition": "extension400"}) + "\n",
+        encoding="utf-8",
+    )
+    assert renormalize_imported(data) == ["golden_v0-002"]
+    state = json.loads((data / "editor.json").read_text(encoding="utf-8"))
+    entity = state["records"]["7"]["record"]["annotations"]["entities"][0]
+    assert (entity["canonical_name"], entity["registry_entity_id"]) == (
+        "Російська Федерація",
+        "local-2",
+    )

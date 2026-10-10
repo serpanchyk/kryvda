@@ -17,7 +17,9 @@ Read before starting:
 4. `WORK/registry.md` — canonical names. Search it (grep) for every actor you annotate.
 
 Never read `experiments/datasets/golden_v0/data/*` or `experiments/dspy/data/*`. Do not run git
-or DVC, and do not edit anything outside your own batch directory.
+or DVC, and do not edit anything outside your own batch directory. Other annotators run in
+parallel: put any helper scripts in a scratch subfolder named after your batch, never in a shared
+location.
 
 ## Task
 

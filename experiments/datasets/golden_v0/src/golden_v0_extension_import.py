@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,6 +29,65 @@ from golden_v0_anchor import SOURCE_FIELDS, check, to_payload  # noqa: E402
 PROVENANCE_FILE = "annotation_provenance.jsonl"
 ANNOTATOR = "claude-opus-5-5"
 LEGACY_ANNOTATOR = "chatgpt_with_web_access+partial_human_review"
+# Spellings of one actor chosen differently by parallel annotators; the value is kept.
+CANONICAL_VARIANTS = {
+    "Дар’я Каленюк": "Дарія Каленюк",
+    "Євгеній Хмара": "Євген Хмара",
+    "Росія": "Російська Федерація",
+}
+# Actors the local registry lists under two types; the brief fixes one of them.
+TYPE_OVERRIDES = {
+    **dict.fromkeys(
+        (
+            "Руслан Кравченко",
+            "Анатолій Шарій",
+            "Ярослав Железняк",
+            "Кирило Буданов",
+            "Володимир Зеленський",
+            "Андрій Єрмак",
+            "Михайло Федоров",
+            "Андрій Білецький",
+        ),
+        "person",
+    ),
+    "Слуга народу": "political_actor",
+}
+
+
+def normalize_entities(
+    anchors: Iterable[dict[str, Any]], registry: Iterable[Mapping[str, Any]]
+) -> None:
+    """Make canonical names and types consistent across independently annotated posts.
+
+    Variant spellings are merged, registry actors take their single registry type (or the
+    brief's override), and new actors take the type most annotators chose for them.
+    """
+    anchors = list(anchors)
+    registry_types: defaultdict[str, set[str]] = defaultdict(set)
+    for entry in registry:
+        registry_types[entry["canonical_name"]].add(entry["entity_type"])
+    entities = [
+        entity
+        for anchor in anchors
+        for entity in anchor["annotations"]["entities"]
+        if entity.get("canonical_name")
+    ]
+    for entity in entities:
+        name = " ".join(entity["canonical_name"].split())
+        entity["canonical_name"] = CANONICAL_VARIANTS.get(name, name)
+    observed = Counter((entity["canonical_name"], entity["entity_type"]) for entity in entities)
+    for entity in entities:
+        name = entity["canonical_name"]
+        if name in TYPE_OVERRIDES:
+            entity["entity_type"] = TYPE_OVERRIDES[name]
+        elif len(registry_types[name]) == 1:
+            entity["entity_type"] = next(iter(registry_types[name]))
+        else:
+            entity["entity_type"] = max(
+                (count, entity_type)
+                for (candidate, entity_type), count in observed.items()
+                if candidate == name
+            )[1]
 
 
 def materialize(
@@ -177,6 +237,7 @@ def import_batches(batches: Sequence[Path], data: Path, annotated_at: str) -> li
             work.append((batch.name, post, json.loads(path.read_text(encoding="utf-8"))))
     state_path = data / "editor.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
+    normalize_entities((anchor for _, _, anchor in work), state["registry"])
     number = max(int(item["record"]["example_id"][-3:]) for item in state["records"].values())
     created: list[tuple[str, str, int]] = []
     for batch_name, post, _ in work:
@@ -215,6 +276,55 @@ def import_batches(batches: Sequence[Path], data: Path, annotated_at: str) -> li
             raise ValueError(f"{post['post_revision_id']}: {response.json()}")
     _append_provenance(data, created, annotated_at)
     return [example_id for example_id, _, _ in created]
+
+
+def renormalize_imported(data: Path) -> list[str]:
+    """Merge variant canonical names in already imported extension records via the editor.
+
+    Returns:
+        Example IDs whose entities were re-resolved.
+    """
+    from annotation_app import create_app
+    from fastapi.testclient import TestClient
+
+    provenance = data / PROVENANCE_FILE
+    if not provenance.exists():
+        return []
+    extension = {
+        row["example_id"]
+        for row in map(json.loads, provenance.read_text(encoding="utf-8").splitlines())
+        if row["partition"] == "extension400"
+    }
+    state = json.loads((data / "editor.json").read_text(encoding="utf-8"))
+    by_name = {entry["canonical_name"]: entry for entry in state["registry"]}
+    client = TestClient(create_app(data))
+    changed = []
+    for key, item in state["records"].items():
+        record = item["record"]
+        entities = [
+            entity
+            for entity in record["annotations"]["entities"]
+            if record["example_id"] in extension
+            and entity.get("canonical_name") in CANONICAL_VARIANTS
+        ]
+        if not entities:
+            continue
+        for entity in entities:
+            entry = by_name[CANONICAL_VARIANTS[entity["canonical_name"]]]
+            entity.update(
+                canonical_name=entry["canonical_name"],
+                registry_entity_id=entry["id"],
+                entity_type=entry["entity_type"],
+                registry_status=entry["status"],
+            )
+        response = client.put(
+            f"/api/records/{key}",
+            json={"record": record, "status": item["status"], "version": item["version"]},
+        )
+        if response.status_code != 200:
+            raise ValueError(f"{record['example_id']}: {response.json()}")
+        changed.append(record["example_id"])
+    return sorted(changed)
 
 
 def _append_provenance(
@@ -264,6 +374,9 @@ def main() -> int:
         report = calibration_report(args.batch, DATA / "annotations.jsonl")
         print(json.dumps(report, ensure_ascii=False, indent=1))
         return 0
+    renormalized = renormalize_imported(DATA)
+    if renormalized:
+        print(f"Re-resolved variant names in {', '.join(renormalized)}")
     created = import_batches(
         [WORK / "batches" / name for name in args.batches],
         DATA,

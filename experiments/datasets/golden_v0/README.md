@@ -41,6 +41,11 @@ uv run python experiments/datasets/golden_v0/src/golden_v0_validation.py
 uv run dvc add experiments/datasets/golden_v0/data experiments/datasets/golden_v0/extension/work
 ```
 
+Import merges variant spellings of one actor and fixes entity types for actors the local
+registry lists twice (`CANONICAL_VARIANTS` and `TYPE_OVERRIDES` in
+`golden_v0_extension_import.py`). Annotators omit named actors that take part in no claim, so
+entity-level extraction recall is less complete in `extension400` than in `pilot100`.
+
 Extension conventions differ from the original pilot in two documented ways: non-evaluative news
 and self-presentation receive `neutral` rather than `positive` stance, and every claim target has
 exactly one stance record overlapping the claim evidence, so the canonical adapter leaves no
