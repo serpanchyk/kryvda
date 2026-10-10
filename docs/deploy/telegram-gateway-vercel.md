@@ -17,7 +17,9 @@ half of the deployment.
    uv run telegram-monitor-authorize
    ```
 
-   Copy the printed `TELEGRAM_SESSION_STRING` value. From now on this session belongs to Vercel
+   If Telegram does not deliver the code, run `uv run telegram-monitor-authorize --qr` instead and
+   scan the QR code in the official app signed in to this account (Settings → Devices → Link
+   Desktop Device). Copy the printed `TELEGRAM_SESSION_STRING` value. From now on this session belongs to Vercel
    only: Telegram revokes a session (`AUTH_KEY_DUPLICATED`) used from two places at once. Local
    development must use a different session.
 4. Generate the shared gateway token: `openssl rand -hex 32`.

@@ -13,8 +13,13 @@ local-development block: `COMPOSE_PROFILES=telegram` starts the `telegram-gatewa
 `TELEGRAM_GATEWAY_URL=http://telegram-gateway:8080` points the scraper at it. Before
 authorization, add `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, and `TELEGRAM_PHONE_NUMBER` of a
 development account; copy the printed session-string assignment back into `.env`. Never reuse the
-production gateway session locally. The database seeds the approved public sources on its first
-initialization.
+production gateway session locally: Telegram revokes an authorization key used from two hosts at
+once (`AUTH_KEY_DUPLICATED`), which is what stopped local collection on 2026-10-07 when the same
+session also ran on Vercel. Third-party clients receive login codes only inside an official
+Telegram app signed in to the account, and Telegram sometimes withholds them; if no code arrives,
+run `uv run telegram-monitor-authorize --qr` and scan the terminal QR code in that app
+(Settings → Devices → Link Desktop Device). The database seeds the approved public sources on its
+first initialization.
 
 The API health endpoint is `http://localhost:8000/health`; the frontend listens on
 `FRONTEND_PORT` and proxies `/api/` to the API. For `npm run dev`, Vite proxies `/api` to

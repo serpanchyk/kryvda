@@ -111,10 +111,27 @@ def test_main_writes_only_session_assignment(
     configured_settings = settings()
     monkeypatch.setattr(authorize, "AuthorizationSettings", lambda: configured_settings)
     monkeypatch.setattr(authorize, "create_session", create_serialized_session)
+    monkeypatch.setattr(authorize.sys, "argv", ["telegram-monitor-authorize"])
 
     authorize.main()
 
     assert capsys.readouterr().out == "TELEGRAM_SESSION_STRING=serialized\n"
+
+
+def test_main_qr_flag_uses_qr_login(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    async def qr_session(_: authorize.AuthorizationSettings) -> str:
+        return "from-qr"
+
+    configured_settings = settings()
+    monkeypatch.setattr(authorize, "AuthorizationSettings", lambda: configured_settings)
+    monkeypatch.setattr(authorize, "create_session_by_qr", qr_session)
+    monkeypatch.setattr(authorize.sys, "argv", ["telegram-monitor-authorize", "--qr"])
+
+    authorize.main()
+
+    assert capsys.readouterr().out == "TELEGRAM_SESSION_STRING=from-qr\n"
 
 
 def test_delivery_description_names_the_channel_and_resend() -> None:
@@ -158,3 +175,48 @@ async def test_unavailable_resend_keeps_waiting_for_the_first_code(
 
     assert await authorize.create_session(settings()) == "serialized"
     assert client.sign_in_calls[0][0] == ("+380000000000", "54321")
+
+
+class FakeQrLogin:
+    def __init__(self, timeouts: int) -> None:
+        self.url = "tg://login?token=abc"
+        self.timeouts = timeouts
+        self.recreated = 0
+
+    async def wait(self) -> None:
+        if self.timeouts:
+            self.timeouts -= 1
+            raise TimeoutError
+
+    async def recreate(self) -> None:
+        self.recreated += 1
+
+
+@pytest.mark.asyncio
+async def test_qr_login_recreates_an_expired_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    qr_login = FakeQrLogin(timeouts=1)
+
+    class QrClient(FakeTelegramClient):
+        async def qr_login(self) -> FakeQrLogin:
+            return qr_login
+
+    client = QrClient()
+    shown: list[str] = []
+    monkeypatch.setattr(authorize, "TelegramClient", lambda *_: client)
+    monkeypatch.setattr(authorize.StringSession, "save", lambda _: "serialized")
+    monkeypatch.setattr(authorize, "show_qr", shown.append)
+
+    assert await authorize.create_session_by_qr(settings()) == "serialized"
+    assert shown == ["tg://login?token=abc", "tg://login?token=abc"]
+    assert qr_login.recreated == 1
+    assert client.disconnected is True
+
+
+def test_show_qr_falls_back_to_the_login_url(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(authorize.shutil, "which", lambda _: None)
+
+    authorize.show_qr("tg://login?token=abc")
+
+    assert "tg://login?token=abc" in capsys.readouterr().err
