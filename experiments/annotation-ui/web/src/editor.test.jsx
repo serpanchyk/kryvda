@@ -130,4 +130,6 @@ test("annotator selects Unicode evidence, saves a draft and finalizes a control"
   await waitFor(() => expect(saves.at(-1)?.payload).toEqual(imported));
   expect(saves.at(-1).status).toBe("completed");
   expect(item.status).toBe("completed");
+  fireEvent.click(screen.getByText("Мої чернетки й готові"));
+  expect(await screen.findByText("golden_v0-001 · @test · ✓ Готово")).toBeTruthy();
 });

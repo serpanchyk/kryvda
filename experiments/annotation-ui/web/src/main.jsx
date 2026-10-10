@@ -550,8 +550,11 @@ function App() {
       setError(e.message);
     }
   }
+  // Saved records are keyed by numeric revision IDs, so object order is not creation order.
   const queue = savedOnly
-    ? Object.values(state.records).map((i) => i.record.source)
+    ? Object.values(state.records)
+        .sort((a, b) => b.record.example_id.localeCompare(a.record.example_id))
+        .map((i) => i.record.source)
     : posts;
   return (
     <>
@@ -643,6 +646,8 @@ function App() {
                 onClick={() => open(p)}
               >
                 <small>
+                  {savedOnly &&
+                    `${state.records[p.post_revision_id].record.example_id} · `}
                   @{p.channel_reference} ·{" "}
                   {state.records[p.post_revision_id]?.status === "completed"
                     ? "✓ Готово"
