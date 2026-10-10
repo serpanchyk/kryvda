@@ -38,6 +38,11 @@ is an external-provider experiment, not a production dependency. Prompt versions
 iterated on `old55` only and stored as `jev_vs_golden_v2` (`old55`), `jev_vs_golden_v3`, and
 `jev_vs_golden_v4`; `diagnostic45` was scored once per final version.
 
+`jev_hybrid_v3_6` is the end-to-end check: Jev prompt `v4` classifies the claims that Mamay v3.6
+extracted in `mamay_vs_golden_v3_6`, so both variants share the same imperfect extraction and the
+same canonical evaluation. On `diagnostic45` it ties Mamay on stance, improves rhetoric labels and
+claim-target attack detection, and lowers post-level attack recall and epistemic accuracy.
+
 DSPy work begins only after the annotation schema is stable. Its evaluation uses component metrics
 for entity extraction/resolution, stance, claims, attribution/modality, and rhetorical features,
 with a documented weighted aggregate.

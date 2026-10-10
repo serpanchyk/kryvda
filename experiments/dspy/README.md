@@ -203,3 +203,23 @@ version, and each version's role was fixed before that run.
 - `v4` (100 examples) replaces the nine rhetoric probabilities with one main-device choice that
   includes `none`; the decoder keeps the choice and one runner-up with probability at least 0.25.
   It is the candidate for the production taxonomy.
+
+## Jev hybrid comparison on Mamay v3.6 extraction
+
+`jev_hybrid_v1.py` removes the reviewed-input advantage of `jev_golden_v1.py`: Jev classifies the
+entities, claims, attribution, and evidence that Mamay v3.6 itself extracted in
+`mamay_vs_golden_v3_6`. Only Pass 3 changes, and every variant passes through the same canonical
+alignment and semantic report. `summary.json` reports:
+
+- `mamay_v3_6`: Mamay alone;
+- `hybrid_jev_pass3`: Jev prompt `v4` stance and rhetoric for every monitored pair;
+- `hybrid_jev_pass3_and_epistemic`: additionally Jev's epistemic status where it maps;
+- `mamay_stance_and_jev_rhetoric`: Mamay's stance gating Jev's main rhetoric device;
+- `stance_agreement_on_mamay_pairs`: the Mamay-by-Jev stance matrix on the same pairs.
+
+```bash
+OPENROUTER_API_KEY=... uv run python experiments/dspy/src/jev_hybrid_v1.py
+uv run python experiments/dspy/src/jev_hybrid_v1.py --validate-only
+uv run dvc add experiments/dspy/data/jev_hybrid_v3_6
+uv run dvc status
+```

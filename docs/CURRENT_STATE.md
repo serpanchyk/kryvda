@@ -128,8 +128,11 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   TypeSafe's Jev typed-decision model through OpenRouter, using reviewed `golden_v0` claims as
   input. Prompts were iterated on `old55` only. With prompt `v4` and no tuned thresholds, Jev matches
   Mamay v3.5.2 stance on Mamay's aligned `diagnostic45` pairs and exceeds it on rhetoric and
-  claim-target attack detection; post-level attack detection remains slightly lower. Production
-  inference is unchanged and does not call external providers.
+  claim-target attack detection; post-level attack detection remains slightly lower. The
+  end-to-end `jev_hybrid_v3_6` run, where Jev classifies Mamay v3.6's own claims, ties Mamay v3.6 on
+  stance, improves rhetoric labels, and lowers post-level attack recall; it does not by itself
+  justify an external classification dependency.
+  Production inference is unchanged and does not call external providers.
 - `mamay_vs_golden_v3_6` is the DVC-tracked v3.6 run over the 100 reviewed examples. Against
   v3.5.2 it misses 8 instead of 20 attacked posts (4 false instead of 1): post-level attack F1
   0.849 → 0.922, negative-stance recall 0.68 → 0.87, positive-stance precision 0.61 → 0.73,

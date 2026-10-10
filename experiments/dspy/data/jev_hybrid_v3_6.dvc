@@ -1,0 +1,6 @@
+outs:
+- md5: 4db9f2c6bd9750c089aecc52440e1542.dir
+  size: 5283333
+  nfiles: 2
+  hash: md5
+  path: jev_hybrid_v3_6
