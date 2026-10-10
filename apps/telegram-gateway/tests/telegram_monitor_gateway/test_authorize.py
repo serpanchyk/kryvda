@@ -138,3 +138,23 @@ async def test_empty_code_requests_another_delivery(monkeypatch: pytest.MonkeyPa
     assert await authorize.create_session(settings()) == "serialized"
     assert client.code_requests == 2
     assert client.sign_in_calls[0][0] == ("+380000000000", "12345")
+
+
+@pytest.mark.asyncio
+async def test_unavailable_resend_keeps_waiting_for_the_first_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class NoResendClient(FakeTelegramClient):
+        async def send_code_request(self, phone_number: str) -> object:
+            if getattr(self, "code_requests", 0):
+                raise authorize.SendCodeUnavailableError(request=None)
+            return await super().send_code_request(phone_number)
+
+    client = NoResendClient()
+    answers = iter(["", "54321"])
+    monkeypatch.setattr(authorize, "TelegramClient", lambda *_: client)
+    monkeypatch.setattr(authorize.StringSession, "save", lambda _: "serialized")
+    monkeypatch.setattr(authorize.getpass, "getpass", lambda _: next(answers))
+
+    assert await authorize.create_session(settings()) == "serialized"
+    assert client.sign_in_calls[0][0] == ("+380000000000", "54321")

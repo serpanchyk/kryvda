@@ -8,7 +8,7 @@ from typing import Any, cast
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from telethon import TelegramClient
-from telethon.errors import FloodWaitError, SessionPasswordNeededError
+from telethon.errors import FloodWaitError, SendCodeUnavailableError, SessionPasswordNeededError
 from telethon.sessions import StringSession
 
 # Where Telegram delivered the login code, keyed by the Telethon ``SentCodeType*`` class name.
@@ -81,7 +81,15 @@ async def create_session(settings: AuthorizationSettings) -> str:
                 if verification_code:
                     break
                 # Telethon resends through auth.resendCode for an already requested number.
-                sent_code = await client.send_code_request(phone_number)
+                try:
+                    sent_code = await client.send_code_request(phone_number)
+                except SendCodeUnavailableError:
+                    # The previously delivered code stays valid; keep waiting for it.
+                    sys.stderr.write(
+                        "Інших способів доставки для цього номера немає. Введіть код, уже "
+                        "надісланий раніше: " + describe_delivery(sent_code) + "\n"
+                    )
+                    continue
                 sys.stderr.write(describe_delivery(sent_code) + "\n")
             try:
                 await client.sign_in(phone_number, verification_code)
