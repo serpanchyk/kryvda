@@ -12,7 +12,9 @@ def test_entity_prompt_separates_foreign_bodies_and_keeps_named_speakers() -> No
     assert "«Міноборони рф»" in ENTITY_PROMPT
     assert "«Янгол ЗСУ»" in ENTITY_PROMPT
     assert "навіть\nякщо вони не моніторингові" in ENTITY_PROMPT
-    assert PROMPT_VERSIONS["entities"] == "inference_v3_entities_prompt_v3"
+    assert "Ніколи не повторюй той самий рядок" in ENTITY_PROMPT
+    assert "не конструюй mention" in ENTITY_PROMPT
+    assert PROMPT_VERSIONS["entities"] == "inference_v3_entities_prompt_v4"
 
 
 def test_claim_prompt_targets_evaluative_framing_and_news_attribution() -> None:

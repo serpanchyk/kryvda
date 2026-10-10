@@ -64,7 +64,9 @@ marks the earlier completed run `superseded`.
 
 The v3.6 prompts came from a manual review of 200 production posts and a blind comparison on the
 100-example golden set (`mamay_vs_golden_v3_6`). Pass 1 keeps named speakers and media and
-separates foreign bodies. Pass 2 does not make a speaker a claim target when the claim is not about
+separates foreign bodies; its prompt keeps the v3.5 rules against repeated, constructed, sentence
+or pronoun mentions, without which Mamay looped on repeated mentions until the JSON broke
+(primary Pass 1 failed on 59 of 60 such production posts before the fix and none after). Pass 2 does not make a speaker a claim target when the claim is not about
 it, extracts evaluative editorial claims expressed through labels, sarcasm, ironic quotation marks,
 rhetorical questions or headlines, and treats the news format `…, — X` as attribution to X. Pass 3
 classifies the stance of the claim's source: neutral reports of a target's actions or successes,
