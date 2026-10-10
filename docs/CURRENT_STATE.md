@@ -85,6 +85,11 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   full reviewed annotation, and Mamay output for external review. Parsed outputs that fail local
   validation are retained with their validation category; it does not score or judge the outputs
   and does not make the AI worker a runtime dependency on DVC.
+- `golden_v0` is being extended from 100 to 500 examples with Claude-annotated posts
+  (`extension400`). The first 50 (`golden_v0-266` to `golden_v0-315`) are imported through the
+  editor's import confirmation; `data/annotation_provenance.jsonl` records the annotator of every
+  example. Benchmark reports keep extension examples out of `diagnostic45` and `all100` and report
+  them as `extension400` plus a combined `all` section.
 - `mamay_vs_golden_v1` is a separate DVC-tracked offline comparison run for an experimental,
   reduced Mamay v2 contract. It removes model-generated character offsets and rhetorical graph
   links, projects reviewed `golden_v0` annotations into the comparable shape, and leaves the

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from golden_report import extension_example_ids
 from golden_schema import (
     RHETORIC_MAP,
     GoldenV0Adapter,
@@ -187,9 +188,13 @@ def test_v1_rejects_rhetoric_on_non_negative_stance() -> None:
 
 
 def test_all_active_annotations_load_through_the_legacy_adapter() -> None:
-    records = load_golden_jsonl(Path("experiments/datasets/golden_v0/data/annotations.jsonl"))
-    assert len(records) == 100
+    path = Path("experiments/datasets/golden_v0/data/annotations.jsonl")
+    records = load_golden_jsonl(path)
     assert all(record.original_schema_version == "annotation_schema_v1" for record in records)
-    summary = mapping_summary(records)
+    extension = extension_example_ids(path)
+    pilot = [record for record in records if record.example_id not in extension]
+    assert len(pilot) == 100
+    assert len(records) == 100 + len(extension)
+    summary = mapping_summary(pilot)
     assert summary["mapped_claims"] == 785
     assert summary["generated_classifications"] == 1579

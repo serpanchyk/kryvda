@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import json
 from collections import Counter
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from golden_schema import CanonicalGolden, GoldenClaim, GoldenClassification, GoldenEntity
 
+EXTENSION_PARTITION = "extension400"
+PROVENANCE_FILENAME = "annotation_provenance.jsonl"
 RHETORIC_LABELS = (
     "корупція_або_особиста_вигода",
     "злочинна_або_незаконна_поведінка",
@@ -128,22 +132,52 @@ def canonical_prediction(
     )
 
 
+def extension_example_ids(annotations_path: Path) -> set[str]:
+    """Return golden_v0 examples added by the Claude-annotated extension.
+
+    Their provenance is recorded next to the annotations; without that file there are none.
+    """
+    path = annotations_path.with_name(PROVENANCE_FILENAME)
+    if not path.exists():
+        return set()
+    return {
+        row["example_id"]
+        for row in map(json.loads, path.read_text(encoding="utf-8").splitlines())
+        if row.get("partition") == EXTENSION_PARTITION
+    }
+
+
 def benchmark_report(
-    items: Iterable[EvaluationItem], old55_example_ids: set[str]
+    items: Iterable[EvaluationItem],
+    old55_example_ids: set[str],
+    extension_ids: Collection[str] = frozenset(),
 ) -> dict[str, dict[str, Any]]:
     """Return explicit old55/diagnostic45/all100 semantic and reliability metrics.
+
+    Extension examples never join diagnostic45 or all100; when present they are reported as
+    ``extension400`` and, together with the original pilot, as ``all``.
 
     Predictions must already use the canonical IDs established by the evaluator's claim/entity
     alignment step. This module intentionally has no schema-version branches.
     """
     all_items = list(items)
     old = [item for item in all_items if item.golden.example_id in old55_example_ids]
-    diagnostic = [item for item in all_items if item.golden.example_id not in old55_example_ids]
-    return {
+    extension = [item for item in all_items if item.golden.example_id in extension_ids]
+    diagnostic = [
+        item
+        for item in all_items
+        if item.golden.example_id not in old55_example_ids
+        and item.golden.example_id not in extension_ids
+    ]
+    report = {
         "old55": _section(old, provenance="legacy_adapter"),
         "diagnostic45": _section(diagnostic, provenance="legacy_adapter_tuned"),
-        "all100": _section(all_items, provenance="mixed"),
+        "all100": _section(old + diagnostic, provenance="mixed"),
     }
+    if extension:
+        report[EXTENSION_PARTITION] = _section(extension, provenance="claude_annotated")
+        report["all"] = _section(all_items, provenance="mixed")
+    return report
 
 
 def _section(items: list[EvaluationItem], provenance: str) -> dict[str, Any]:

@@ -42,6 +42,15 @@ DSPy work begins only after the annotation schema is stable. Its evaluation uses
 for entity extraction/resolution, stance, claims, attribution/modality, and rhetorical features,
 with a documented weighted aggregate.
 
+`golden_v0` is being extended to 500 examples with an `extension400` partition annotated by Claude
+subagents. Posts are selected read-only from PostgreSQL with the production registry matcher,
+square-root channel quotas, a 65% share of anti-corruption core actors, and an 8% per-entity cap.
+Annotators write exact quotes rather than offsets; `golden_v0_anchor.py` resolves them to spans
+and applies the editor's import and full-record checks, and the import itself goes through the
+editor's `complete-import` endpoint. A blind re-annotation of ten `diagnostic45` posts measures
+agreement with the original annotations. The original 100 were drafted by ChatGPT with web access
+and partly reviewed by the user; the provenance file records both origins.
+
 The local annotation UI is documented in `experiments/annotation-ui/README.md`. Its standalone
 Compose service serves a React editor through an experimental FastAPI backend. It reads existing
 Post Revisions with read-only transactions through the existing Compose PostgreSQL network,

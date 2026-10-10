@@ -11,7 +11,12 @@ from itertools import batched
 from pathlib import Path
 from typing import Any, Protocol, cast
 
-from golden_report import EvaluationItem, benchmark_report, canonical_prediction
+from golden_report import (
+    EvaluationItem,
+    benchmark_report,
+    canonical_prediction,
+    extension_example_ids,
+)
 from golden_schema import load_golden_jsonl
 from monitoring_common.contracts import (
     InferenceValidationError,
@@ -793,7 +798,7 @@ def semantic_benchmark_report(
                 degraded=row.get("status") != "completed",
             )
         )
-    return benchmark_report(items, old55_ids)
+    return benchmark_report(items, old55_ids, extension_example_ids(annotations_path))
 
 
 def compare_summaries(current: Mapping[str, Any], baseline: Mapping[str, Any]) -> dict[str, Any]:

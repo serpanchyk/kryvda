@@ -26,6 +26,7 @@ from golden_report import (
     _ratio,
     benchmark_report,
     canonical_prediction,
+    extension_example_ids,
 )
 from golden_schema import (
     EPISTEMIC_MAP,
@@ -865,6 +866,7 @@ def held_out_calibration(
     decoded: Sequence[Decoded],
     alignment: Mapping[str, tuple[set[tuple[str, str]], set[str]]],
     old55: set[str],
+    extension: set[str] | None = None,
 ) -> dict[str, Any]:
     """Select thresholds on old55 and report them on diagnostic45, over Mamay's pairs only."""
 
@@ -885,7 +887,7 @@ def held_out_calibration(
             for golden, pairs, claims in decoded
             if golden.example_id in alignment
         ]
-        return cast(dict[str, dict[str, Any]], benchmark_report(items, old55))
+        return cast(dict[str, dict[str, Any]], benchmark_report(items, old55, extension or set()))
 
     negative = max(
         NEGATIVE_GRID,
@@ -924,6 +926,7 @@ def build_summary(
     """Compute the production-taxonomy, head-to-head, and extended-taxonomy reports."""
     records = {record["example_id"]: record for record in annotations}
     old55 = completed_example_ids(old55_path)
+    extension = extension_example_ids(annotations_path)
     alignment = mamay_alignment(mamay_path, annotations_path) if mamay_path.exists() else {}
     full: list[EvaluationItem] = []
     on_mamay_pairs: list[EvaluationItem] = []
@@ -962,12 +965,12 @@ def build_summary(
             "the claim-target pairs and claims Mamay produced and aligned."
         ),
         "run": usage_summary(rows),
-        "production_taxonomy_all_reviewed_pairs": benchmark_report(full, old55),
+        "production_taxonomy_all_reviewed_pairs": benchmark_report(full, old55, extension),
         "head_to_head": {
             "mamay_v3_5_2": mamay,
-            "jev_on_mamay_pairs": benchmark_report(on_mamay_pairs, old55),
+            "jev_on_mamay_pairs": benchmark_report(on_mamay_pairs, old55, extension),
             "jev_calibrated_held_out": (
-                held_out_calibration(decoded, alignment, old55) if alignment else None
+                held_out_calibration(decoded, alignment, old55, extension) if alignment else None
             ),
         },
         "extended_taxonomy": extended_report(extended_inputs, threshold),
@@ -993,13 +996,22 @@ def validate_rows(
 
 
 def select_examples(
-    annotations: Sequence[dict[str, Any]], partition: str, old55: set[str]
+    annotations: Sequence[dict[str, Any]],
+    partition: str,
+    old55: set[str],
+    extension: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Restrict a run to a benchmark partition so prompt iteration never sees diagnostic45."""
+    extension = extension or set()
+
+    def name(example_id: str) -> str:
+        if example_id in old55:
+            return "old55"
+        return "extension400" if example_id in extension else "diagnostic45"
+
     if partition == "all":
         return list(annotations)
-    in_old55 = partition == "old55"
-    return [record for record in annotations if (record["example_id"] in old55) == in_old55]
+    return [record for record in annotations if name(record["example_id"]) == partition]
 
 
 def parse_args(arguments: Iterable[str] | None = None) -> argparse.Namespace:
@@ -1007,7 +1019,9 @@ def parse_args(arguments: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--annotations", type=Path, default=DEFAULT_ANNOTATIONS)
     parser.add_argument("--output", type=Path, default=None, help="Defaults by prompt version")
     parser.add_argument("--prompt-version", choices=sorted(PROMPTS), default="v1")
-    parser.add_argument("--examples", choices=("all", "old55", "diagnostic45"), default="all")
+    parser.add_argument(
+        "--examples", choices=("all", "old55", "diagnostic45", "extension400"), default="all"
+    )
     parser.add_argument("--mamay", type=Path, default=DEFAULT_MAMAY)
     parser.add_argument("--old55", type=Path, default=DEFAULT_OLD55)
     parser.add_argument("--model", default=DEFAULT_MODEL)
@@ -1030,7 +1044,10 @@ async def run(arguments: Iterable[str] | None = None) -> None:
             / (DEFAULT_OUTPUT.name)
         )
     annotations = select_examples(
-        load_annotations(args.annotations), args.examples, completed_example_ids(args.old55)
+        load_annotations(args.annotations),
+        args.examples,
+        completed_example_ids(args.old55),
+        extension_example_ids(args.annotations),
     )[: args.limit]
     if not args.validate_only:
         api_key = os.environ.get("OPENROUTER_API_KEY")

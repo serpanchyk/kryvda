@@ -37,8 +37,11 @@ uv run python experiments/datasets/golden_v0/src/golden_v0_validation.py
 
 Semantic evaluation consumes a single canonical representation. Immutable `golden_v0` records use
 the deterministic legacy adapter. The v3.5.2 100-example report labels its tuned partitions
-`old55`, `diagnostic45`, and `all100`; `diagnostic45` is not held-out. Inspect the migration
-without changing its source data:
+`old55`, `diagnostic45`, and `all100`; `diagnostic45` is not held-out. Claude-annotated extension
+examples listed in `golden_v0/data/annotation_provenance.jsonl` never join those partitions:
+reports add `extension400` and a combined `all` section, and the Jev runner accepts
+`--examples extension400`. The Mamay runner still runs every annotation by default. Inspect the
+migration without changing its source data:
 
 ```bash
 uv run python experiments/dspy/src/inspect_golden_mapping.py
