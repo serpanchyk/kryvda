@@ -32,7 +32,9 @@ Kubernetes доповнює звичайний Docker Compose deployment.
    `kubectl config current-context`, `kubectl get nodes -o wide`.
 2. Переконайтесь, що DNS kryvda.thesis-i.com веде на ingress кластера та
    Traefik віддає дійсний сертифікат для цього імені. Ingress використовує
-   websecure з TLS; сертифікат забезпечує конфігурація Traefik кластера.
+   web та websecure за схемою інших сервісів кластера. На момент запуску
+   Traefik повертає default self-signed certificate: для Cloudflare Full (strict)
+   потрібно встановити origin certificate; для HTTP tunnel origin використовуйте web.
 3. Скопіюйте `k8s/secret.example.yaml` у `k8s/secret.yaml`, встановіть права
    `chmod 600 k8s/secret.yaml`. Створіть POSTGRES_PASSWORD (`openssl rand -hex 24`)
    і LITELLM_MASTER_KEY (`openssl rand -hex 32`). Заповніть ключі інтеграцій.
@@ -84,3 +86,12 @@ Rollback образів не відкочує схему БД.
 Без ключів інтеграцій неможливо підтвердити реальну колекцію Telegram та LLM-аналіз.
 Docker builds і запуск контейнерів мають пройти в CI; dry-run Kubernetes
 не перевіряє наявність образів, доступ до GHCR, DNS, сертифікат чи зовнішні API.
+
+## Перевірка першого розгортання, 2026-10-16
+
+GitHub Actions успішно зібрав усі п’ять образів; Argo CD Synced/Healthy.
+Шість сервісів Running, міграції завершені, frontend → API health повертає 200.
+Ручний запуск backup CronJob успішний. DNS та кінцевий TLS через Cloudflare
+потребують налаштування власником домену. Поточний TELEGRAM_GATEWAY_URL
+посилається на відсутній локальний telegram-gateway; необхідна робоча адреса
+або окреме розгортання gateway перед запуском збору.
