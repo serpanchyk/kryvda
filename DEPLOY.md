@@ -118,3 +118,8 @@ docker compose up -d     # запустити знову
 | Помилка `Telegram gateway returned 401` | `TELEGRAM_GATEWAY_TOKEN` у `.env` не збігається з токеном gateway — уточнити в розробника. |
 | Помилка `Telegram gateway returned 503` | Telegram-сесія відкликана — повідомити розробника. |
 | Помилка `rate limited` | Telegram тимчасово обмежив запити; збір відновиться сам наступного запуску. |
+
+## Kubernetes / Argo CD на Mac mini
+
+Для кластера thesis-i.com використовуйте [окрему інструкцію](docs/deploy/mac-mini-argocd.md).
+Маніфести — `k8s/`; збірка й оновлення SHA-тегів — `.github/workflows/docker-build.yml`.

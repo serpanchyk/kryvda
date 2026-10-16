@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+  namespace: kryvda
+  annotations:
+    argocd.argoproj.io/sync-wave: '-2'
+data:
+  config.yaml: "model_list:\n  - model_name: MamayLM-Gemma-3-27B-IT\n    litellm_params:\n\
+    \      model: openai/MamayLM-Gemma-3-27B-IT\n      api_base: os.environ/LAPATHONIIA_API_BASE\n\
+    \      api_key: os.environ/LAPATHONIIA_API_KEY\n\ngeneral_settings:\n  master_key:\
+    \ os.environ/LITELLM_MASTER_KEY\n"

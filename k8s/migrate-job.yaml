@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kryvda-migrate
+  namespace: kryvda
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      imagePullSecrets:
+      - name: ghcr-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+      - name: migrate
+        image: ghcr.io/serpanchyk/kryvda-database:bootstrap
+        command:
+        - sh
+        - /migrate.sh
+        env:
+        - name: PGHOST
+          value: postgres
+        - name: POSTGRES_USER
+          value: telegram_monitor
+        - name: POSTGRES_DB
+          value: telegram_monitor
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: kryvda-secret
+              key: POSTGRES_PASSWORD

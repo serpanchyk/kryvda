@@ -186,3 +186,10 @@ work belongs in `tasks/backlog/`; operational records belong in `problems/backlo
 ## Claims Explorer and analytical completeness
 
 `/claims` is the primary investigation workspace for URL-backed claim filtering. Analytical aggregates include valid persisted records from `completed_with_partial_classification` and `completed_with_entity_fallback` runs; the Dashboard exposes completeness counts so degraded and unfinished coverage is visible. Operational AI queue details live on `/system`, not the main Dashboard. Entity-facing evaluative-claim totals are labelled as claims/classifications rather than mentions.
+
+## Kubernetes deployment
+
+`k8s/` adds the Mac mini Argo CD deployment, with amd64 GHCR builds, Sealed Secrets,
+ordered database initialization/migrations, node-local persistent storage, and daily backups.
+Compose remains supported. See `docs/deploy/mac-mini-argocd.md` for bootstrap requirements;
+external integration credentials must be supplied before activating the Application.

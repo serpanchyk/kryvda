@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: kryvda
+  annotations:
+    argocd.argoproj.io/sync-wave: '2'
+spec:
+  schedule: 0 2 * * *
+  timeZone: Europe/Kyiv
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+          imagePullSecrets:
+          - name: ghcr-secret
+          containers:
+          - name: backup
+            image: ghcr.io/serpanchyk/kryvda-database:bootstrap
+            command:
+            - sh
+            - /backup-once.sh
+            env:
+            - name: PGHOST
+              value: postgres
+            - name: PGUSER
+              value: telegram_monitor
+            - name: PGDATABASE
+              value: telegram_monitor
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kryvda-secret
+                  key: POSTGRES_PASSWORD
+            volumeMounts:
+            - name: backups
+              mountPath: /backups
+          volumes:
+          - name: backups
+            persistentVolumeClaim:
+              claimName: backups
+          nodeSelector:
+            kubernetes.io/hostname: mac-node2

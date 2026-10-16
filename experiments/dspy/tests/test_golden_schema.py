@@ -186,6 +186,10 @@ def test_v1_rejects_rhetoric_on_non_negative_stance() -> None:
         )
 
 
+@pytest.mark.skipif(
+    not Path("experiments/datasets/golden_v0/data/annotations.jsonl").is_file(),
+    reason="Optional DVC golden dataset is not downloaded; run dvc pull when configured",
+)
 def test_all_active_annotations_load_through_the_legacy_adapter() -> None:
     records = load_golden_jsonl(Path("experiments/datasets/golden_v0/data/annotations.jsonl"))
     assert len(records) == 100

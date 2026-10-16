@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  namespace: kryvda
+  annotations:
+    argocd.argoproj.io/sync-wave: '1'
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: litellm
+  template:
+    metadata:
+      labels:
+        app: litellm
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      imagePullSecrets:
+      - name: ghcr-secret
+      containers:
+      - name: litellm
+        image: docker.litellm.ai/berriai/litellm@sha256:7c311546c25e7bb6e8cafede9fcd3d0d622ac636b5c9418befaa32e85dfb0186
+        env:
+        - name: LITELLM_MASTER_KEY
+          valueFrom:
+            secretKeyRef:
+              name: kryvda-secret
+              key: LITELLM_MASTER_KEY
+        - name: LAPATHONIIA_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: kryvda-secret
+              key: LAPATHONIIA_API_KEY
+        - name: LAPATHONIIA_API_BASE
+          value: https://api.lapathoniia.top
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - containerPort: 4000
+        startupProbe:
+          httpGet:
+            path: /health/liveliness
+            port: 4000
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        readinessProbe:
+          httpGet:
+            path: /health/liveliness
+            port: 4000
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health/liveliness
+            port: 4000
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        args:
+        - --config
+        - /etc/litellm/config.yaml
+        volumeMounts:
+        - name: config
+          mountPath: /etc/litellm
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: litellm-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm
+  namespace: kryvda
+spec:
+  selector:
+    app: litellm
+  ports:
+  - port: 4000
+    targetPort: 4000

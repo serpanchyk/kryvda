@@ -21,3 +21,10 @@ node_modules/
 .vscode/
 .claude/settings.local.json
 backups/
+k8s/secret.yaml
+k8s/ghcr-secret.yaml
+k8s/*.tmp
+.env.local
+**/.env.local
+env.local
+**/env.local

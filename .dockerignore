@@ -1,0 +1,14 @@
+.git
+.env
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/.venv
+**/__pycache__
+.dvc/cache
+backups
+k8s/secret.yaml
+k8s/ghcr-secret.yaml
+env.local
+**/env.local
