@@ -91,7 +91,8 @@ Docker builds і запуск контейнерів мають пройти в 
 
 GitHub Actions успішно зібрав усі п’ять образів; Argo CD Synced/Healthy.
 Шість сервісів Running, міграції завершені, frontend → API health повертає 200.
-Ручний запуск backup CronJob успішний. DNS та кінцевий TLS через Cloudflare
-потребують налаштування власником домену. Поточний TELEGRAM_GATEWAY_URL
+Ручний запуск backup CronJob успішний. DNS налаштовано власником; публічні
+https://kryvda.thesis-i.com/ і /api/health повертають 200 через Cloudflare
+з успішною перевіркою TLS. Поточний TELEGRAM_GATEWAY_URL
 посилається на відсутній локальний telegram-gateway; необхідна робоча адреса
 або окреме розгортання gateway перед запуском збору.
