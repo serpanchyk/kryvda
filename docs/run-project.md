@@ -29,8 +29,8 @@ Production deployment is documented in `DEPLOY.md` (department server) and
 `docs/deploy/telegram-gateway-vercel.md` (Telegram gateway).
 
 Compose runs the versioned `migrate` service before API, scraper, and AI worker startup. Fresh
-volumes are marked at v3.6 by their initialization scripts. For an existing legacy volume the
-service detects the missing v3 registry schema, applies migrations `003` through `013`, preserves
+volumes are marked at v3.7 by their initialization scripts. For an existing legacy volume the
+service detects the missing v3 registry schema, applies migrations `003` through `014`, preserves
 raw posts/revisions, and re-enqueues matching latest revisions. Migration `003` intentionally
 replaces obsolete analysis jobs/results; take a PostgreSQL backup before the first legacy upgrade.
 
@@ -51,7 +51,7 @@ analytics never count both:
 
 ```bash
 docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
-  < infra/postgres/maintenance/reanalyze_before_v3_6.sql
+  < infra/postgres/maintenance/reanalyze_before_v3_7.sql
 ```
 
 The scraper re-reads posts from the last `COLLECTION_REFRESH_HOURS` (48 by default) on every run,

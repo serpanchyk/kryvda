@@ -4,7 +4,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import asyncpg
 from monitoring_common.config import BaseServiceSettings
@@ -39,15 +39,19 @@ from telegram_monitor_ai_worker.models import (
     ModelResponse,
 )
 from telegram_monitor_ai_worker.pipeline import (
+    PIPELINE_VERSION,
+    admitted_entities,
     assign_claim_ids,
+    candidate_request,
     classification_batches,
     classification_items,
     classification_subset,
     final_payload,
+    has_monitored_entity,
     matched_monitored_entity_ids,
-    prefilter_entity_groups,
-    resolve_entity_groups,
+    registry_candidates,
     salvage_classification_objects,
+    salvage_entity_payload,
 )
 from telegram_monitor_ai_worker.prompt import PROMPT_VERSIONS
 from telegram_monitor_ai_worker.repository import AnalysisJobRepository
@@ -177,13 +181,43 @@ class AnalysisWorker:
             await self._repository.skip(job)
             return
 
-        fallback_groups = prefilter_entity_groups(job.post_text, aliases)
+        candidates = registry_candidates(job.post_text, aliases)
+        decisions: dict[str, Any] | None
+        try:
+            decisions = await self._execute_pass(
+                job,
+                "candidates",
+                candidate_request(job.post_text, candidates),
+                source_text=job.post_text,
+                entities=candidates,
+            )
+        except (InferenceValidationError, ModelOutputError):
+            decisions = None
+            await self._repository.record_pass_diagnostic(
+                run_id=job.run_id,
+                pass_name="candidates",
+                raw_primary_output=None,
+                sanitized_primary_payload=None,
+                primary_sanitization_actions=[],
+                primary_validation_errors=[],
+                raw_repair_output=None,
+                sanitized_repair_payload=None,
+                repair_sanitization_actions=[],
+                repair_validation_errors=[],
+                final_validation_status="degraded",
+                final_parsed_payload=None,
+                fallback="admit_all_candidates",
+            )
         entity_fallback = False
         try:
             entity_payload = await self._execute_pass(
-                job, "entities", {"post_text": job.post_text}, source_text=job.post_text
+                job,
+                "entities",
+                {"post_text": job.post_text},
+                source_text=job.post_text,
+                salvage=salvage_entity_payload,
             )
-            model_groups = entity_payload["entities"]
+            model_groups = cast(list[dict[str, Any]], entity_payload["entities"])
         except (InferenceValidationError, ModelOutputError):
             entity_fallback = True
             model_groups = []
@@ -199,23 +233,27 @@ class AnalysisWorker:
                 repair_sanitization_actions=[],
                 repair_validation_errors=[],
                 final_validation_status="degraded",
-                final_parsed_payload={"entities": fallback_groups},
+                final_parsed_payload={
+                    "entities": [{"mentions": item["mentions"]} for item in candidates]
+                },
                 fallback="prefilter_entities_only",
             )
-        entities = resolve_entity_groups([*fallback_groups, *model_groups], aliases, job.post_text)
+        entities = admitted_entities(candidates, decisions, model_groups, aliases, job.post_text)
         approved_aliases = {
             (int(alias["entity_id"]), str(alias["normalized_alias"])) for alias in aliases
         }
         await self._repository.persist_entities(job.run_id, entities, approved_aliases)
 
-        claim_payload = await self._execute_pass(
-            job,
-            "claims",
-            {"post_text": job.post_text, "entities": entities},
-            source_text=job.post_text,
-            entities=entities,
-        )
-        claims = assign_claim_ids(claim_payload, job.post_text)
+        claims: list[dict[str, Any]] = []
+        if has_monitored_entity(entities):
+            claim_payload = await self._execute_pass(
+                job,
+                "claims",
+                {"post_text": job.post_text, "entities": entities},
+                source_text=job.post_text,
+                entities=entities,
+            )
+            claims = assign_claim_ids(claim_payload, job.post_text)
         items = classification_items(job.post_text, entities, claims)
         if items:
             classifications, classification_partial = await self._execute_classification(
@@ -242,10 +280,12 @@ class AnalysisWorker:
             "completed_with_partial_classification"
             if classification_partial
             else "completed_with_entity_fallback"
-            if entity_fallback
+            if entity_fallback or decisions is None
             else "completed"
         )
         degradations = []
+        if decisions is None:
+            degradations.append({"pass": "candidates", "fallback": "admit_all_candidates"})
         if entity_fallback:
             degradations.append({"pass": "entities", "fallback": "prefilter_entities_only"})
         if classification_partial:
@@ -254,6 +294,30 @@ class AnalysisWorker:
         await self._repository.complete(
             job, entities, claims, classifications, result, run_status=run_status
         )
+
+    @staticmethod
+    def _salvaged_primary(
+        pass_name: PassName,
+        raw_output: str,
+        source_text: str,
+        entities: Sequence[Mapping[str, Any]],
+        claims: Sequence[Mapping[str, Any]],
+        salvage: Callable[[str], dict[str, Any] | None] | None,
+    ) -> dict[str, Any] | None:
+        """Return a valid payload recovered from complete parts of a broken primary output."""
+        if salvage is None:
+            return None
+        recovered = salvage(raw_output)
+        if recovered is None:
+            return None
+        payload = sanitize_pass_payload_with_actions(
+            pass_name, recovered, source_text, entities
+        ).payload
+        try:
+            validate_pass(pass_name, payload, source_text, entities, claims)
+        except InferenceValidationError:
+            return None
+        return payload
 
     async def _execute_classification(
         self,
@@ -422,6 +486,7 @@ class AnalysisWorker:
         entities: Sequence[Mapping[str, Any]] = (),
         claims: Sequence[Mapping[str, Any]] = (),
         post_validate: Callable[[Mapping[str, Any]], None] | None = None,
+        salvage: Callable[[str], dict[str, Any] | None] | None = None,
     ) -> dict[str, Any]:
         completed = await self._repository.completed_pass_payload(job.run_id, pass_name)
         if completed is not None:
@@ -478,6 +543,25 @@ class AnalysisWorker:
                 errors,
                 primary_actions,
             )
+            salvaged = self._salvaged_primary(
+                pass_name, response.raw_output, source_text, entities, claims, salvage
+            )
+            if salvaged is not None:
+                await self._repository.record_pass_diagnostic(
+                    run_id=job.run_id,
+                    pass_name=pass_name,
+                    raw_primary_output=response.raw_output,
+                    sanitized_primary_payload=sanitized_payload,
+                    primary_sanitization_actions=primary_actions,
+                    primary_validation_errors=errors,
+                    raw_repair_output=None,
+                    sanitized_repair_payload=None,
+                    repair_sanitization_actions=[],
+                    repair_validation_errors=[],
+                    final_validation_status="salvaged",
+                    final_parsed_payload=salvaged,
+                )
+                return salvaged
             await self._repository.renew_lease(
                 job.id, job.attempts, self._settings.analysis_lease_seconds
             )
@@ -724,7 +808,7 @@ async def run(
         raw_client, ProviderSlotLimiter(pool, settings.llm_max_concurrency)
     )
     worker = AnalysisWorker(AnalysisJobRepository(pool), client, settings, logger)
-    logger.info("analysis worker started", extra={"pipeline_version": "inference_v3_6"})
+    logger.info("analysis worker started", extra={"pipeline_version": PIPELINE_VERSION})
 
     async def worker_loop() -> None:
         """Lease jobs until shutdown, polling only while this worker is idle."""

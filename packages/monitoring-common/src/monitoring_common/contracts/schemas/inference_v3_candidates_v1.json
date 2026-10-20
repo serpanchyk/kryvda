@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["candidates"],
+  "properties": {
+    "candidates": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", "same_actor"],
+        "properties": {
+          "reason": {"type": "string"},
+          "same_actor": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

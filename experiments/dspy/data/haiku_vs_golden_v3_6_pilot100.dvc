@@ -1,0 +1,6 @@
+outs:
+- md5: 092ca9d525ece7444a7a35d2e0ffee49.dir
+  size: 4752063
+  nfiles: 2
+  hash: md5
+  path: haiku_vs_golden_v3_6_pilot100

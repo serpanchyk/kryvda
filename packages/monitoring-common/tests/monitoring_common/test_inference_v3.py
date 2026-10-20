@@ -5,6 +5,8 @@ from monitoring_common.contracts import (
     InferenceValidationError,
     alias_occurs,
     foreign_state_context,
+    generation_schema,
+    load_inference_schema,
     matched_registry_entity_ids,
     mention_is_only_foreign_state,
     normalize_match_text,
@@ -44,15 +46,8 @@ def test_alias_matching_is_casefolded_literal_and_boundary_aware() -> None:
     assert normalize_match_text("  Дар’я   КАЛЕНЮК ") == "дар’я каленюк"
 
 
-def test_chesno_prefilter_requires_the_organization_name() -> None:
+def test_common_word_aliases_become_candidates_for_pass_1_to_judge() -> None:
     aliases = [
-        {
-            "entity_id": 22,
-            "canonical_name": "Рух ЧЕСНО",
-            "coarse_type": "organization",
-            "monitored": True,
-            "alias": "Рух ЧЕСНО",
-        },
         {
             "entity_id": 22,
             "canonical_name": "Рух ЧЕСНО",
@@ -61,26 +56,27 @@ def test_chesno_prefilter_requires_the_organization_name() -> None:
             "alias": "ЧЕСНО",
         },
         {
-            "entity_id": 22,
-            "canonical_name": "Рух ЧЕСНО",
+            "entity_id": 128,
+            "canonical_name": "Голос",
             "coarse_type": "organization",
             "monitored": True,
-            "alias": "CHESNO",
+            "alias": "Голос",
         },
     ]
 
-    assert matched_registry_entity_ids("Чесно кажучи, давно його не бачив.", aliases) == []
-    assert matched_registry_entity_ids("рух чесно опублікував заяву.", aliases) == []
-    assert matched_registry_entity_ids("Чесна мобілізація потрібна державі.", aliases) == []
-    assert (
-        matched_registry_entity_ids(
-            "Представники руху «Чесна мобілізація» виступили із заявою.", aliases
-        )
-        == []
-    )
-    assert matched_registry_entity_ids("Рух ЧЕСНО опублікував заяву.", aliases) == [22]
-    assert matched_registry_entity_ids("рух ЧЕСНО опублікував заяву.", aliases) == [22]
+    assert matched_registry_entity_ids("Чесно кажучи, давно його не бачив.", aliases) == [22]
     assert matched_registry_entity_ids("У ЧЕСНО заявили про порушення.", aliases) == [22]
+    assert matched_registry_entity_ids("Це голос народу.", aliases) == [128]
+    assert matched_registry_entity_ids("Фракція «Голос» проголосувала.", aliases) == [128]
+
+
+def test_inflection_covers_feminine_adjectives_and_ist_nouns() -> None:
+    party = "Європейська Солідарність"
+
+    assert alias_occurs("членів «Європейської Солідарності» стало більше", party)
+    assert alias_occurs("у Європейській Солідарності заявили", party)
+    assert alias_occurs("разом із Європейською Солідарністю", party)
+    assert alias_occurs("Верховної Ради", "Верховна Рада")
 
 
 STATE_BODIES = [
@@ -192,12 +188,69 @@ def test_registry_matching_admits_only_unique_inflected_person_surnames() -> Non
 def test_entity_validation_accepts_exact_groups_and_rejects_grounding() -> None:
     validate_pass(
         "entities",
-        {"entities": [{"mentions": ["Віталій Шабунін"]}, {"mentions": ["ЦПК"]}]},
+        {
+            "entities": [{"mentions": ["Віталій Шабунін"]}, {"mentions": ["ЦПК"]}],
+        },
         TEXT,
     )
     with pytest.raises(InferenceValidationError) as captured:
         validate_pass("entities", {"entities": [{"mentions": ["Шабуніна"]}]}, TEXT)
     assert validation_errors(captured.value)[0]["kind"] == "grounding_failure"
+
+
+CANDIDATES = [{"candidate_id": "r1"}, {"candidate_id": "r2"}]
+
+
+DECIDED = {"reason": "абревіатура", "same_actor": True}
+
+
+def test_candidate_validation_requires_one_decision_per_candidate() -> None:
+    validate_pass("candidates", {"candidates": {"r1": DECIDED, "r2": DECIDED}}, TEXT, CANDIDATES)
+
+    with pytest.raises(InferenceValidationError, match="missing candidate: r2"):
+        validate_pass("candidates", {"candidates": {"r1": DECIDED}}, TEXT, CANDIDATES)
+
+    with pytest.raises(InferenceValidationError, match="unexpected candidate decision: r9"):
+        validate_pass(
+            "candidates",
+            {"candidates": {"r1": DECIDED, "r2": DECIDED, "r9": DECIDED}},
+            TEXT,
+            CANDIDATES,
+        )
+
+
+def test_candidate_sanitizer_drops_unknown_candidates() -> None:
+    payload = {"candidates": {"r1": DECIDED, "r9": DECIDED}}
+
+    result = sanitize_pass_payload_with_actions("candidates", payload, TEXT, CANDIDATES)
+
+    assert result.payload == {"candidates": {"r1": DECIDED}}
+    assert [action["action"] for action in result.actions] == ["dropped_unknown_candidate"]
+
+
+def test_entity_sanitizer_drops_cross_group_duplicates() -> None:
+    payload = {"entities": [{"mentions": ["ЦПК"]}, {"mentions": ["ЦПК", "Віталій Шабунін"]}]}
+
+    result = sanitize_pass_payload_with_actions("entities", payload, TEXT, ())
+
+    assert result.payload == {
+        "entities": [{"mentions": ["ЦПК"]}, {"mentions": ["Віталій Шабунін"]}]
+    }
+    assert [action["action"] for action in result.actions] == ["dropped_cross_group_duplicate"]
+
+
+def test_generation_schema_requires_a_decision_for_every_supplied_candidate() -> None:
+    schema = generation_schema(
+        "candidates",
+        {"candidates": [{"candidate_id": "r1"}, {"candidate_id": "r2"}]},
+    )
+
+    decisions = schema["properties"]["candidates"]
+    assert decisions["required"] == ["r1", "r2"]
+    assert decisions["additionalProperties"] is False
+    assert decisions["properties"]["r1"]["required"] == ["reason", "same_actor"]
+    assert "properties" not in load_inference_schema("candidates")["properties"]["candidates"]
+    assert generation_schema("claims", {}) == load_inference_schema("claims")
 
 
 def test_entity_validation_rejects_duplicate_mentions_across_groups() -> None:

@@ -22,10 +22,15 @@ ALIASES = [
 ]
 
 
+CONFIRMED = {"candidates": {"r1": {"reason": "прізвище", "same_actor": True}}}
+REJECTED = {"candidates": {"r1": {"reason": "інша людина", "same_actor": False}}}
+
+
 def pass_payloads() -> dict[str, dict[str, Any]]:
     """Return a smallest complete v3 semantic pipeline."""
     return {
-        "entities": {"entities": [{"mentions": ["Шабунін"]}]},
+        "candidates": CONFIRMED,
+        "entities": {"entities": []},
         "claims": {
             "claims": [
                 {
@@ -51,8 +56,9 @@ def pass_payloads() -> dict[str, dict[str, Any]]:
 class FakeRepository:
     """Record worker effects without PostgreSQL."""
 
-    def __init__(self, aliases: list[dict[str, Any]] = ALIASES) -> None:
-        self.job = ClaimedAnalysisJob(3, 7, SOURCE, "live", 1, 9)
+    def __init__(self, aliases: list[dict[str, Any]] = ALIASES, source: str = SOURCE) -> None:
+        self.job = ClaimedAnalysisJob(3, 7, source, "live", 1, 9)
+        self.entities: list[dict[str, Any]] = []
         self.aliases = aliases
         self.attempts: list[tuple[str, str, str, dict[str, Any] | None]] = []
         self.diagnostics: list[dict[str, Any]] = []
@@ -92,7 +98,7 @@ class FakeRepository:
         self, run_id: int, entities: list[dict[str, Any]], aliases: set[Any]
     ) -> None:
         assert run_id == 9
-        assert entities[0]["registry_entity_id"] == 10
+        self.entities = entities
 
     async def complete(
         self,
@@ -139,8 +145,10 @@ async def test_worker_runs_three_passes_and_persists_final_result() -> None:
     assert await worker.process_next() is True
     assert repository.failures == []
     assert repository.completed is not None
-    assert repository.completed["pipeline_version"] == "inference_v3_6"
+    assert repository.completed["pipeline_version"] == "inference_v3_7"
+    assert repository.entities[0]["registry_entity_id"] == 10
     assert [item[:2] for item in repository.attempts] == [
+        ("candidates", "primary"),
         ("entities", "primary"),
         ("claims", "primary"),
         ("classification", "batch_primary"),
@@ -174,6 +182,7 @@ async def test_worker_completes_when_claim_sanitizer_drops_every_claim() -> None
     assert repository.completed["claims"] == []
     assert repository.completed["classifications"] == []
     assert [item[:2] for item in repository.attempts] == [
+        ("candidates", "primary"),
         ("entities", "primary"),
         ("claims", "primary"),
     ]
@@ -252,7 +261,7 @@ async def test_worker_repairs_invalid_primary_once() -> None:
     await worker.process_next()
 
     assert repository.completed is not None
-    assert repository.attempts[0] == ("entities", "primary", "valid", {"entities": []})
+    assert repository.attempts[1] == ("entities", "primary", "valid", {"entities": []})
     assert repository.completed["status"] == "completed"
 
 
@@ -271,12 +280,87 @@ async def test_worker_sanitizes_entity_primary_without_repair() -> None:
     await worker.process_next()
 
     assert repository.completed is not None
-    assert repository.attempts[0] == (
+    assert repository.attempts[1] == (
         "entities",
         "primary",
         "valid",
         {"entities": [{"mentions": ["Шабунін"]}]},
     )
+    assert "entities" not in client.repairs
+
+
+async def test_worker_completes_without_claims_when_every_candidate_is_rejected() -> None:
+    payloads = pass_payloads()
+    payloads["candidates"] = REJECTED
+    payloads["entities"] = {"entities": [{"mentions": ["Шабунін"]}]}
+    repository = FakeRepository()
+    worker = AnalysisWorker(
+        repository,  # type: ignore[arg-type]
+        FakeClient(payloads),  # type: ignore[arg-type]
+        AiWorkerSettings(litellm_api_key="key"),
+        logging.getLogger("test"),
+    )
+
+    await worker.process_next()
+
+    assert repository.completed is not None
+    assert repository.completed["status"] == "completed"
+    assert repository.completed["claims"] == []
+    assert repository.entities[0]["registry_entity_id"] is None
+    assert [item[:2] for item in repository.attempts] == [
+        ("candidates", "primary"),
+        ("entities", "primary"),
+    ]
+
+
+async def test_worker_admits_every_candidate_when_the_candidate_pass_fails() -> None:
+    payloads = pass_payloads()
+    payloads["candidates"] = {"candidates": {}}
+    client = FakeClient(payloads)
+    client.repairs["candidates"] = {"candidates": {}}
+    repository = FakeRepository()
+    worker = AnalysisWorker(
+        repository,  # type: ignore[arg-type]
+        client,  # type: ignore[arg-type]
+        AiWorkerSettings(litellm_api_key="key"),
+        logging.getLogger("test"),
+    )
+
+    await worker.process_next()
+
+    assert repository.completed is not None
+    assert repository.completed["status"] == "completed_with_entity_fallback"
+    assert repository.entities[0]["registry_entity_id"] == 10
+    assert repository.diagnostics[1]["fallback"] == "admit_all_candidates"
+    assert repository.completed["degradations"] == [
+        {"pass": "candidates", "fallback": "admit_all_candidates"}
+    ]
+
+
+async def test_worker_salvages_complete_entity_groups_without_repair() -> None:
+    class BrokenEntityClient(FakeClient):
+        async def infer(self, name: str, request: dict[str, Any]) -> ModelResponse:
+            if name == "entities":
+                return ModelResponse(
+                    '{"entities": [{"mentions": ["Шабунін"]}, {"mentions": ["Ша', 4
+                )
+            return await super().infer(name, request)
+
+    repository = FakeRepository()
+    client = BrokenEntityClient(pass_payloads())
+    worker = AnalysisWorker(
+        repository,  # type: ignore[arg-type]
+        client,  # type: ignore[arg-type]
+        AiWorkerSettings(litellm_api_key="key"),
+        logging.getLogger("test"),
+    )
+
+    await worker.process_next()
+
+    assert repository.completed is not None
+    assert repository.completed["status"] == "completed"
+    assert repository.entities[0]["registry_entity_id"] == 10
+    assert repository.diagnostics[1]["final_validation_status"] == "salvaged"
     assert "entities" not in client.repairs
 
 

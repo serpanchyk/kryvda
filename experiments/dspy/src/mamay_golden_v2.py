@@ -30,20 +30,24 @@ from monitoring_common.logging import setup_logging
 from telegram_monitor_ai_worker.client import LiteLlmInferenceClient
 from telegram_monitor_ai_worker.models import ModelOutputError, ModelResponse
 from telegram_monitor_ai_worker.pipeline import (
+    PIPELINE_VERSION,
+    admitted_entities,
     assign_claim_ids,
+    candidate_request,
     classification_batches,
     classification_items,
     classification_subset,
     final_payload,
+    has_monitored_entity,
     matched_monitored_entity_ids,
-    prefilter_entity_groups,
-    resolve_entity_groups,
+    registry_candidates,
     salvage_classification_objects,
+    salvage_entity_payload,
 )
 
 DEFAULT_ANNOTATIONS = Path("experiments/datasets/golden_v0/data/annotations.jsonl")
-DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v3_6/comparisons.jsonl")
-DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v3_5_2/comparisons.jsonl")
+DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v3_7/comparisons.jsonl")
+DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v3_6_all500/comparisons.jsonl")
 # The tuned old55 partition is defined by the preserved 55-example v3.5 run, not by the baseline.
 OLD55_REFERENCE = Path("experiments/dspy/data/mamay_vs_golden_v3_5/comparisons.jsonl")
 DEFAULT_SEED = Path("infra/postgres/init/003_registry_seed.sql")
@@ -109,6 +113,30 @@ def load_seed_aliases(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _salvaged_primary(
+    pass_name: PassName,
+    raw_output: str,
+    source_text: str,
+    entities: Sequence[Mapping[str, Any]],
+    claims: Sequence[Mapping[str, Any]],
+    salvage: Callable[[str], dict[str, Any] | None] | None,
+) -> dict[str, Any] | None:
+    """Mirror the worker: accept complete parts of a broken primary output when they validate."""
+    if salvage is None:
+        return None
+    recovered = salvage(raw_output)
+    if recovered is None:
+        return None
+    payload = sanitize_pass_payload_with_actions(
+        pass_name, recovered, source_text, entities
+    ).payload
+    try:
+        validate_pass(pass_name, payload, source_text, entities, claims)
+    except InferenceValidationError:
+        return None
+    return payload
+
+
 async def _run_pass(
     client: InferenceClient,
     pass_name: PassName,
@@ -119,6 +147,7 @@ async def _run_pass(
     entities: Sequence[Mapping[str, Any]] = (),
     claims: Sequence[Mapping[str, Any]] = (),
     post_validate: Callable[[Mapping[str, Any]], None] | None = None,
+    salvage: Callable[[str], dict[str, Any] | None] | None = None,
 ) -> dict[str, Any]:
     try:
         response = await client.infer(pass_name, request)
@@ -176,6 +205,28 @@ async def _run_pass(
                 primary_actions,
             )
         )
+        salvaged = _salvaged_primary(
+            pass_name, response.raw_output, source_text, entities, claims, salvage
+        )
+        if salvaged is not None:
+            attempts.append(
+                _attempt_record(pass_name, "salvage", response, None, salvaged, "valid", [], [])
+            )
+            diagnostics.append(
+                _pass_diagnostic(
+                    pass_name,
+                    response,
+                    sanitized_payload,
+                    errors,
+                    None,
+                    None,
+                    [],
+                    "salvaged",
+                    salvaged,
+                    primary_actions=primary_actions,
+                )
+            )
+            return salvaged
         try:
             repaired = await client.repair(pass_name, response.raw_output, errors)
         except ModelOutputError as repair_error:
@@ -505,7 +556,7 @@ async def analyze_annotation(
         "prefilter": {"matched_entity_ids": matched},
         "run_metadata": {
             "model": DEFAULT_MODEL,
-            "pipeline_version": "inference_v3_6",
+            "pipeline_version": PIPELINE_VERSION,
             "run_timestamp": datetime.now(UTC).isoformat(),
         },
     }
@@ -519,13 +570,40 @@ async def analyze_annotation(
     attempts: list[dict[str, Any]] = []
     diagnostics: list[dict[str, Any]] = []
     try:
-        fallback_groups = prefilter_entity_groups(source_text, aliases)
+        candidates = registry_candidates(source_text, aliases)
+        decisions: dict[str, Any] | None
+        try:
+            decisions = await _run_pass(
+                client,
+                "candidates",
+                candidate_request(source_text, candidates),
+                source_text,
+                attempts,
+                diagnostics,
+                candidates,
+            )
+        except (InferenceValidationError, ModelOutputError):
+            decisions = None
+            diagnostics.append(
+                {
+                    "pass": "candidates",
+                    "final_validation_status": "degraded",
+                    "fallback": "admit_all_candidates",
+                    "final_parsed_payload": None,
+                }
+            )
         entity_fallback = False
         try:
             entity_payload = await _run_pass(
-                client, "entities", {"post_text": source_text}, source_text, attempts, diagnostics
+                client,
+                "entities",
+                {"post_text": source_text},
+                source_text,
+                attempts,
+                diagnostics,
+                salvage=salvage_entity_payload,
             )
-            model_groups = entity_payload["entities"]
+            model_groups = cast(list[dict[str, Any]], entity_payload["entities"])
         except (InferenceValidationError, ModelOutputError):
             entity_fallback = True
             model_groups = []
@@ -534,20 +612,24 @@ async def analyze_annotation(
                     "pass": "entities",
                     "final_validation_status": "degraded",
                     "fallback": "prefilter_entities_only",
-                    "final_parsed_payload": {"entities": fallback_groups},
+                    "final_parsed_payload": {
+                        "entities": [{"mentions": item["mentions"]} for item in candidates]
+                    },
                 }
             )
-        entities = resolve_entity_groups([*fallback_groups, *model_groups], aliases, source_text)
-        claim_payload = await _run_pass(
-            client,
-            "claims",
-            {"post_text": source_text, "entities": entities},
-            source_text,
-            attempts,
-            diagnostics,
-            entities,
-        )
-        claims = assign_claim_ids(claim_payload, source_text)
+        entities = admitted_entities(candidates, decisions, model_groups, aliases, source_text)
+        claims: list[dict[str, Any]] = []
+        if has_monitored_entity(entities):
+            claim_payload = await _run_pass(
+                client,
+                "claims",
+                {"post_text": source_text, "entities": entities},
+                source_text,
+                attempts,
+                diagnostics,
+                entities,
+            )
+            claims = assign_claim_ids(claim_payload, source_text)
         items = classification_items(source_text, entities, claims)
         if items:
             classifications, classification_partial = await _run_classification(
@@ -560,10 +642,12 @@ async def analyze_annotation(
             "completed_with_partial_classification"
             if classification_partial
             else "completed_with_entity_fallback"
-            if entity_fallback
+            if entity_fallback or decisions is None
             else "completed"
         )
         degradations = []
+        if decisions is None:
+            degradations.append({"pass": "candidates", "fallback": "admit_all_candidates"})
         if entity_fallback:
             degradations.append({"pass": "entities", "fallback": "prefilter_entities_only"})
         if classification_partial:
@@ -574,7 +658,6 @@ async def analyze_annotation(
             classifications,
             status,
             degradations,
-            pipeline_version="inference_v3_6",
         )
     except Exception as error:
         failure = (
@@ -688,6 +771,13 @@ def summarize_comparisons(path: Path) -> dict[str, Any]:
                     attempt["pass"] == pass_name
                     and attempt["attempt"] == "repair"
                     and attempt["status"] == "valid"
+                    for attempt in row.get("attempts", [])
+                )
+                for row in rows
+            ),
+            "salvaged": sum(
+                any(
+                    attempt["pass"] == pass_name and attempt["attempt"] == "salvage"
                     for attempt in row.get("attempts", [])
                 )
                 for row in rows

@@ -80,6 +80,14 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   foreign context (`Міноборони рф`, `МЗС КНР`) no longer admit Ukrainian registry entities. Stored
   posts are re-analyzed through a maintenance script; a newer completed run of a revision marks the
   previous one `superseded`, and analytics read only completed statuses.
+- Inference v3.7 (migration 014) adds a `candidates` model call before Pass 1: every alias match
+  is shown with its sentences and confirmed or rejected, so common-word aliases (`Голос`, `ЧЕСНО`)
+  need no case rule and the uppercase-only `ЧЕСНО` rule is gone; Pass 1 keeps the v3.6 prompt and
+  a broken Pass 1 response is salvaged before repair. The matcher now inflects feminine adjectives and `-ість` nouns. Pass 2
+  no longer links a claim to an entity that is only neutral background, and Pass 3 restores the
+  v3.5.2 rule that an event involving a target is not the source's evaluation of it. A revision
+  with no confirmed monitored entity completes without Pass 2/3. The worker image still runs v3.6 until it is rebuilt; stored
+  posts are not re-analyzed without an explicit decision.
 - `golden_v0` is an offline, DVC-tracked pilot for annotation-schema validation. The offline Mamay
   comparison generator reuses the worker's inference request boundary to pair each golden input,
   full reviewed annotation, and Mamay output for external review. Parsed outputs that fail local

@@ -8,6 +8,7 @@ import asyncpg
 from monitoring_common.contracts import normalize_match_text
 
 from telegram_monitor_ai_worker.models import ClaimedAnalysisJob, JobLeaseLostError
+from telegram_monitor_ai_worker.pipeline import PIPELINE_VERSION
 
 _BACKGROUND_RETRY_SECONDS = (300, 1_800, 7_200, 21_600, 86_400)
 
@@ -91,14 +92,15 @@ class AnalysisJobRepository:
             run_id = await connection.fetchval(
                 """INSERT INTO analysis_runs
                    (job_id, post_revision_id, model_name, pipeline_version)
-                   VALUES ($1, $2, $3, 'inference_v3_6')
+                   VALUES ($1, $2, $3, $4)
                    ON CONFLICT (job_id) DO UPDATE
-                   SET status = 'running', pipeline_version = 'inference_v3_6',
+                   SET status = 'running', pipeline_version = $4,
                        failure_kind = NULL, failure_detail = NULL, completed_at = NULL
                    RETURNING id""",
                 row["id"],
                 row["post_revision_id"],
                 model,
+                PIPELINE_VERSION,
             )
         return ClaimedAnalysisJob(
             id=int(row["id"]),

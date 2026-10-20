@@ -9,7 +9,6 @@ import asyncio
 import csv
 import json
 import os
-import re
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
@@ -35,19 +34,9 @@ class PreparedRegistryMatcher:
     def __init__(self, aliases: Sequence[Mapping[str, Any]]) -> None:
         self._aliases_by_first_token: dict[str, list[tuple[int, tuple[frozenset[str], ...]]]] = {}
         surname_owners: dict[str, set[int]] = {}
-        self._chesno_acronym_ids: set[int] = set()
-        self._chesno_movement_ids: set[int] = set()
         for row in aliases:
             entity_id = int(row["entity_id"])
             alias = str(row["alias"])
-            canonical_name = str(row["canonical_name"])
-            normalized_alias = str(row["normalized_alias"])
-            if canonical_name == "Рух ЧЕСНО" and normalized_alias == "чесно":
-                self._chesno_acronym_ids.add(entity_id)
-                continue
-            if canonical_name == "Рух ЧЕСНО" and normalized_alias == "рух чесно":
-                self._chesno_movement_ids.add(entity_id)
-                continue
             tokens = _word_tokens(alias)
             if not tokens:
                 continue
@@ -85,12 +74,6 @@ class PreparedRegistryMatcher:
                 ):
                     matched.add(entity_id)
             matched.update(self._unique_surnames_by_form.get(source_token, set()))
-        if self._chesno_acronym_ids and re.search(r"(?<!\\w)ЧЕСНО(?!\\w)", source_text):
-            matched.update(self._chesno_acronym_ids)
-        if self._chesno_movement_ids and re.search(
-            r'(?<!\\w)(?i:рух)\\s+[«"“]?ЧЕСНО[»"”]?(?!\\w)', source_text
-        ):
-            matched.update(self._chesno_movement_ids)
         return sorted(matched)
 
 

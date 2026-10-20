@@ -2,7 +2,7 @@
 
 import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from typing import Any, cast
 
 from monitoring_common.contracts import (
@@ -13,18 +13,99 @@ from monitoring_common.contracts import (
 )
 from monitoring_common.contracts import matched_registry_entity_ids as matched_registry_ids
 
+PIPELINE_VERSION = "inference_v3_7"
+
 
 def matched_monitored_entity_ids(post_text: str, aliases: Sequence[Mapping[str, Any]]) -> list[int]:
     """Return stable registry IDs whose active aliases occur in source text."""
     return matched_registry_ids(post_text, aliases)
 
 
-def prefilter_entity_groups(
+def registry_candidates(
     post_text: str, aliases: Sequence[Mapping[str, Any]]
 ) -> list[dict[str, Any]]:
-    """Create non-optional monitored entity groups from prefilter matches."""
-    matches = matched_registry_entities(post_text, aliases)
-    return [{"mentions": item["mentions"]} for item in matches]
+    """Describe every prefilter registry match as a candidate to confirm or reject.
+
+    An alias match is only lexical evidence: ``голос`` or ``чесно`` can be ordinary words, so the
+    candidate pass decides whether the matched forms name the registry actor.
+    """
+    types = {int(row["entity_id"]): row.get("coarse_type") for row in aliases}
+    return [
+        {
+            "candidate_id": f"r{index}",
+            "entity_id": int(match["entity_id"]),
+            "name": match["canonical_name"],
+            "type": types.get(int(match["entity_id"])),
+            "mentions": list(match["mentions"]),
+        }
+        for index, match in enumerate(matched_registry_entities(post_text, aliases), start=1)
+    ]
+
+
+def candidate_request(
+    post_text: str, candidates: Sequence[Mapping[str, Any]], max_contexts: int = 3
+) -> dict[str, Any]:
+    """Build the candidate-pass request: each candidate with the sentences around its forms."""
+    items = []
+    for candidate in candidates:
+        contexts: list[str] = []
+        for mention in cast(list[str], candidate["mentions"]):
+            start = post_text.find(mention)
+            while start != -1 and len(contexts) < max_contexts:
+                context = local_context(post_text, start, start + len(mention))
+                if context not in contexts:
+                    contexts.append(context)
+                start = post_text.find(mention, start + 1)
+        items.append(
+            {
+                "candidate_id": candidate["candidate_id"],
+                "name": candidate["name"],
+                "type": candidate["type"],
+                "mentions": candidate["mentions"],
+                "contexts": contexts,
+            }
+        )
+    return {"candidates": items}
+
+
+def admitted_entities(
+    candidates: Sequence[Mapping[str, Any]],
+    decisions: Mapping[str, Any] | None,
+    model_groups: Sequence[Mapping[str, Any]],
+    aliases: Sequence[Mapping[str, Any]],
+    source_text: str,
+) -> list[dict[str, Any]]:
+    """Resolve Pass 1 groups together with the registry candidates the model confirmed.
+
+    Without valid candidate decisions every candidate is admitted, which matches the
+    pre-v3.7 behaviour. A rejected candidate cannot re-enter through a Pass 1 group that
+    repeats one of its forms.
+    """
+    if decisions is None:
+        confirmed = {cast(str, candidate["candidate_id"]) for candidate in candidates}
+    else:
+        confirmed = {
+            identifier
+            for identifier, decision in cast(Mapping[str, Any], decisions["candidates"]).items()
+            if cast(Mapping[str, Any], decision)["same_actor"] is True
+        }
+    groups: list[Mapping[str, Any]] = [
+        {"mentions": candidate["mentions"]}
+        for candidate in candidates
+        if candidate["candidate_id"] in confirmed
+    ]
+    rejected = {
+        int(candidate["entity_id"])
+        for candidate in candidates
+        if candidate["candidate_id"] not in confirmed
+    }
+    groups.extend(model_groups)
+    return resolve_entity_groups(groups, aliases, source_text, rejected)
+
+
+def has_monitored_entity(entities: Sequence[Mapping[str, Any]]) -> bool:
+    """Tell whether any resolved entity still needs claim extraction."""
+    return any(bool(entity["monitored"]) for entity in entities)
 
 
 def classification_subset(
@@ -98,13 +179,29 @@ def classification_batches(
 
 
 def salvage_classification_objects(raw_output: str) -> list[dict[str, Any]]:
-    """Recover only complete objects from a truncated classifications array.
+    """Recover only complete objects from a truncated classifications array."""
+    return salvage_array_objects(raw_output, "classifications")
+
+
+def salvage_entity_payload(raw_output: str) -> dict[str, Any] | None:
+    """Recover the complete entity groups that precede a broken Pass 1 response.
+
+    Mamay can loop on a repeated name until the JSON breaks; the groups emitted before the loop
+    are still the model's own output, and repair never sees the post.
+    """
+    if re.search(r'"entities"\s*:\s*\[', raw_output) is None:
+        return None
+    return {"entities": salvage_array_objects(raw_output, "entities")}
+
+
+def salvage_array_objects(raw_output: str, key: str) -> list[dict[str, Any]]:
+    """Recover only complete objects from a possibly truncated top-level JSON array.
 
     This deliberately accepts a contiguous JSON-object prefix of the generated array. It never
     closes brackets, fills fields, or searches beyond malformed content, so recovery cannot alter
     the model's semantic output.
     """
-    match = re.search(r'"classifications"\s*:\s*\[', raw_output)
+    match = re.search(rf'"{re.escape(key)}"\s*:\s*\[', raw_output)
     if match is None:
         return []
     decoder = json.JSONDecoder()
@@ -134,11 +231,13 @@ def resolve_entity_groups(
     groups: Sequence[Mapping[str, Any]],
     aliases: Sequence[Mapping[str, Any]],
     source_text: str | None = None,
+    rejected_registry_ids: Collection[int] = (),
 ) -> list[dict[str, Any]]:
     """Resolve exact aliases, merge safe duplicates, and assign local IDs.
 
     With the source text, a state-body mention that only ever names a foreign institution
-    (``Міноборони`` in ``Міноборони рф``) stays an unresolved post-local actor.
+    (``Міноборони`` in ``Міноборони рф``) stays an unresolved post-local actor, as does a
+    mention of a registry entity that Pass 1 rejected.
     """
     resolved: list[dict[str, Any]] = []
     by_registry_id: dict[int, dict[str, Any]] = {}
@@ -153,6 +252,8 @@ def resolve_entity_groups(
                 and row.get("coarse_type") == "state_institution"
                 and mention_is_only_foreign_state(source_text, mention)
             ):
+                row = None
+            if row is not None and int(row["entity_id"]) in rejected_registry_ids:
                 row = None
             registry_id = int(row["entity_id"]) if row is not None else None
             partitions.setdefault(registry_id, []).append(mention)
@@ -290,7 +391,7 @@ def final_payload(
     classifications: Sequence[Mapping[str, Any]],
     status: str = "completed",
     degradations: Sequence[Mapping[str, Any]] = (),
-    pipeline_version: str = "inference_v3_6",
+    pipeline_version: str = PIPELINE_VERSION,
 ) -> dict[str, Any]:
     """Build the inspectable immutable v3 result document."""
     return {

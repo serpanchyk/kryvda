@@ -12,7 +12,7 @@ from typing import Any, Literal, cast
 
 from jsonschema import Draft202012Validator
 
-PassName = Literal["entities", "claims", "classification"]
+PassName = Literal["candidates", "entities", "claims", "classification"]
 FailureKind = Literal[
     "generation_failure",
     "json_parse_failure",
@@ -22,6 +22,7 @@ FailureKind = Literal[
 ]
 
 SCHEMA_VERSIONS: dict[PassName, str] = {
+    "candidates": "inference_v3_candidates_v1",
     "entities": "inference_v3_entities_v1",
     "claims": "inference_v3_claims_v4",
     "classification": "inference_v3_classification_v1",
@@ -206,68 +207,34 @@ def _alias_surfaces(source_text: str, alias: str) -> list[tuple[int, str]]:
 
 
 def _registry_alias_occurs(source_text: str, row: Mapping[str, Any]) -> bool:
-    """Apply entity-specific registry matching policy before generic morphology.
+    """Apply the registry matching policy before generic morphology.
 
     A state-body alias whose every occurrence names a foreign institution (``Міноборони рф``)
-    does not admit the Ukrainian registry entity.
-
-    ``ЧЕСНО`` is an organization acronym that is also the common Ukrainian adverb/adjective
-    stem.  It must therefore never enter the generic inflection expansion used for ordinary
-    registry aliases.
+    does not admit the Ukrainian registry entity. Aliases that coincide with common words
+    (``Голос``, ``ЧЕСНО``) are matched like any other alias; Pass 1 decides whether a match
+    names the registry actor.
     """
     alias = cast(str, row["alias"])
-    if row.get("canonical_name") != "Рух ЧЕСНО":
-        if not alias_occurs(source_text, alias):
-            return False
-        if row.get("coarse_type") != "state_institution":
-            return True
-        surfaces = _alias_surfaces(source_text, alias)
-        return not surfaces or any(
-            not foreign_state_context(source_text, start, start + len(surface))
-            for start, surface in surfaces
-        )
-    normalized_alias = normalize_match_text(alias)
-    if normalized_alias == "чесно":
-        return _exact_case_sensitive_occurs(source_text, "ЧЕСНО")
-    if normalized_alias == "рух чесно":
-        pattern = r'(?<!\w)(?i:рух)\s+[«"“]?ЧЕСНО[»"”]?(?!\w)'
-        return re.search(pattern, source_text) is not None
-    return alias_occurs(source_text, alias)
+    if not alias_occurs(source_text, alias):
+        return False
+    if row.get("coarse_type") != "state_institution":
+        return True
+    surfaces = _alias_surfaces(source_text, alias)
+    return not surfaces or any(
+        not foreign_state_context(source_text, start, start + len(surface))
+        for start, surface in surfaces
+    )
 
 
 def _registry_alias_surfaces(source_text: str, row: Mapping[str, Any]) -> list[tuple[int, str]]:
     """Find source spans admitted by the corresponding registry alias policy."""
-    alias = cast(str, row["alias"])
-    if row.get("canonical_name") != "Рух ЧЕСНО":
-        surfaces = _alias_surfaces(source_text, alias)
-        if row.get("coarse_type") != "state_institution":
-            return surfaces
-        return [
-            (start, surface)
-            for start, surface in surfaces
-            if not foreign_state_context(source_text, start, start + len(surface))
-        ]
-    normalized_alias = normalize_match_text(alias)
-    if normalized_alias == "чесно":
-        return _exact_case_sensitive_surfaces(source_text, "ЧЕСНО")
-    if normalized_alias == "рух чесно":
-        return [
-            (match.start(), match.group(0))
-            for match in re.finditer(r'(?<!\w)(?i:рух)\s+[«"“]?ЧЕСНО[»"”]?(?!\w)', source_text)
-        ]
-    return _alias_surfaces(source_text, alias)
-
-
-def _exact_case_sensitive_occurs(source_text: str, alias: str) -> bool:
-    """Match an acronym literally with word boundaries and no case folding."""
-    return bool(re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", source_text))
-
-
-def _exact_case_sensitive_surfaces(source_text: str, alias: str) -> list[tuple[int, str]]:
-    """Return literal acronym spans accepted by exact-case matching."""
+    surfaces = _alias_surfaces(source_text, cast(str, row["alias"]))
+    if row.get("coarse_type") != "state_institution":
+        return surfaces
     return [
-        (match.start(), match.group(0))
-        for match in re.finditer(rf"(?<!\w){re.escape(alias)}(?!\w)", source_text)
+        (start, surface)
+        for start, surface in surfaces
+        if not foreign_state_context(source_text, start, start + len(surface))
     ]
 
 
@@ -316,12 +283,17 @@ def _inflection_forms(token: str) -> frozenset[str]:
     elif normalized.endswith("а"):
         stem = normalized[:-1]
         forms.update(stem + suffix for suffix in ("и", "і", "у", "ою", "е", "о"))
+        if normalized.endswith(("ська", "цька", "зька", "на", "ва", "ла", "ра")):
+            forms.update(stem + suffix for suffix in ("ої", "ій"))
     elif normalized.endswith("я"):
         stem = normalized[:-1]
         forms.update(stem + suffix for suffix in ("і", "ї", "и", "ю", "єю", "ею", "ей"))
     elif normalized.endswith("о"):
         stem = normalized[:-1]
         forms.update(stem + suffix for suffix in ("а", "у", "ом", "і", "е"))
+    elif normalized.endswith("ість"):
+        stem = normalized[:-4]
+        forms.update(stem + suffix for suffix in ("ості", "істю"))
     elif normalized.endswith("ь"):
         stem = normalized[:-1]
         forms.update(stem + suffix for suffix in ("я", "ю", "ем", "єм", "і", "е"))
@@ -369,9 +341,16 @@ def sanitize_pass_payload_with_actions(
             cast(list[Any], sanitized["claims"]), source_text, entities, actions
         )
         return SanitizedPayload(sanitized, tuple(actions))
+    if pass_name == "candidates":
+        if isinstance(sanitized.get("candidates"), dict):
+            sanitized["candidates"] = _sanitize_candidate_decisions(
+                cast(dict[str, Any], sanitized["candidates"]), entities, actions
+            )
+        return SanitizedPayload(sanitized, tuple(actions))
     if pass_name != "entities" or not isinstance(sanitized.get("entities"), list):
         return SanitizedPayload(sanitized, tuple(actions))
     groups: list[Any] = []
+    claimed: set[str] = set()
     for candidate in sanitized["entities"]:
         if not isinstance(candidate, dict) or not isinstance(candidate.get("mentions"), list):
             groups.append(candidate)
@@ -381,6 +360,8 @@ def sanitize_pass_payload_with_actions(
         for mention in candidate["mentions"]:
             if not isinstance(mention, str):
                 mentions.append(mention)
+            elif mention in claimed:
+                actions.append({"action": "dropped_cross_group_duplicate", "mention": mention})
             elif mention in source_text and mention not in seen:
                 seen.add(mention)
                 mentions.append(mention)
@@ -388,6 +369,7 @@ def sanitize_pass_payload_with_actions(
                 actions.append({"action": "deduplicated_mention", "mention": mention})
             else:
                 actions.append({"action": "dropped_ungrounded_mention", "mention": mention})
+        claimed.update(seen)
         if mentions:
             candidate["mentions"] = mentions
             groups.append(candidate)
@@ -395,6 +377,22 @@ def sanitize_pass_payload_with_actions(
             actions.append({"action": "dropped_empty_entity_group"})
     sanitized["entities"] = groups
     return SanitizedPayload(sanitized, tuple(actions))
+
+
+def _sanitize_candidate_decisions(
+    decisions: dict[str, Any],
+    candidates: Sequence[Mapping[str, Any]],
+    actions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Drop decisions for candidate IDs that were not supplied to the candidate pass."""
+    known = {cast(str, candidate["candidate_id"]) for candidate in candidates}
+    kept: dict[str, Any] = {}
+    for identifier, decision in decisions.items():
+        if identifier in known:
+            kept[identifier] = decision
+        else:
+            actions.append({"action": "dropped_unknown_candidate", "candidate_id": identifier})
+    return kept
 
 
 def _sanitize_classification_rhetoric(
@@ -628,6 +626,26 @@ def _normalized_source_with_positions(value: str) -> tuple[str, list[tuple[int, 
     return "".join(output), positions
 
 
+def generation_schema(pass_name: PassName, request: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the guided-generation schema for one concrete pass request.
+
+    The candidate pass names every supplied registry candidate as a required property, so
+    constrained decoding cannot skip or invent a candidate decision.
+    """
+    schema = deepcopy(load_inference_schema(pass_name))
+    candidates = request.get("candidates")
+    if pass_name == "candidates" and isinstance(candidates, list):
+        identifiers = [cast(str, candidate["candidate_id"]) for candidate in candidates]
+        decision = schema["properties"]["candidates"]["additionalProperties"]
+        schema["properties"]["candidates"] = {
+            "type": "object",
+            "additionalProperties": False,
+            "required": identifiers,
+            "properties": {identifier: decision for identifier in identifiers},
+        }
+    return schema
+
+
 @lru_cache
 def load_inference_schema(pass_name: PassName) -> dict[str, Any]:
     """Load one packaged inference-v3 JSON Schema."""
@@ -666,12 +684,34 @@ def validate_pass(
         raise InferenceValidationError(
             [ValidationIssue("schema_failure", error.message) for error in schema_errors]
         )
-    if pass_name == "entities":
+    if pass_name == "candidates":
+        _validate_candidates(payload, entities)
+    elif pass_name == "entities":
         _validate_entities(payload, source_text)
     elif pass_name == "claims":
         _validate_claims(payload, source_text, entities)
     else:
         _validate_classifications(payload, entities, claims)
+
+
+def _validate_candidates(
+    payload: Mapping[str, Any], candidates: Sequence[Mapping[str, Any]]
+) -> None:
+    """Require exactly one decision for every supplied registry candidate."""
+    expected = [cast(str, candidate["candidate_id"]) for candidate in candidates]
+    decided = list(cast(Mapping[str, Any], payload["candidates"]))
+    issues = [
+        ValidationIssue("reference_failure", f"missing candidate: {identifier}")
+        for identifier in expected
+        if identifier not in decided
+    ]
+    issues.extend(
+        ValidationIssue("reference_failure", f"unexpected candidate decision: {identifier}")
+        for identifier in decided
+        if identifier not in expected
+    )
+    if issues:
+        raise InferenceValidationError(issues)
 
 
 def _validate_entities(payload: Mapping[str, Any], source_text: str) -> None:

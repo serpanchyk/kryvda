@@ -4,7 +4,12 @@ import json
 import time
 from typing import Any, cast
 
-from monitoring_common.contracts import PassName, load_extraction_schema, load_inference_schema
+from monitoring_common.contracts import (
+    PassName,
+    generation_schema,
+    load_extraction_schema,
+    load_inference_schema,
+)
 from openai import AsyncOpenAI
 
 from telegram_monitor_ai_worker.models import ModelOutputError, ModelResponse
@@ -44,6 +49,7 @@ class LiteLlmInferenceClient:
                 {"role": "user", "content": pass_message(pass_name, request)},
             ],
             self._max_tokens(pass_name, request),
+            generation_schema(pass_name, request),
         )
 
     async def repair(
@@ -65,10 +71,15 @@ class LiteLlmInferenceClient:
                 },
             ],
             self._max_tokens(pass_name, {}),
+            load_inference_schema(pass_name),
         )
 
     def _max_tokens(self, pass_name: PassName, request: dict[str, Any]) -> int:
         """Return the output budget appropriate for one focused inference pass."""
+        if pass_name == "candidates":
+            candidates = request.get("candidates", [])
+            count = len(candidates) if isinstance(candidates, list) else 0
+            return min(128 + count * 128, self._claims_max_output_tokens)
         if pass_name == "entities":
             return self._entities_max_output_tokens
         if pass_name == "claims":
@@ -78,7 +89,11 @@ class LiteLlmInferenceClient:
         return min(128 + item_count * 128, self._classification_max_output_tokens)
 
     async def _request(
-        self, pass_name: PassName, messages: list[dict[str, str]], max_tokens: int
+        self,
+        pass_name: PassName,
+        messages: list[dict[str, str]],
+        max_tokens: int,
+        schema: dict[str, Any],
     ) -> ModelResponse:
         started = time.monotonic()
         response = await self._client.chat.completions.create(
@@ -91,7 +106,7 @@ class LiteLlmInferenceClient:
                     "json_schema": {
                         "name": f"telegram_monitor_{pass_name}",
                         "strict": True,
-                        "schema": load_inference_schema(pass_name),
+                        "schema": schema,
                     },
                 },
             ),

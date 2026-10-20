@@ -1,31 +1,48 @@
-# Inference v3.6
+# Inference v3.7
 
 Production analysis is target monitoring. A Post Revision is eligible only when a Unicode-aware,
 case-insensitive match finds an approved alias of a monitored registry entity. Exact matches use
 letter/digit boundaries. A conservative deterministic Ukrainian/Russian nominal-inflection
 matcher also recognizes grammatical forms token by token. A bare inflected surname from a person
 alias is accepted only when it uniquely identifies one monitored registry entity; it does not
-perform fuzzy matching. A state-body alias whose every occurrence names a foreign institution
+perform fuzzy matching. Feminine adjective cases (`Європейської Солідарності`) and `-ість` nouns
+are recognized. A state-body alias whose every occurrence names a foreign institution
 (`Міноборони рф`, `МЗС КНР`, `російський Генштаб`) does not admit the Ukrainian entity, and a Pass 1
-mention that only ever occurs in such a context stays an unresolved post-local actor.
+mention that only ever occurs in such a context stays an unresolved post-local actor. No alias has
+a case-sensitive or entity-specific rule: an alias that is also a common word (`Голос`, `ЧЕСНО`)
+admits the post, and Pass 1 decides whether the match names the registry actor.
 
-The AI worker makes exactly three semantic model calls:
+The AI worker makes four semantic model calls:
 
-1. `entities` groups exact textual references to relevant identifiable actors.
-2. `claims` extracts atomic claims involving at least one monitored entity, with attribution,
+1. `candidates` receives every registry candidate matched by alias (`r*` ID, canonical name, type,
+   exact matched forms and the sentences around them) and answers, per candidate, a short
+   `reason` and `same_actor`. Its guided-generation schema names every candidate ID as a
+   required property, so no decision can be skipped or invented.
+2. `entities` groups exact textual references to relevant identifiable actors (the v3.6 prompt).
+3. `claims` extracts atomic claims involving at least one monitored entity, with attribution,
    Ukrainian epistemic status, and one exact evidence string. `presentation` is deliberately not
    stored or inferred.
-3. `classification` classifies every monitored claim-target pair for Ukrainian stance and up to
+4. `classification` classifies every monitored claim-target pair for Ukrainian stance and up to
    two attack-rhetoric categories.
 
 Between calls, backend code validates grounding, resolves approved aliases including inflected
 forms, assigns `e*` and `c*` IDs, records candidates, and derives deterministic evidence offsets.
 Before Pass 1 validation it removes repeated strings and ungrounded strings, retaining each entity
-group that still has at least one exact mention. Backend-created entities preserve every exact
-surface form that caused the monitored prefilter match; Pass 1 entities merge into this set. If
-Pass 1 remains invalid after repair, the pipeline continues with these prefilter entities only.
-A mention repeated inside one group is harmless;
-the same grounded mention in separate groups remains a reference failure. Mixed Pass 1 groups are
+group that still has at least one exact mention and keeps a mention repeated across groups only
+in its first group. Only confirmed candidates become monitored entities, with every exact surface
+form that caused the match; a rejected candidate cannot re-enter through a Pass 1 group. When no
+monitored entity remains, Pass 2 and Pass 3 are skipped and the run completes without claims. If
+the candidate pass stays invalid after repair, every candidate is admitted
+(`admit_all_candidates`); if Pass 1 stays invalid, the confirmed candidates alone continue
+(`prefilter_entities_only`). The decision was first folded into Pass 1, but Mamay then wrongly
+rejected real entities (often the first candidate) whether asked for a yes/no per candidate or for
+a rejection list. With the separate call and sentence context Mamay confirmed 346 of 349
+candidates on the 100 reviewed examples and rejected the adverb `Чесно` and `Чесна мобілізація`;
+its one wrong rejection read «актор» as a profession, so the prompt now says person, body or
+organization. A Pass 1 response that
+breaks (Mamay can loop on a repeated name) is salvaged before repair: every complete entity group
+is kept when it validates, because the repair request carries neither the post nor the candidates.
+A mention repeated inside one group is harmless. Mixed Pass 1 groups are
 partitioned by uniquely resolvable mention, leaving ambiguous text as a post-local candidate. Pass
 2 receives the whole post. Its deterministic sanitizer drops only invalid or non-monitored claims,
 deduplicates retained claims, and realigns uniquely recoverable quote/dash/whitespace evidence to
@@ -59,7 +76,7 @@ whitespace even when the token budget was raised.
 
 Final results are stored relationally as post-local entities, atomic claims, claim/entity links,
 and claim-target classifications. `analysis_runs.final_payload` keeps an inspectable immutable
-v3.6 document, including completion/degradation status. A later completed run of the same revision
+v3.7 document, including completion/degradation status. A later completed run of the same revision
 marks the earlier completed run `superseded`.
 
 The v3.6 prompts came from a manual review of 200 production posts and a blind comparison on the
@@ -71,8 +88,17 @@ it, extracts evaluative editorial claims expressed through labels, sarcasm, iron
 rhetorical questions or headlines, and treats the news format `…, — X` as attribution to X. Pass 3
 classifies the stance of the claim's source: neutral reports of a target's actions or successes,
 a target's self-presentation, another actor's attack on a target and polls are `відсутнє`.
-Aggregation and product analytics are
-intentionally deferred.
+
+v3.7 follows a review of v3.6 errors on all 500 `golden_v0` examples, where v3.6 put stance on
+entities that were only background. Pass 1 judges registry candidates as above. Pass 2 links a
+claim to an entity when the claim concerns its actions, qualities or evaluation, including its
+people, protégés or former staff used against it (`ексдетектив НАБУ брав хабарі`, `протеже Андрія
+Єрмака`), but not when the entity is neutral background (`уникнув служби в ЗСУ`, `передав ЗСУ
+РЕБи`).
+Pass 3 restores the v3.5.2 separation between an event involving the target and the source's own
+evaluation: neutral reports of suspicions, searches, exclusions or attacks, neutral background,
+statements by the target's own officials, polls, awards and donations, and hostile-source reports
+are `відсутнє`. Aggregation and product analytics are intentionally deferred.
 
 The previous `extraction_schema_v1` remains packaged only so historical DVC experiments can be
 reproduced; it is no longer a production runtime contract.

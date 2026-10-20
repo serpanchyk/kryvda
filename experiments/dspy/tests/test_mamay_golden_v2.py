@@ -38,7 +38,8 @@ def annotation(identifier: str = "golden-1", text: str = TEXT) -> dict[str, Any]
 class FakeClient:
     def __init__(self) -> None:
         self.payloads = {
-            "entities": {"entities": [{"mentions": ["Шабунін"]}]},
+            "candidates": {"candidates": {"r1": {"reason": "прізвище", "same_actor": True}}},
+            "entities": {"entities": []},
             "claims": {
                 "claims": [
                     {
@@ -78,15 +79,15 @@ async def test_analysis_records_prefilter_all_passes_and_final_output() -> None:
     assert row["status"] == "completed"
     assert row["input"]["post_length_chars"] == len(TEXT)
     assert [attempt["pass"] for attempt in row["attempts"]] == [
+        "candidates",
         "entities",
         "claims",
         "classification",
     ]
-    assert row["final_output"]["pipeline_version"] == "inference_v3_6"
-    assert len(row["pass_diagnostics"]) == 3
-    assert row["pass_diagnostics"][0]["sanitized_primary_output"] == {
-        "entities": [{"mentions": ["Шабунін"]}]
-    }
+    assert row["final_output"]["pipeline_version"] == "inference_v3_7"
+    assert len(row["pass_diagnostics"]) == 4
+    assert row["pass_diagnostics"][1]["sanitized_primary_output"] == {"entities": []}
+    assert row["final_output"]["entities"][0]["canonical_name"] == "Віталій Шабунін"
 
 
 async def test_filtered_records_make_no_model_requests() -> None:
@@ -113,8 +114,8 @@ async def test_generator_resumes_and_validator_checks_artifact(tmp_path: Path) -
             "completed_with_entity_fallback": 0,
         },
         "passes": {
-            "entities": {"primary_valid": 1, "valid_after_repair": 0},
-            "claims": {"primary_valid": 1, "valid_after_repair": 0},
+            "entities": {"primary_valid": 1, "valid_after_repair": 0, "salvaged": 0},
+            "claims": {"primary_valid": 1, "valid_after_repair": 0, "salvaged": 0},
             "classification": {
                 "expected_pairs": 1,
                 "primary_valid_pairs": 1,

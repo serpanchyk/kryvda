@@ -157,6 +157,20 @@ uv run python experiments/dspy/src/mamay_golden_v2.py --validate-only
 uv run dvc add experiments/dspy/data/mamay_vs_golden_v3_6
 ```
 
+## Inference v3.7 comparison
+
+The runner now defaults to `mamay_vs_golden_v3_7` over all 500 annotations and compares contract
+health with `mamay_vs_golden_v3_6_all500`, the same v3.6 code run over all 500. Pass 1 receives
+every registry alias match as a candidate and confirms or rejects it.
+
+```bash
+docker compose run --rm --no-deps -w /workspace -v "$PWD:/workspace" \
+  -e PYTHONPATH=/workspace/apps/ai-worker/src:/workspace/packages/monitoring-common/src \
+  ai-worker python /workspace/experiments/dspy/src/mamay_golden_v2.py --concurrency 8
+uv run python experiments/dspy/src/mamay_golden_v2.py --validate-only
+uv run dvc add experiments/dspy/data/mamay_vs_golden_v3_7
+```
+
 ## Jev classification-only comparison
 
 `jev_golden_v1.py` evaluates TypeSafe's Jev typed-decision model, reached through OpenRouter's
