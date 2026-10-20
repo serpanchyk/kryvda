@@ -1,0 +1,6 @@
+outs:
+- md5: 21bbb239fc73e1c6c4e7f5dc1f723dd3.dir
+  size: 34698702
+  nfiles: 6
+  hash: md5
+  path: golden_test_v2_runs
