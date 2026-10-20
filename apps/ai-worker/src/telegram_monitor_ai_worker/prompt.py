@@ -8,7 +8,7 @@ from monitoring_common.contracts import PassName
 PROMPT_VERSIONS: dict[PassName, str] = {
     "candidates": "inference_v3_candidates_prompt_v1",
     "entities": "inference_v3_entities_prompt_v4",
-    "claims": "inference_v3_claims_prompt_v8",
+    "claims": "inference_v3_claims_prompt_v9",
     "targets": "inference_v3_targets_prompt_v3",
     "classification": "inference_v3_classification_prompt_v7",
 }
@@ -56,9 +56,12 @@ entity. Кожен рядок mentions дослівно копіюй із одн
 
 CLAIM_PROMPT = f"""{COMMON}
 
-Завдання: з'ясуй, що пост каже ПРО monitored entities (monitored=true). Витягни атомарні
-твердження, кожне з яких щось каже про дії, якості чи оцінку щонайменше однієї monitored entity.
-Використовуй лише передані entity IDs.
+Завдання: з'ясуй, що пост каже ПРО ОДНУ entity — focus_entity (focus_entity_id). Витягни ВСІ
+атомарні твердження, які щось кажуть про її дії, якості чи оцінку, зокрема через натяк, сарказм,
+ярлик чи її людей, — і лише їх. Кожне твердження має містити focus_entity_id в entity_ids; інші
+monitored entities додавай до нього, лише якщо твердження і про них. Твердження, у яких
+focus_entity немає, не повертай: про інших акторів питають окремо. Якщо пост нічого не каже про
+focus_entity, поверни claims: []. Використовуй лише передані entity IDs.
 
 - entity_ids — monitored entities, про які щось каже твердження: їхні дії, якості чи оцінку, а
   також їхніх людей, протеже, членів чи колишніх працівників, коли пост використовує цей зв'язок

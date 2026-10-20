@@ -13,7 +13,7 @@ from monitoring_common.contracts import (
 )
 from monitoring_common.contracts import matched_registry_entity_ids as matched_registry_ids
 
-PIPELINE_VERSION = "inference_v4"
+PIPELINE_VERSION = "inference_v4_3"
 
 
 def matched_monitored_entity_ids(post_text: str, aliases: Sequence[Mapping[str, Any]]) -> list[int]:
@@ -101,6 +101,47 @@ def admitted_entities(
     }
     groups.extend(model_groups)
     return resolve_entity_groups(groups, aliases, source_text, rejected)
+
+
+def focused_claim_request(
+    post_text: str, entities: Sequence[Mapping[str, Any]], focus: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Build a Pass 2 request that asks only what the post says about one monitored entity."""
+    return {
+        "post_text": post_text,
+        "entities": list(entities),
+        "focus_entity_id": focus["id"],
+        "focus_entity": _entity_label(focus),
+    }
+
+
+def merge_focused_claims(payloads: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Merge per-entity Pass 2 outputs, uniting claims that quote the same evidence.
+
+    Two focused calls often extract the same statement; a claim with the same evidence and
+    source as an earlier one only adds its entity IDs to that claim.
+    """
+    merged: list[dict[str, Any]] = []
+    by_key: dict[tuple[str, str, Any], dict[str, Any]] = {}
+    for payload in payloads:
+        for claim in cast(list[Mapping[str, Any]], payload["claims"]):
+            attribution = cast(Mapping[str, Any], claim["attribution"])
+            key = (
+                cast(str, claim["evidence_text"]),
+                cast(str, attribution.get("source_kind")),
+                attribution.get("source_entity_id"),
+            )
+            existing = by_key.get(key)
+            if existing is None:
+                copy = dict(claim)
+                copy["entity_ids"] = list(cast(list[str], claim["entity_ids"]))
+                by_key[key] = copy
+                merged.append(copy)
+                continue
+            for entity_id in cast(list[str], claim["entity_ids"]):
+                if entity_id not in existing["entity_ids"]:
+                    existing["entity_ids"].append(entity_id)
+    return {"claims": merged}
 
 
 def has_monitored_entity(entities: Sequence[Mapping[str, Any]]) -> bool:

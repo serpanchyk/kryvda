@@ -38,8 +38,10 @@ from telegram_monitor_ai_worker.pipeline import (
     classification_items,
     classification_subset,
     final_payload,
+    focused_claim_request,
     has_monitored_entity,
     matched_monitored_entity_ids,
+    merge_focused_claims,
     registry_candidates,
     salvage_classification_objects,
     salvage_entity_payload,
@@ -48,8 +50,8 @@ from telegram_monitor_ai_worker.pipeline import (
 )
 
 DEFAULT_ANNOTATIONS = Path("experiments/datasets/golden_v0/data/annotations.jsonl")
-DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v4/comparisons.jsonl")
-DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v3_7/comparisons.jsonl")
+DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v4_3/comparisons.jsonl")
+DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v4_2/comparisons.jsonl")
 # The tuned old55 partition is defined by the preserved 55-example v3.5 run, not by the baseline.
 OLD55_REFERENCE = Path("experiments/dspy/data/mamay_vs_golden_v3_5/comparisons.jsonl")
 DEFAULT_SEED = Path("infra/postgres/init/003_registry_seed.sql")
@@ -621,17 +623,29 @@ async def analyze_annotation(
             )
         entities = admitted_entities(candidates, decisions, model_groups, aliases, source_text)
         claims: list[dict[str, Any]] = []
+        claim_failures: list[str] = []
         if has_monitored_entity(entities):
-            claim_payload = await _run_pass(
-                client,
-                "claims",
-                {"post_text": source_text, "entities": entities},
-                source_text,
-                attempts,
-                diagnostics,
-                entities,
-            )
-            claims = assign_claim_ids(claim_payload, source_text)
+            payloads: list[dict[str, Any]] = []
+            last_error: Exception | None = None
+            for focus in [entity for entity in entities if entity["monitored"]]:
+                try:
+                    payloads.append(
+                        await _run_pass(
+                            client,
+                            "claims",
+                            focused_claim_request(source_text, entities, focus),
+                            source_text,
+                            attempts,
+                            diagnostics,
+                            entities,
+                        )
+                    )
+                except (InferenceValidationError, ModelOutputError) as error:
+                    claim_failures.append(cast(str, focus["id"]))
+                    last_error = error
+            if not payloads and last_error is not None:
+                raise last_error
+            claims = assign_claim_ids(merge_focused_claims(payloads), source_text)
         items = classification_items(source_text, entities, claims)
         targets: dict[str, Any] | None = None
         if items:
@@ -671,11 +685,13 @@ async def analyze_annotation(
             if entity_fallback or decisions is None
             else "completed"
         )
-        degradations = []
+        degradations: list[dict[str, Any]] = []
         if decisions is None:
             degradations.append({"pass": "candidates", "fallback": "admit_all_candidates"})
         if items and targets is None:
             degradations.append({"pass": "targets", "fallback": "classify_all_pairs"})
+        if claim_failures:
+            degradations.append({"pass": "claims", "failed_focus_entities": claim_failures})
         if entity_fallback:
             degradations.append({"pass": "entities", "fallback": "prefilter_entities_only"})
         if classification_partial:

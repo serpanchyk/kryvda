@@ -5,8 +5,10 @@ from telegram_monitor_ai_worker.pipeline import (
     classification_batches,
     classification_items,
     classification_subset,
+    focused_claim_request,
     local_context,
     matched_monitored_entity_ids,
+    merge_focused_claims,
     resolve_entity_groups,
     salvage_classification_objects,
 )
@@ -209,3 +211,46 @@ def test_classification_subset_clears_rhetoric_for_non_negative_stance() -> None
     ]
     assert missing == []
     assert actions == [{"action": "cleared_rhetoric_for_non_negative_stance", "index": 0}]
+
+
+def test_focused_claim_request_names_one_monitored_entity() -> None:
+    entities = [
+        {
+            "id": "e1",
+            "canonical_name": "Віталій Шабунін",
+            "mentions": ["Шабунін"],
+            "monitored": True,
+        },
+        {"id": "e2", "canonical_name": None, "mentions": ["Іванов"], "monitored": False},
+    ]
+
+    request = focused_claim_request("Шабунін і Іванов.", entities, entities[0])
+
+    assert request["focus_entity_id"] == "e1"
+    assert request["focus_entity"] == "Віталій Шабунін"
+    assert request["entities"] == entities
+
+
+def test_merge_focused_claims_unites_entities_of_the_same_quote_and_source() -> None:
+    editorial = {"source_kind": "channel_editorial", "source_entity_id": None}
+
+    def claim(text: str, entity_ids: list[str], source: dict[str, object]) -> dict[str, object]:
+        return {
+            "normalized_text": text,
+            "entity_ids": entity_ids,
+            "evidence_text": "НАБУ відбілює ЦПК",
+            "attribution": source,
+            "epistemic_status": "ствердження",
+        }
+
+    quoted = {"source_kind": "named_entity", "source_entity_id": "e3"}
+    merged = merge_focused_claims(
+        [
+            {"claims": [claim("НАБУ відбілює ЦПК.", ["e1"], editorial)]},
+            {"claims": [claim("ЦПК відбілюють.", ["e2", "e1"], editorial)]},
+            {"claims": [claim("Цитата.", ["e2"], quoted)]},
+        ]
+    )
+
+    assert [item["entity_ids"] for item in merged["claims"]] == [["e1", "e2"], ["e2"]]
+    assert merged["claims"][0]["normalized_text"] == "НАБУ відбілює ЦПК."

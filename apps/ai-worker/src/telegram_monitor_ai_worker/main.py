@@ -47,8 +47,10 @@ from telegram_monitor_ai_worker.pipeline import (
     classification_items,
     classification_subset,
     final_payload,
+    focused_claim_request,
     has_monitored_entity,
     matched_monitored_entity_ids,
+    merge_focused_claims,
     registry_candidates,
     salvage_classification_objects,
     salvage_entity_payload,
@@ -247,14 +249,9 @@ class AnalysisWorker:
         await self._repository.persist_entities(job.run_id, entities, approved_aliases)
 
         claims: list[dict[str, Any]] = []
+        claim_failures: list[str] = []
         if has_monitored_entity(entities):
-            claim_payload = await self._execute_pass(
-                job,
-                "claims",
-                {"post_text": job.post_text, "entities": entities},
-                source_text=job.post_text,
-                entities=entities,
-            )
+            claim_payload, claim_failures = await self._execute_focused_claims(job, entities)
             claims = assign_claim_ids(claim_payload, job.post_text)
         items = classification_items(job.post_text, entities, claims)
         targets: dict[str, Any] | None = None
@@ -314,11 +311,13 @@ class AnalysisWorker:
             if entity_fallback or decisions is None
             else "completed"
         )
-        degradations = []
+        degradations: list[dict[str, Any]] = []
         if decisions is None:
             degradations.append({"pass": "candidates", "fallback": "admit_all_candidates"})
         if items and targets is None:
             degradations.append({"pass": "targets", "fallback": "classify_all_pairs"})
+        if claim_failures:
+            degradations.append({"pass": "claims", "failed_focus_entities": claim_failures})
         if entity_fallback:
             degradations.append({"pass": "entities", "fallback": "prefilter_entities_only"})
         if classification_partial:
@@ -327,6 +326,56 @@ class AnalysisWorker:
         await self._repository.complete(
             job, entities, claims, classifications, result, run_status=run_status
         )
+
+    async def _execute_focused_claims(
+        self, job: ClaimedAnalysisJob, entities: Sequence[Mapping[str, Any]]
+    ) -> tuple[dict[str, Any], list[str]]:
+        """Run Pass 2 once per monitored entity and merge the claims.
+
+        Per-entity calls share one attempt and diagnostic slot, so they are never reused after a
+        transient job retry; the merged result and per-entity outcomes are recorded at the end.
+        """
+        payloads: list[dict[str, Any]] = []
+        failures: list[str] = []
+        last_error: Exception | None = None
+        for focus in [entity for entity in entities if entity["monitored"]]:
+            try:
+                payloads.append(
+                    await self._execute_pass(
+                        job,
+                        "claims",
+                        focused_claim_request(job.post_text, entities, focus),
+                        source_text=job.post_text,
+                        entities=entities,
+                        reuse=False,
+                    )
+                )
+            except (InferenceValidationError, ModelOutputError) as error:
+                failures.append(cast(str, focus["id"]))
+                last_error = error
+        if not payloads and last_error is not None:
+            raise last_error
+        merged = merge_focused_claims(payloads)
+        metadata: dict[str, Any] = {
+            "focused_entities": [entity["id"] for entity in entities if entity["monitored"]],
+            "failed_focus_entities": failures,
+        }
+        await self._repository.record_pass_diagnostic(
+            run_id=job.run_id,
+            pass_name="claims",
+            raw_primary_output=None,
+            sanitized_primary_payload=None,
+            primary_sanitization_actions=[],
+            primary_validation_errors=[],
+            raw_repair_output=None,
+            sanitized_repair_payload=None,
+            repair_sanitization_actions=[],
+            repair_validation_errors=[],
+            final_validation_status="partial" if failures else "valid",
+            final_parsed_payload=merged,
+            recovery_metadata=metadata,
+        )
+        return merged, failures
 
     @staticmethod
     def _salvaged_primary(
@@ -520,8 +569,11 @@ class AnalysisWorker:
         claims: Sequence[Mapping[str, Any]] = (),
         post_validate: Callable[[Mapping[str, Any]], None] | None = None,
         salvage: Callable[[str], dict[str, Any] | None] | None = None,
+        reuse: bool = True,
     ) -> dict[str, Any]:
-        completed = await self._repository.completed_pass_payload(job.run_id, pass_name)
+        completed = (
+            await self._repository.completed_pass_payload(job.run_id, pass_name) if reuse else None
+        )
         if completed is not None:
             validate_pass(pass_name, completed, source_text, entities, claims)
             if post_validate is not None:

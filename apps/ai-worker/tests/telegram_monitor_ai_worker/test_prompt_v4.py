@@ -33,7 +33,8 @@ def test_claim_prompt_keeps_background_entities_out_of_claim_targets() -> None:
     assert (
         "normalized_text, entity_ids,\nevidence_text, attribution, epistemic_status" in CLAIM_PROMPT
     )
-    assert PROMPT_VERSIONS["claims"] == "inference_v3_claims_prompt_v8"
+    assert "focus_entity_id" in CLAIM_PROMPT
+    assert PROMPT_VERSIONS["claims"] == "inference_v3_claims_prompt_v9"
 
 
 def test_targets_prompt_asks_for_every_evaluated_actor_by_name() -> None:
