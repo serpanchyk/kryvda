@@ -147,6 +147,16 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   bootstrap 95% intervals exclude zero for attack F1, negative recall and the negative-precision
   drop. A blind Claude Haiku comparison through subagents (not production, outside DVC) scored
   higher on attribution and rhetoric but extracted about 30% fewer claims.
+- `luna_vs_golden_v3_7_pilot100` and `luna_low_vs_golden_v3_7_pilot100` are DVC-tracked runs of
+  the committed v3.7 pipeline on OpenAI GPT-6 Luna through OpenRouter over the 100 reviewed
+  examples, with OpenRouter reasoning effort `none` and `low` (low adds 4096 output tokens per
+  pass, since reasoning counts against `max_tokens`). The runner's CLI has no reasoning option;
+  it was injected by wrapping the client, and `run_metadata.model` still records the Mamay
+  default. With `none`, 7 posts fail on JSON followed by stray text (strict schema is not
+  enforced). With `low`, all 100 complete and the old55/diagnostic45 results match or exceed
+  Mamay v3.7 on post-level attack F1 (0.966/0.862), negative-stance precision, rhetoric micro-F1
+  (0.525/0.443) and claim coverage (0.69/0.70); attribution accuracy (0.80/0.82) stays below the
+  Haiku pilot. Production inference is unchanged.
 - `registry_post_coverage` is a DVC-tracked snapshot of the number of latest accessible posts
   matching each active registry entity under the production alias policy. Its summary records the
   live queue and a throughput-based ETA; it is an operational snapshot, not a model evaluation.

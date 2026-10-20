@@ -1,0 +1,6 @@
+outs:
+- md5: a9ecb8491a1c205be04ba2978f7ef771.dir
+  size: 6117289
+  nfiles: 2
+  hash: md5
+  path: luna_vs_golden_v3_7_pilot100
