@@ -1,4 +1,4 @@
-"""Regression coverage for the v3.7 semantic prompt constraints."""
+"""Regression coverage for the inference v4 semantic prompt constraints."""
 
 from telegram_monitor_ai_worker.prompt import (
     CANDIDATE_PROMPT,
@@ -6,6 +6,7 @@ from telegram_monitor_ai_worker.prompt import (
     CLASSIFICATION_PROMPT,
     ENTITY_PROMPT,
     PROMPT_VERSIONS,
+    TARGET_PROMPT,
 )
 
 
@@ -35,12 +36,16 @@ def test_claim_prompt_keeps_background_entities_out_of_claim_targets() -> None:
     assert PROMPT_VERSIONS["claims"] == "inference_v3_claims_prompt_v8"
 
 
-def test_classification_prompt_separates_events_from_the_source_evaluation() -> None:
+def test_targets_prompt_asks_who_the_source_evaluates() -> None:
+    assert "кого з його entities джерело твердження" in TARGET_PROMPT
+    assert "«уникнув служби в ЗСУ»" in TARGET_PROMPT
+    assert "«впливала на суддів ВАКС»" in TARGET_PROMPT
+    assert PROMPT_VERSIONS["targets"] == "inference_v3_targets_prompt_v1"
+
+
+def test_classification_prompt_only_chooses_the_direction_of_an_evaluation() -> None:
     assert "claim_source" in CLASSIFICATION_PROMPT
     assert "source_is_target" in CLASSIFICATION_PROMPT
-    assert "учасник чи об'єкт негативної події" in CLASSIFICATION_PROMPT
-    assert "TARGET лише нейтральне тло" in CLASSIFICATION_PROMPT
-    assert "подано як доказ проти нього" in CLASSIFICATION_PROMPT
-    assert "результати опитувань" in CLASSIFICATION_PROMPT
-    assert "ворожих джерел" in CLASSIFICATION_PROMPT
-    assert PROMPT_VERSIONS["classification"] == "inference_v3_classification_prompt_v7"
+    assert "Визнач напрям цієї оцінки" in CLASSIFICATION_PROMPT
+    assert "«історія не підтвердилась»" in CLASSIFICATION_PROMPT
+    assert PROMPT_VERSIONS["classification"] == "inference_v3_classification_prompt_v8"

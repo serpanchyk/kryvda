@@ -13,7 +13,7 @@ from monitoring_common.contracts import (
 )
 from monitoring_common.contracts import matched_registry_entity_ids as matched_registry_ids
 
-PIPELINE_VERSION = "inference_v3_7"
+PIPELINE_VERSION = "inference_v4"
 
 
 def matched_monitored_entity_ids(post_text: str, aliases: Sequence[Mapping[str, Any]]) -> list[int]:
@@ -344,6 +344,56 @@ def classification_items(
                 }
             )
     return items
+
+
+def target_request(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Group Pass 3 pairs by claim for the targets pass, one entry per claim."""
+    claims: dict[str, dict[str, Any]] = {}
+    for item in items:
+        claim = claims.setdefault(
+            cast(str, item["claim_id"]),
+            {
+                "claim_id": item["claim_id"],
+                "claim_source": item["claim_source"],
+                "normalized_claim": item["normalized_claim"],
+                "evidence_text": item["evidence_text"],
+                "local_context": item["local_context"],
+                "entities": [],
+            },
+        )
+        claim["entities"].append({"entity_id": item["entity_id"], "name": item["target"]})
+    return {"claims": list(claims.values())}
+
+
+def split_by_targets(
+    items: Sequence[Mapping[str, Any]], decisions: Mapping[str, Any] | None
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return pairs whose target the source evaluates, and `відсутнє` rows for the others.
+
+    Without valid targets decisions every pair is classified, as before v4.
+    """
+    if decisions is None:
+        return [dict(item) for item in items], []
+    evaluated = {
+        (claim_id, entity_id)
+        for claim_id, decision in cast(Mapping[str, Any], decisions["claims"]).items()
+        for entity_id in cast(Mapping[str, Any], decision)["evaluated_entity_ids"]
+    }
+    to_classify: list[dict[str, Any]] = []
+    absent: list[dict[str, Any]] = []
+    for item in items:
+        if (item["claim_id"], item["entity_id"]) in evaluated:
+            to_classify.append(dict(item))
+        else:
+            absent.append(
+                {
+                    "claim_id": item["claim_id"],
+                    "entity_id": item["entity_id"],
+                    "stance": "відсутнє",
+                    "rhetoric": [],
+                }
+            )
+    return to_classify, absent
 
 
 def _entity_label(entity: Mapping[str, Any]) -> str:

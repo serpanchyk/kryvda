@@ -9,6 +9,7 @@ from mamay_golden_v2 import (
     analyze_annotation,
     completed_example_ids,
     generate_comparisons,
+    is_transient_failure,
     load_seed_aliases,
     summarize_comparisons,
     validate_comparisons,
@@ -54,6 +55,7 @@ class FakeClient:
                     }
                 ]
             },
+            "targets": {"claims": {"c1": {"reason": "Шабунін", "evaluated_entity_ids": ["e1"]}}},
             "classification": {
                 "classifications": [
                     {
@@ -82,10 +84,11 @@ async def test_analysis_records_prefilter_all_passes_and_final_output() -> None:
         "candidates",
         "entities",
         "claims",
+        "targets",
         "classification",
     ]
-    assert row["final_output"]["pipeline_version"] == "inference_v3_7"
-    assert len(row["pass_diagnostics"]) == 4
+    assert row["final_output"]["pipeline_version"] == "inference_v4"
+    assert len(row["pass_diagnostics"]) == 5
     assert row["pass_diagnostics"][1]["sanitized_primary_output"] == {"entities": []}
     assert row["final_output"]["entities"][0]["canonical_name"] == "Віталій Шабунін"
 
@@ -148,3 +151,65 @@ def test_seed_loader_reads_supplied_copy_registry(tmp_path: Path) -> None:
     )
     aliases = load_seed_aliases(seed)
     assert [row["alias"] for row in aliases] == ["Шабунін", "Shabunin"]
+
+
+class FlakyClient(FakeClient):
+    """Fail the first request with a provider 503, then answer normally."""
+
+    def __init__(self, failures: int = 1, message: str = "Error code: 503 - unavailable") -> None:
+        super().__init__()
+        self.failures = failures
+        self.message = message
+
+    async def infer(self, name: str, request: dict[str, Any]) -> ModelResponse:
+        if self.failures:
+            self.failures -= 1
+            raise RuntimeError(self.message)
+        return await super().infer(name, request)
+
+
+async def test_generator_retries_transient_provider_errors(tmp_path: Path) -> None:
+    output = tmp_path / "comparisons.jsonl"
+
+    written, failures = await generate_comparisons(
+        [annotation()],
+        ALIASES,
+        output,
+        FlakyClient(),
+        logging.getLogger("test"),
+        retry_delay_seconds=0,
+    )
+
+    assert (written, failures) == (1, 0)
+    assert json.loads(output.read_text())["status"] == "completed"
+
+
+async def test_generator_writes_non_transient_failures_without_retry(tmp_path: Path) -> None:
+    output = tmp_path / "comparisons.jsonl"
+    client = FlakyClient(failures=1, message="Error code: 400 - bad schema")
+
+    written, failures = await generate_comparisons(
+        [annotation(), annotation("golden-2")],
+        ALIASES,
+        output,
+        client,
+        logging.getLogger("test"),
+        concurrency=2,
+        retry_delay_seconds=0,
+    )
+
+    assert (written, failures) == (2, 1)
+    assert completed_example_ids(output) == {"golden-1", "golden-2"}
+
+
+def test_transient_failure_detection_needs_a_provider_error() -> None:
+    def failed(message: str) -> dict[str, Any]:
+        return {
+            "status": "failed",
+            "failure": [{"kind": "model_request_failed", "message": message}],
+        }
+
+    assert is_transient_failure(failed("Error code: 429 - slow down"))
+    assert is_transient_failure(failed("Request timed out."))
+    assert not is_transient_failure(failed("Error code: 400 - bad request"))
+    assert not is_transient_failure({"status": "completed"})

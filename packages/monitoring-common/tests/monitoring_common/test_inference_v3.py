@@ -438,3 +438,55 @@ def test_json_parser_categorizes_malformed_and_non_object_values() -> None:
     with pytest.raises(InferenceValidationError) as wrong_shape:
         parse_json_object("[]")
     assert wrong_shape.value.issues[0].kind == "schema_failure"
+
+
+TARGET_CLAIMS = [
+    {"claim_id": "c1", "entities": [{"entity_id": "e1"}, {"entity_id": "e2"}]},
+    {"claim_id": "c2", "entities": [{"entity_id": "e1"}]},
+]
+
+
+def test_targets_validation_requires_each_claim_and_its_own_entities() -> None:
+    valid = {
+        "claims": {
+            "c1": {"reason": "критикує e2", "evaluated_entity_ids": ["e2"]},
+            "c2": {"reason": "нікого", "evaluated_entity_ids": []},
+        }
+    }
+    validate_pass("targets", valid, TEXT, TARGET_CLAIMS)
+
+    with pytest.raises(InferenceValidationError, match="missing claim: c2"):
+        validate_pass("targets", {"claims": {"c1": valid["claims"]["c1"]}}, TEXT, TARGET_CLAIMS)
+
+    foreign = {"claims": {**valid["claims"], "c2": {"reason": "x", "evaluated_entity_ids": ["e2"]}}}
+    with pytest.raises(InferenceValidationError, match="entity e2 is not in claim c2"):
+        validate_pass("targets", foreign, TEXT, TARGET_CLAIMS)
+
+
+def test_targets_sanitizer_drops_unknown_claims_and_foreign_entities() -> None:
+    payload = {
+        "claims": {
+            "c1": {"reason": "x", "evaluated_entity_ids": ["e1", "e1", "e9"]},
+            "c9": {"reason": "x", "evaluated_entity_ids": []},
+        }
+    }
+
+    result = sanitize_pass_payload_with_actions("targets", payload, TEXT, TARGET_CLAIMS)
+
+    assert result.payload == {"claims": {"c1": {"reason": "x", "evaluated_entity_ids": ["e1"]}}}
+    assert [action["action"] for action in result.actions] == [
+        "dropped_foreign_target",
+        "dropped_unknown_claim",
+    ]
+
+
+def test_targets_generation_schema_limits_each_claim_to_its_entities() -> None:
+    schema = generation_schema("targets", {"claims": TARGET_CLAIMS})
+
+    claims = schema["properties"]["claims"]
+    assert claims["required"] == ["c1", "c2"]
+    c1_items = claims["properties"]["c1"]["properties"]["evaluated_entity_ids"]["items"]
+    c2_items = claims["properties"]["c2"]["properties"]["evaluated_entity_ids"]["items"]
+    assert c1_items["enum"] == ["e1", "e2"]
+    assert c2_items["enum"] == ["e1"]
+    assert "enum" not in str(load_inference_schema("targets"))

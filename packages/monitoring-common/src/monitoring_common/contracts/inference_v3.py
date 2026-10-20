@@ -12,7 +12,7 @@ from typing import Any, Literal, cast
 
 from jsonschema import Draft202012Validator
 
-PassName = Literal["candidates", "entities", "claims", "classification"]
+PassName = Literal["candidates", "entities", "claims", "targets", "classification"]
 FailureKind = Literal[
     "generation_failure",
     "json_parse_failure",
@@ -25,6 +25,7 @@ SCHEMA_VERSIONS: dict[PassName, str] = {
     "candidates": "inference_v3_candidates_v1",
     "entities": "inference_v3_entities_v1",
     "claims": "inference_v3_claims_v4",
+    "targets": "inference_v3_targets_v1",
     "classification": "inference_v3_classification_v1",
 }
 
@@ -341,6 +342,12 @@ def sanitize_pass_payload_with_actions(
             cast(list[Any], sanitized["claims"]), source_text, entities, actions
         )
         return SanitizedPayload(sanitized, tuple(actions))
+    if pass_name == "targets":
+        if isinstance(sanitized.get("claims"), dict):
+            sanitized["claims"] = _sanitize_target_decisions(
+                cast(dict[str, Any], sanitized["claims"]), entities, actions
+            )
+        return SanitizedPayload(sanitized, tuple(actions))
     if pass_name == "candidates":
         if isinstance(sanitized.get("candidates"), dict):
             sanitized["candidates"] = _sanitize_candidate_decisions(
@@ -392,6 +399,43 @@ def _sanitize_candidate_decisions(
             kept[identifier] = decision
         else:
             actions.append({"action": "dropped_unknown_candidate", "candidate_id": identifier})
+    return kept
+
+
+def _sanitize_target_decisions(
+    decisions: dict[str, Any],
+    claims: Sequence[Mapping[str, Any]],
+    actions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Keep decisions for supplied claims and only entity IDs that belong to each claim."""
+    allowed = {
+        cast(str, claim["claim_id"]): {
+            cast(str, entity["entity_id"]) for entity in cast(list[Any], claim["entities"])
+        }
+        for claim in claims
+    }
+    kept: dict[str, Any] = {}
+    for claim_id, decision in decisions.items():
+        if claim_id not in allowed:
+            actions.append({"action": "dropped_unknown_claim", "claim_id": claim_id})
+            continue
+        if isinstance(decision, dict) and isinstance(decision.get("evaluated_entity_ids"), list):
+            identifiers: list[Any] = []
+            for identifier in decision["evaluated_entity_ids"]:
+                if identifier in identifiers:
+                    continue
+                if isinstance(identifier, str) and identifier not in allowed[claim_id]:
+                    actions.append(
+                        {
+                            "action": "dropped_foreign_target",
+                            "claim_id": claim_id,
+                            "entity_id": identifier,
+                        }
+                    )
+                    continue
+                identifiers.append(identifier)
+            decision = {**decision, "evaluated_entity_ids": identifiers}
+        kept[claim_id] = decision
     return kept
 
 
@@ -633,6 +677,25 @@ def generation_schema(pass_name: PassName, request: Mapping[str, Any]) -> dict[s
     constrained decoding cannot skip or invent a candidate decision.
     """
     schema = deepcopy(load_inference_schema(pass_name))
+    claims = request.get("claims")
+    if pass_name == "targets" and isinstance(claims, list):
+        decision = schema["properties"]["claims"]["additionalProperties"]
+        properties = {}
+        for claim in claims:
+            identifiers = [cast(str, entity["entity_id"]) for entity in claim["entities"]]
+            claim_decision = deepcopy(decision)
+            claim_decision["properties"]["evaluated_entity_ids"]["items"] = {
+                "type": "string",
+                "enum": identifiers,
+            }
+            properties[cast(str, claim["claim_id"])] = claim_decision
+        schema["properties"]["claims"] = {
+            "type": "object",
+            "additionalProperties": False,
+            "required": list(properties),
+            "properties": properties,
+        }
+        return schema
     candidates = request.get("candidates")
     if pass_name == "candidates" and isinstance(candidates, list):
         identifiers = [cast(str, candidate["candidate_id"]) for candidate in candidates]
@@ -686,6 +749,8 @@ def validate_pass(
         )
     if pass_name == "candidates":
         _validate_candidates(payload, entities)
+    elif pass_name == "targets":
+        _validate_targets(payload, entities)
     elif pass_name == "entities":
         _validate_entities(payload, source_text)
     elif pass_name == "claims":
@@ -709,6 +774,33 @@ def _validate_candidates(
         ValidationIssue("reference_failure", f"unexpected candidate decision: {identifier}")
         for identifier in decided
         if identifier not in expected
+    )
+    if issues:
+        raise InferenceValidationError(issues)
+
+
+def _validate_targets(payload: Mapping[str, Any], claims: Sequence[Mapping[str, Any]]) -> None:
+    """Require one decision per supplied claim, naming only that claim's entities."""
+    issues: list[ValidationIssue] = []
+    decisions = cast(Mapping[str, Mapping[str, Any]], payload["claims"])
+    for claim in claims:
+        claim_id = cast(str, claim["claim_id"])
+        if claim_id not in decisions:
+            issues.append(ValidationIssue("reference_failure", f"missing claim: {claim_id}"))
+            continue
+        allowed = {cast(str, entity["entity_id"]) for entity in cast(list[Any], claim["entities"])}
+        for identifier in cast(list[str], decisions[claim_id]["evaluated_entity_ids"]):
+            if identifier not in allowed:
+                issues.append(
+                    ValidationIssue(
+                        "reference_failure", f"entity {identifier} is not in claim {claim_id}"
+                    )
+                )
+    known = {cast(str, claim["claim_id"]) for claim in claims}
+    issues.extend(
+        ValidationIssue("reference_failure", f"unexpected claim decision: {claim_id}")
+        for claim_id in decisions
+        if claim_id not in known
     )
     if issues:
         raise InferenceValidationError(issues)
