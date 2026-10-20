@@ -13,7 +13,7 @@ from monitoring_common.contracts import (
 )
 from monitoring_common.contracts import matched_registry_entity_ids as matched_registry_ids
 
-PIPELINE_VERSION = "inference_v3_7"
+PIPELINE_VERSION = "inference_v4"
 
 
 def matched_monitored_entity_ids(post_text: str, aliases: Sequence[Mapping[str, Any]]) -> list[int]:
@@ -344,6 +344,78 @@ def classification_items(
                 }
             )
     return items
+
+
+OTHER_ACTOR = "інший актор або ніхто з переліку"
+
+
+def target_request(
+    items: Sequence[Mapping[str, Any]], entities: Sequence[Mapping[str, Any]]
+) -> dict[str, Any]:
+    """Group Pass 3 pairs by claim for the targets pass, listing every actor of each claim.
+
+    The options include non-monitored actors named in the claim and a catch-all, so the model can
+    name the actor it actually means (a judge rather than her court) instead of being forced to
+    pick the only monitored entity on offer. Options are names, the form the model reasons in.
+    """
+    claims: dict[str, dict[str, Any]] = {}
+    for item in items:
+        claim = claims.setdefault(
+            cast(str, item["claim_id"]),
+            {
+                "claim_id": item["claim_id"],
+                "claim_source": item["claim_source"],
+                "normalized_claim": item["normalized_claim"],
+                "evidence_text": item["evidence_text"],
+                "local_context": item["local_context"],
+                "actors": [],
+            },
+        )
+        if item["target"] not in claim["actors"]:
+            claim["actors"].append(item["target"])
+    for claim in claims.values():
+        text = f"{claim['normalized_claim']} {claim['evidence_text']}"
+        for entity in entities:
+            name = _entity_label(entity)
+            if name in claim["actors"]:
+                continue
+            if any(mention in text for mention in cast(list[str], entity["mentions"])) or (
+                entity["canonical_name"] and cast(str, entity["canonical_name"]) in text
+            ):
+                claim["actors"].append(name)
+        claim["actors"].append(OTHER_ACTOR)
+    return {"claims": list(claims.values())}
+
+
+def split_by_targets(
+    items: Sequence[Mapping[str, Any]], decisions: Mapping[str, Any] | None
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return pairs whose target the source evaluates, and `відсутнє` rows for the others.
+
+    Without valid targets decisions every pair is classified, as before v4.
+    """
+    if decisions is None:
+        return [dict(item) for item in items], []
+    evaluated = {
+        (claim_id, name)
+        for claim_id, decision in cast(Mapping[str, Any], decisions["claims"]).items()
+        for name in cast(Mapping[str, Any], decision)["evaluated"]
+    }
+    to_classify: list[dict[str, Any]] = []
+    absent: list[dict[str, Any]] = []
+    for item in items:
+        if (item["claim_id"], item["target"]) in evaluated:
+            to_classify.append(dict(item))
+        else:
+            absent.append(
+                {
+                    "claim_id": item["claim_id"],
+                    "entity_id": item["entity_id"],
+                    "stance": "відсутнє",
+                    "rhetoric": [],
+                }
+            )
+    return to_classify, absent
 
 
 def _entity_label(entity: Mapping[str, Any]) -> str:

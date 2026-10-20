@@ -1,4 +1,4 @@
-# Inference v3.7
+# Inference v4
 
 Production analysis is target monitoring. A Post Revision is eligible only when a Unicode-aware,
 case-insensitive match finds an approved alias of a monitored registry entity. Exact matches use
@@ -12,7 +12,7 @@ mention that only ever occurs in such a context stays an unresolved post-local a
 a case-sensitive or entity-specific rule: an alias that is also a common word (`Голос`, `ЧЕСНО`)
 admits the post, and Pass 1 decides whether the match names the registry actor.
 
-The AI worker makes four semantic model calls:
+The AI worker makes five semantic model calls:
 
 1. `candidates` receives every registry candidate matched by alias (`r*` ID, canonical name, type,
    exact matched forms and the sentences around them) and answers, per candidate, a short
@@ -22,8 +22,13 @@ The AI worker makes four semantic model calls:
 3. `claims` extracts atomic claims involving at least one monitored entity, with attribution,
    Ukrainian epistemic status, and one exact evidence string. `presentation` is deliberately not
    stored or inferred.
-4. `classification` classifies every monitored claim-target pair for Ukrainian stance and up to
-   two attack-rhetoric categories.
+4. `targets` receives, per claim, every actor named in it (monitored or not) plus «інший актор
+   або ніхто з переліку» and answers, per claim, a short `reason` and the names of every actor the
+   claim source evaluates. The guided schema limits each claim to its own actor names. Pairs whose
+   target is not named become `відсутнє` without Pass 3; if the pass stays invalid every pair is
+   classified (`classify_all_pairs`).
+5. `classification` classifies every remaining monitored claim-target pair for Ukrainian stance
+   and up to two attack-rhetoric categories.
 
 Between calls, backend code validates grounding, resolves approved aliases including inflected
 forms, assigns `e*` and `c*` IDs, records candidates, and derives deterministic evidence offsets.
@@ -76,7 +81,7 @@ whitespace even when the token budget was raised.
 
 Final results are stored relationally as post-local entities, atomic claims, claim/entity links,
 and claim-target classifications. `analysis_runs.final_payload` keeps an inspectable immutable
-v3.7 document, including completion/degradation status. A later completed run of the same revision
+v4 document, including completion/degradation status. A later completed run of the same revision
 marks the earlier completed run `superseded`.
 
 The v3.6 prompts came from a manual review of 200 production posts and a blind comparison on the
@@ -98,7 +103,17 @@ people, protégés or former staff used against it (`ексдетектив НА
 Pass 3 restores the v3.5.2 separation between an event involving the target and the source's own
 evaluation: neutral reports of suspicions, searches, exclusions or attacks, neutral background,
 statements by the target's own officials, polls, awards and donations, and hostile-source reports
-are `відсутнє`. Aggregation and product analytics are intentionally deferred.
+are `відсутнє`.
+
+v4 adds the `targets` pass. Mamay's false negatives were mostly background entities coloured by a
+negative event in the same sentence. When the pass offered only a claim's monitored entity IDs,
+Mamay's reasons named the right actor («канал критикує Шабуніна») but 37 of 68 false negatives
+named an actor that was not on offer (a judge rather than her court, a fund), so constrained
+decoding forced the only monitored entity; offering every named actor plus a catch-all, by name,
+fixed that. On the 249-post measure-only test split negative F1 was v3.5.2 0.626, v3.6 0.682, v3.7
+0.674 and v4 0.728 (v4 - v3.6 +0.047, 95% CI -0.012..+0.106); Claude Haiku 5.5 with the v3.7
+prompts reached 0.821. Splitting decisions into narrow calls helped where rewording prompts did
+not. Aggregation and product analytics are intentionally deferred.
 
 The previous `extraction_schema_v1` remains packaged only so historical DVC experiments can be
 reproduced; it is no longer a production runtime contract.

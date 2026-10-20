@@ -43,11 +43,13 @@ from telegram_monitor_ai_worker.pipeline import (
     registry_candidates,
     salvage_classification_objects,
     salvage_entity_payload,
+    split_by_targets,
+    target_request,
 )
 
 DEFAULT_ANNOTATIONS = Path("experiments/datasets/golden_v0/data/annotations.jsonl")
-DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v3_7/comparisons.jsonl")
-DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v3_6_all500/comparisons.jsonl")
+DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v4/comparisons.jsonl")
+DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v3_7/comparisons.jsonl")
 # The tuned old55 partition is defined by the preserved 55-example v3.5 run, not by the baseline.
 OLD55_REFERENCE = Path("experiments/dspy/data/mamay_vs_golden_v3_5/comparisons.jsonl")
 DEFAULT_SEED = Path("infra/postgres/init/003_registry_seed.sql")
@@ -631,13 +633,37 @@ async def analyze_annotation(
             )
             claims = assign_claim_ids(claim_payload, source_text)
         items = classification_items(source_text, entities, claims)
+        targets: dict[str, Any] | None = None
         if items:
+            request = target_request(items, entities)
+            try:
+                targets = await _run_pass(
+                    client,
+                    "targets",
+                    request,
+                    source_text,
+                    attempts,
+                    diagnostics,
+                    request["claims"],
+                )
+            except (InferenceValidationError, ModelOutputError):
+                diagnostics.append(
+                    {
+                        "pass": "targets",
+                        "final_validation_status": "degraded",
+                        "fallback": "classify_all_pairs",
+                        "final_parsed_payload": None,
+                    }
+                )
+        to_classify, absent = split_by_targets(items, targets)
+        if to_classify:
             classifications, classification_partial = await _run_classification(
-                client, items, entities, claims, attempts, diagnostics
+                client, to_classify, entities, claims, attempts, diagnostics
             )
         else:
             classifications = []
             classification_partial = False
+        classifications = [*classifications, *absent]
         status = (
             "completed_with_partial_classification"
             if classification_partial
@@ -648,6 +674,8 @@ async def analyze_annotation(
         degradations = []
         if decisions is None:
             degradations.append({"pass": "candidates", "fallback": "admit_all_candidates"})
+        if items and targets is None:
+            degradations.append({"pass": "targets", "fallback": "classify_all_pairs"})
         if entity_fallback:
             degradations.append({"pass": "entities", "fallback": "prefilter_entities_only"})
         if classification_partial:

@@ -56,6 +56,7 @@ class FakeClient:
                     }
                 ]
             },
+            "targets": {"claims": {"c1": {"reason": "Шабунін", "evaluated": ["Віталій Шабунін"]}}},
             "classification": {
                 "classifications": [
                     {
@@ -84,10 +85,11 @@ async def test_analysis_records_prefilter_all_passes_and_final_output() -> None:
         "candidates",
         "entities",
         "claims",
+        "targets",
         "classification",
     ]
-    assert row["final_output"]["pipeline_version"] == "inference_v3_7"
-    assert len(row["pass_diagnostics"]) == 4
+    assert row["final_output"]["pipeline_version"] == "inference_v4"
+    assert len(row["pass_diagnostics"]) == 5
     assert row["pass_diagnostics"][1]["sanitized_primary_output"] == {"entities": []}
     assert row["final_output"]["entities"][0]["canonical_name"] == "Віталій Шабунін"
 

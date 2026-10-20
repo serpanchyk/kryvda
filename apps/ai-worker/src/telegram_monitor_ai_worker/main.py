@@ -52,6 +52,8 @@ from telegram_monitor_ai_worker.pipeline import (
     registry_candidates,
     salvage_classification_objects,
     salvage_entity_payload,
+    split_by_targets,
+    target_request,
 )
 from telegram_monitor_ai_worker.prompt import PROMPT_VERSIONS
 from telegram_monitor_ai_worker.repository import AnalysisJobRepository
@@ -255,9 +257,37 @@ class AnalysisWorker:
             )
             claims = assign_claim_ids(claim_payload, job.post_text)
         items = classification_items(job.post_text, entities, claims)
+        targets: dict[str, Any] | None = None
         if items:
+            request = target_request(items, entities)
+            try:
+                targets = await self._execute_pass(
+                    job,
+                    "targets",
+                    request,
+                    source_text=job.post_text,
+                    entities=request["claims"],
+                )
+            except (InferenceValidationError, ModelOutputError):
+                await self._repository.record_pass_diagnostic(
+                    run_id=job.run_id,
+                    pass_name="targets",
+                    raw_primary_output=None,
+                    sanitized_primary_payload=None,
+                    primary_sanitization_actions=[],
+                    primary_validation_errors=[],
+                    raw_repair_output=None,
+                    sanitized_repair_payload=None,
+                    repair_sanitization_actions=[],
+                    repair_validation_errors=[],
+                    final_validation_status="degraded",
+                    final_parsed_payload=None,
+                    fallback="classify_all_pairs",
+                )
+        to_classify, absent = split_by_targets(items, targets)
+        if to_classify:
             classifications, classification_partial = await self._execute_classification(
-                job, items, entities, claims
+                job, to_classify, entities, claims
             )
         else:
             classifications = []
@@ -276,6 +306,7 @@ class AnalysisWorker:
                 final_validation_status="valid",
                 final_parsed_payload={"classifications": []},
             )
+        classifications = [*classifications, *absent]
         run_status = (
             "completed_with_partial_classification"
             if classification_partial
@@ -286,6 +317,8 @@ class AnalysisWorker:
         degradations = []
         if decisions is None:
             degradations.append({"pass": "candidates", "fallback": "admit_all_candidates"})
+        if items and targets is None:
+            degradations.append({"pass": "targets", "fallback": "classify_all_pairs"})
         if entity_fallback:
             degradations.append({"pass": "entities", "fallback": "prefilter_entities_only"})
         if classification_partial:

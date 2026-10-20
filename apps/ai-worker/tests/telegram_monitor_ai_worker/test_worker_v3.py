@@ -45,6 +45,9 @@ def pass_payloads() -> dict[str, dict[str, Any]]:
                 }
             ]
         },
+        "targets": {
+            "claims": {"c1": {"reason": "канал оцінює Шабуніна", "evaluated": ["Віталій Шабунін"]}}
+        },
         "classification": {
             "classifications": [
                 {"claim_id": "c1", "entity_id": "e1", "stance": "відсутнє", "rhetoric": []}
@@ -145,12 +148,13 @@ async def test_worker_runs_three_passes_and_persists_final_result() -> None:
     assert await worker.process_next() is True
     assert repository.failures == []
     assert repository.completed is not None
-    assert repository.completed["pipeline_version"] == "inference_v3_7"
+    assert repository.completed["pipeline_version"] == "inference_v4"
     assert repository.entities[0]["registry_entity_id"] == 10
     assert [item[:2] for item in repository.attempts] == [
         ("candidates", "primary"),
         ("entities", "primary"),
         ("claims", "primary"),
+        ("targets", "primary"),
         ("classification", "batch_primary"),
     ]
     assert all(item["final_validation_status"] == "valid" for item in repository.diagnostics)
@@ -362,6 +366,48 @@ async def test_worker_salvages_complete_entity_groups_without_repair() -> None:
     assert repository.entities[0]["registry_entity_id"] == 10
     assert repository.diagnostics[1]["final_validation_status"] == "salvaged"
     assert "entities" not in client.repairs
+
+
+async def test_worker_marks_unevaluated_targets_absent_without_classification() -> None:
+    payloads = pass_payloads()
+    payloads["targets"] = {"claims": {"c1": {"reason": "нікого", "evaluated": []}}}
+    repository = FakeRepository()
+    worker = AnalysisWorker(
+        repository,  # type: ignore[arg-type]
+        FakeClient(payloads),  # type: ignore[arg-type]
+        AiWorkerSettings(litellm_api_key="key"),
+        logging.getLogger("test"),
+    )
+
+    await worker.process_next()
+
+    assert repository.completed is not None
+    assert repository.completed["classifications"] == [
+        {"claim_id": "c1", "entity_id": "e1", "stance": "відсутнє", "rhetoric": []}
+    ]
+    assert "classification" not in [item[0] for item in repository.attempts]
+
+
+async def test_worker_classifies_every_pair_when_the_targets_pass_fails() -> None:
+    payloads = pass_payloads()
+    payloads["targets"] = {"claims": {}}
+    client = FakeClient(payloads)
+    client.repairs["targets"] = {"claims": {}}
+    repository = FakeRepository()
+    worker = AnalysisWorker(
+        repository,  # type: ignore[arg-type]
+        client,  # type: ignore[arg-type]
+        AiWorkerSettings(litellm_api_key="key"),
+        logging.getLogger("test"),
+    )
+
+    await worker.process_next()
+
+    assert repository.completed is not None
+    assert repository.completed["degradations"] == [
+        {"pass": "targets", "fallback": "classify_all_pairs"}
+    ]
+    assert ("classification", "batch_primary") in [item[:2] for item in repository.attempts]
 
 
 async def test_worker_skips_stale_prefilter_job_without_model_calls() -> None:

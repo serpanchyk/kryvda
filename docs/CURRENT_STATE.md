@@ -80,14 +80,15 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   foreign context (`Міноборони рф`, `МЗС КНР`) no longer admit Ukrainian registry entities. Stored
   posts are re-analyzed through a maintenance script; a newer completed run of a revision marks the
   previous one `superseded`, and analytics read only completed statuses.
-- Inference v3.7 (migration 014) adds a `candidates` model call before Pass 1: every alias match
-  is shown with its sentences and confirmed or rejected, so common-word aliases (`Голос`, `ЧЕСНО`)
-  need no case rule and the uppercase-only `ЧЕСНО` rule is gone; Pass 1 keeps the v3.6 prompt and
-  a broken Pass 1 response is salvaged before repair. The matcher now inflects feminine adjectives and `-ість` nouns. Pass 2
-  no longer links a claim to an entity that is only neutral background, and Pass 3 restores the
-  v3.5.2 rule that an event involving a target is not the source's evaluation of it. A revision
-  with no confirmed monitored entity completes without Pass 2/3. The worker image still runs v3.6 until it is rebuilt; stored
-  posts are not re-analyzed without an explicit decision.
+- Inference v4 (migration 014) makes five model calls. A `candidates` call shows every alias match
+  with its sentences and confirms or rejects it, so common-word aliases (`Голос`, `ЧЕСНО`) need no
+  case rule; Pass 1 keeps the v3.6 prompt and a broken Pass 1 response is salvaged before repair.
+  A `targets` call names, per claim, every actor the claim source evaluates, and the other pairs
+  become `відсутнє` without Pass 3. The matcher inflects feminine adjectives and `-ість` nouns,
+  Pass 2 no longer links a claim to neutral background entities, and Pass 3 keeps the v3.5.2 rule
+  that an event involving a target is not the source's evaluation of it. On the measure-only test
+  split negative F1 is 0.728 against 0.682 for v3.6. The worker image still runs v3.6 until it is
+  rebuilt; stored posts are not re-analyzed without an explicit decision.
 - `golden_v0/test_split.json` (v2) is a measure-only test split of 249 fresh, registry-matched
   production posts (the `test` partition, `golden_v0-666`..`golden_v0-914`, 81 negative and 22
   positive gold pairs) annotated after the prompt work; only aggregate metrics are reported on
@@ -151,6 +152,16 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   bootstrap 95% intervals exclude zero for attack F1, negative recall and the negative-precision
   drop. A blind Claude Haiku comparison through subagents (not production, outside DVC) scored
   higher on attribution and rhetoric but extracted about 30% fewer claims.
+- `luna_vs_golden_v3_7_pilot100` and `luna_low_vs_golden_v3_7_pilot100` are DVC-tracked runs of
+  the committed v3.7 pipeline on OpenAI GPT-6 Luna through OpenRouter over the 100 reviewed
+  examples, with OpenRouter reasoning effort `none` and `low` (low adds 4096 output tokens per
+  pass, since reasoning counts against `max_tokens`). The runner's CLI has no reasoning option;
+  it was injected by wrapping the client, and `run_metadata.model` still records the Mamay
+  default. With `none`, 7 posts fail on JSON followed by stray text (strict schema is not
+  enforced). With `low`, all 100 complete and the old55/diagnostic45 results match or exceed
+  Mamay v3.7 on post-level attack F1 (0.966/0.862), negative-stance precision, rhetoric micro-F1
+  (0.525/0.443) and claim coverage (0.69/0.70); attribution accuracy (0.80/0.82) stays below the
+  Haiku pilot. Production inference is unchanged.
 - `registry_post_coverage` is a DVC-tracked snapshot of the number of latest accessible posts
   matching each active registry entity under the production alias policy. Its summary records the
   live queue and a throughput-based ETA; it is an operational snapshot, not a model evaluation.

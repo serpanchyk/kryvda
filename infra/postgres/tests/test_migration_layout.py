@@ -50,16 +50,16 @@ def test_inference_v3_6_migration_adds_superseded_runs() -> None:
     assert "'013_inference_v3_6.sql'" in fresh_init
 
 
-def test_inference_v3_7_migration_sets_the_pipeline_version_default() -> None:
-    migration = (POSTGRES_ROOT / "migrations" / "014_inference_v3_7.sql").read_text()
+def test_inference_v4_migration_sets_version_and_pass_constraints() -> None:
+    migration = (POSTGRES_ROOT / "migrations" / "014_inference_v4.sql").read_text()
     runner = (POSTGRES_ROOT / "migrate.sql").read_text()
-    fresh_init = (POSTGRES_ROOT / "init" / "014_inference_v3_7.sql").read_text()
+    fresh_init = (POSTGRES_ROOT / "init" / "014_inference_v4.sql").read_text()
 
-    assert "SET DEFAULT 'inference_v3_7'" in migration
-    assert "('candidates', 'entities', 'claims', 'classification')" in migration
+    assert "SET DEFAULT 'inference_v4'" in migration
+    assert "('candidates', 'entities', 'claims', 'targets', 'classification')" in migration
     assert "'salvaged'" in migration
-    assert "\\i /database/migrations/014_inference_v3_7.sql" in runner
-    assert "'014_inference_v3_7.sql'" in fresh_init
+    assert "\\i /database/migrations/014_inference_v4.sql" in runner
+    assert "'014_inference_v4.sql'" in fresh_init
 
 
 def test_v3_base_schema_can_retain_partial_transition_registry() -> None:

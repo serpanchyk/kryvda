@@ -106,11 +106,11 @@ INSERT INTO schema_migrations (version) VALUES ('013_inference_v3_6.sql');
 \endif
 
 SELECT NOT EXISTS (
-    SELECT 1 FROM schema_migrations WHERE version = '014_inference_v3_7.sql'
+    SELECT 1 FROM schema_migrations WHERE version = '014_inference_v4.sql'
 ) AS apply_014 \gset
 \if :apply_014
-\i /database/migrations/014_inference_v3_7.sql
-INSERT INTO schema_migrations (version) VALUES ('014_inference_v3_7.sql');
+\i /database/migrations/014_inference_v4.sql
+INSERT INTO schema_migrations (version) VALUES ('014_inference_v4.sql');
 \endif
 
 COMMIT;

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["claims"],
+  "properties": {
+    "claims": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", "evaluated"],
+        "properties": {
+          "reason": {"type": "string"},
+          "evaluated": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

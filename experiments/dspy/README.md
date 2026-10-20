@@ -171,6 +171,13 @@ uv run python experiments/dspy/src/mamay_golden_v2.py --validate-only
 uv run dvc add experiments/dspy/data/mamay_vs_golden_v3_7
 ```
 
+## Inference v4 comparison
+
+The runner defaults to `mamay_vs_golden_v4` and compares contract health with
+`mamay_vs_golden_v3_7`. `mamay_vs_golden_v4`, `_v4_1` and `_v4_2` record the targets-pass
+iterations on two random 100-example dev samples; `golden_test_v2_runs` holds one run per version
+over the measure-only test split.
+
 ## Dev and test splits
 
 The runner accepts `--split dev` (the 400 examples whose errors may be inspected) or `--split
