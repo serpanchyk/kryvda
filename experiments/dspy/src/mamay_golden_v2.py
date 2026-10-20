@@ -7,7 +7,6 @@ import logging
 import os
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
-from itertools import batched
 from pathlib import Path
 from typing import Any, Protocol, cast
 
@@ -691,6 +690,29 @@ def completed_example_ids(path: Path) -> set[str]:
     return set(identifiers)
 
 
+TRANSIENT_FAILURE_MARKERS = (
+    "Error code: 429",
+    "Error code: 500",
+    "Error code: 502",
+    "Error code: 503",
+    "Error code: 504",
+    "timed out",
+    "Connection error",
+)
+
+
+def is_transient_failure(row: Mapping[str, Any]) -> bool:
+    """Tell whether a failed row came from a provider error worth retrying."""
+    if row.get("status") != "failed":
+        return False
+    failures = cast(list[Mapping[str, Any]], row.get("failure") or [])
+    return any(
+        failure.get("kind") == "model_request_failed"
+        and any(marker in str(failure.get("message", "")) for marker in TRANSIENT_FAILURE_MARKERS)
+        for failure in failures
+    )
+
+
 async def generate_comparisons(
     annotations: Sequence[Mapping[str, Any]],
     aliases: list[dict[str, Any]],
@@ -698,29 +720,50 @@ async def generate_comparisons(
     client: InferenceClient,
     logger: logging.Logger,
     concurrency: int = 1,
+    retries: int = 2,
+    retry_delay_seconds: float = 10.0,
 ) -> tuple[int, int]:
-    """Append missing full-pipeline records and return written/failed counts."""
+    """Append missing full-pipeline records and return written/failed counts.
+
+    Workers take the next example as soon as they finish one, so a slow post never idles the
+    other slots. Provider errors (429/5xx, timeouts) are retried with growing delays before a
+    failed row is written, because a written row is never requested again.
+    """
     if concurrency < 1:
         raise ValueError("concurrency must be at least one")
     completed = completed_example_ids(output_path)
     pending = [item for item in annotations if item["example_id"] not in completed]
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    written = failures = 0
+    queue: asyncio.Queue[Mapping[str, Any]] = asyncio.Queue()
+    for annotation in pending:
+        queue.put_nowait(annotation)
+    counts = {"written": 0, "failed": 0}
+
     with output_path.open("a", encoding="utf-8") as output:
-        for batch in batched(pending, concurrency):
-            rows = await asyncio.gather(
-                *(analyze_annotation(annotation, aliases, client) for annotation in batch)
-            )
-            for annotation, row in zip(batch, rows):
+
+        async def worker() -> None:
+            while True:
+                try:
+                    annotation = queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    return
+                row = await analyze_annotation(annotation, aliases, client)
+                for attempt in range(retries):
+                    if not is_transient_failure(row):
+                        break
+                    await asyncio.sleep(retry_delay_seconds * (attempt + 1))
+                    row = await analyze_annotation(annotation, aliases, client)
                 output.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
                 output.flush()
-                written += 1
-                failures += row["status"] == "failed"
+                counts["written"] += 1
+                counts["failed"] += row["status"] == "failed"
                 logger.info(
                     "comparison row written",
                     extra={"example_id": annotation["example_id"], "status": row["status"]},
                 )
-    return written, failures
+
+        await asyncio.gather(*(worker() for _ in range(min(concurrency, len(pending)) or 1)))
+    return counts["written"], counts["failed"]
 
 
 def validate_comparisons(path: Path) -> int:
