@@ -20,6 +20,16 @@ Run `uv run python experiments/datasets/golden_v0/src/golden_v0_validation.py` a
 annotation change. The command validates the JSON Schema, span boundaries, surface forms, and
 cross-record references.
 
+## Measure-only test split
+
+`test_split.json` fixes 100 examples (20% of the 500) as a measure-only test split. Report
+aggregate metrics on them, but never read, print or analyse their individual outputs or errors
+while designing prompts or pipelines; inspect errors only on the other 400 (`dev`). Every example
+in the split is from `extension400`, was outside the samples used to analyse inference v4, had no
+v3.6 errors displayed during the v3.7 analysis, and contains no phrase quoted in a production
+prompt. `pilot100` was inspected extensively and is development data only. When the split has
+been used to choose between many variants, add a fresh test split instead of reusing it.
+
 ## Extension to 500 examples
 
 `extension400` adds Claude-annotated posts to the same dataset. `data/annotation_provenance.jsonl`

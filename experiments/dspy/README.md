@@ -171,6 +171,22 @@ uv run python experiments/dspy/src/mamay_golden_v2.py --validate-only
 uv run dvc add experiments/dspy/data/mamay_vs_golden_v3_7
 ```
 
+## Dev and test splits
+
+The runner accepts `--split dev` (the 400 examples whose errors may be inspected) or `--split
+test` (the 100 measure-only examples in `golden_v0/test_split.json`); `summary.json` then reports
+separate `dev` and `test` sections. Iterate on `dev`, and run `test` once per finished candidate:
+
+```bash
+docker compose run --rm --no-deps -w /workspace -v "$PWD:/workspace" \
+  -e PYTHONPATH=/workspace/apps/ai-worker/src:/workspace/packages/monitoring-common/src \
+  ai-worker python /workspace/experiments/dspy/src/mamay_golden_v2.py --concurrency 16 --split dev
+```
+
+The runner gives each worker the next example as soon as it finishes one and retries provider
+errors (429/5xx, timeouts) before writing a failed row. At 16 concurrent requests Lapathoniia
+answered 100 examples in about 3 minutes without errors.
+
 ## Jev classification-only comparison
 
 `jev_golden_v1.py` evaluates TypeSafe's Jev typed-decision model, reached through OpenRouter's

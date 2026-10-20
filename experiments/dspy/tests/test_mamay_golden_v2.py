@@ -11,6 +11,7 @@ from mamay_golden_v2 import (
     generate_comparisons,
     is_transient_failure,
     load_seed_aliases,
+    select_split,
     summarize_comparisons,
     validate_comparisons,
 )
@@ -211,3 +212,11 @@ def test_transient_failure_detection_needs_a_provider_error() -> None:
     assert is_transient_failure(failed("Request timed out."))
     assert not is_transient_failure(failed("Error code: 400 - bad request"))
     assert not is_transient_failure({"status": "completed"})
+
+
+def test_select_split_separates_the_measure_only_test_examples() -> None:
+    records = [{"example_id": name} for name in ("a", "b", "c")]
+
+    assert select_split(records, "all", {"b"}) == records
+    assert select_split(records, "dev", {"b"}) == [{"example_id": "a"}, {"example_id": "c"}]
+    assert select_split(records, "test", {"b"}) == [{"example_id": "b"}]

@@ -5,7 +5,7 @@ import asyncio
 import json
 import logging
 import os
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, cast
@@ -15,6 +15,7 @@ from golden_report import (
     benchmark_report,
     canonical_prediction,
     extension_example_ids,
+    heldout_example_ids,
 )
 from golden_schema import load_golden_jsonl
 from monitoring_common.contracts import (
@@ -931,7 +932,12 @@ def semantic_benchmark_report(
                 degraded=row.get("status") != "completed",
             )
         )
-    return benchmark_report(items, old55_ids, extension_example_ids(annotations_path))
+    return benchmark_report(
+        items,
+        old55_ids,
+        extension_example_ids(annotations_path),
+        heldout_example_ids(annotations_path),
+    )
 
 
 def compare_summaries(current: Mapping[str, Any], baseline: Mapping[str, Any]) -> dict[str, Any]:
@@ -963,8 +969,24 @@ def parse_args(arguments: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--timeout-seconds", type=int, default=120)
     parser.add_argument("--max-output-tokens", type=int, default=4096)
     parser.add_argument("--concurrency", type=int, default=1)
+    parser.add_argument(
+        "--split",
+        choices=("all", "dev", "test"),
+        default="all",
+        help="dev excludes the measure-only test split; test runs only it",
+    )
     parser.add_argument("--validate-only", action="store_true")
     return parser.parse_args(arguments)
+
+
+def select_split(
+    annotations: Sequence[dict[str, Any]], split: str, test_ids: Collection[str]
+) -> list[dict[str, Any]]:
+    """Keep the annotations of one split; `all` keeps every annotation."""
+    if split == "all":
+        return list(annotations)
+    in_test = split == "test"
+    return [record for record in annotations if (record["example_id"] in test_ids) == in_test]
 
 
 async def run(arguments: Iterable[str] | None = None) -> None:
@@ -985,7 +1007,11 @@ async def run(arguments: Iterable[str] | None = None) -> None:
     )
     try:
         await generate_comparisons(
-            load_annotations(args.annotations),
+            select_split(
+                load_annotations(args.annotations),
+                args.split,
+                heldout_example_ids(args.annotations),
+            ),
             load_seed_aliases(args.registry_seed),
             args.output,
             client,

@@ -132,6 +132,20 @@ def canonical_prediction(
     )
 
 
+TEST_SPLIT_FILENAME = "test_split.json"
+
+
+def heldout_example_ids(annotations_path: Path) -> set[str]:
+    """Return the measure-only golden_v0 test split stored beside the dataset's data directory.
+
+    Outputs on these examples are only aggregated; their individual errors are never inspected.
+    """
+    path = annotations_path.parent.parent / TEST_SPLIT_FILENAME
+    if not path.exists():
+        return set()
+    return set(json.loads(path.read_text(encoding="utf-8"))["example_ids"])
+
+
 def extension_example_ids(annotations_path: Path) -> set[str]:
     """Return golden_v0 examples added by the Claude-annotated extension.
 
@@ -151,6 +165,7 @@ def benchmark_report(
     items: Iterable[EvaluationItem],
     old55_example_ids: set[str],
     extension_ids: Collection[str] = frozenset(),
+    test_ids: Collection[str] = frozenset(),
 ) -> dict[str, dict[str, Any]]:
     """Return explicit old55/diagnostic45/all100 semantic and reliability metrics.
 
@@ -177,6 +192,11 @@ def benchmark_report(
     if extension:
         report[EXTENSION_PARTITION] = _section(extension, provenance="claude_annotated")
         report["all"] = _section(all_items, provenance="mixed")
+    test = [item for item in all_items if item.golden.example_id in test_ids]
+    if test:
+        dev = [item for item in all_items if item.golden.example_id not in test_ids]
+        report["dev"] = _section(dev, provenance="mixed")
+        report["test"] = _section(test, provenance="claude_annotated")
     return report
 
 

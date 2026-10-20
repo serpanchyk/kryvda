@@ -5,7 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from golden_report import EvaluationItem, benchmark_report, extension_example_ids
+from golden_report import (
+    EvaluationItem,
+    benchmark_report,
+    extension_example_ids,
+    heldout_example_ids,
+)
 from golden_schema import CanonicalGolden
 from jev_golden_v1 import select_examples
 
@@ -40,3 +45,31 @@ def test_select_examples_isolates_extension_partition() -> None:
     records = [{"example_id": name} for name in ("a", "b", "c")]
     assert select_examples(records, "diagnostic45", {"a"}, {"c"}) == [{"example_id": "b"}]
     assert select_examples(records, "extension400", {"a"}, {"c"}) == [{"example_id": "c"}]
+
+
+def test_measure_only_test_split_is_read_and_reported_separately(tmp_path: Path) -> None:
+    annotations = tmp_path / "data" / "annotations.jsonl"
+    annotations.parent.mkdir()
+    assert heldout_example_ids(annotations) == set()
+    (tmp_path / "test_split.json").write_text(
+        json.dumps({"example_ids": ["golden_v0-266"]}), encoding="utf-8"
+    )
+    test_ids = heldout_example_ids(annotations)
+    items = [item("golden_v0-001"), item("golden_v0-266"), item("golden_v0-267")]
+
+    report = benchmark_report(
+        items, {"golden_v0-001"}, {"golden_v0-266", "golden_v0-267"}, test_ids
+    )
+
+    assert test_ids == {"golden_v0-266"}
+    assert report["test"]["examples"] == 1
+    assert report["dev"]["examples"] == 2
+    assert "test" not in benchmark_report(items, {"golden_v0-001"})
+
+
+def test_repository_test_split_is_a_fifth_of_extension400() -> None:
+    split = json.loads(Path("experiments/datasets/golden_v0/test_split.json").read_text())
+    identifiers = split["example_ids"]
+
+    assert len(identifiers) == len(set(identifiers)) == 100
+    assert all(266 <= int(name.removeprefix("golden_v0-")) <= 665 for name in identifiers)
