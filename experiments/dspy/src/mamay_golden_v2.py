@@ -634,7 +634,7 @@ async def analyze_annotation(
         items = classification_items(source_text, entities, claims)
         targets: dict[str, Any] | None = None
         if items:
-            request = target_request(items)
+            request = target_request(items, entities)
             try:
                 targets = await _run_pass(
                     client,

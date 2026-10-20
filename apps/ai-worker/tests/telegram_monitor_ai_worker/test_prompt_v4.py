@@ -36,16 +36,15 @@ def test_claim_prompt_keeps_background_entities_out_of_claim_targets() -> None:
     assert PROMPT_VERSIONS["claims"] == "inference_v3_claims_prompt_v8"
 
 
-def test_targets_prompt_asks_who_the_source_evaluates() -> None:
-    assert "кого з його entities джерело твердження" in TARGET_PROMPT
-    assert "«уникнув служби в ЗСУ»" in TARGET_PROMPT
-    assert "«впливала на суддів ВАКС»" in TARGET_PROMPT
-    assert PROMPT_VERSIONS["targets"] == "inference_v3_targets_prompt_v1"
+def test_targets_prompt_asks_for_every_evaluated_actor_by_name() -> None:
+    assert "actors — усі актори твердження" in TARGET_PROMPT
+    assert "«інший актор або ніхто з\nпереліку»" in TARGET_PROMPT
+    assert "оцінюються ВАКС, САП і НАБУ" in TARGET_PROMPT
+    assert "імена з actors УСІХ, кого оцінюють" in TARGET_PROMPT
+    assert PROMPT_VERSIONS["targets"] == "inference_v3_targets_prompt_v3"
 
 
-def test_classification_prompt_only_chooses_the_direction_of_an_evaluation() -> None:
+def test_classification_prompt_keeps_the_v3_7_event_rules() -> None:
     assert "claim_source" in CLASSIFICATION_PROMPT
-    assert "source_is_target" in CLASSIFICATION_PROMPT
-    assert "Визнач напрям цієї оцінки" in CLASSIFICATION_PROMPT
-    assert "«історія не підтвердилась»" in CLASSIFICATION_PROMPT
-    assert PROMPT_VERSIONS["classification"] == "inference_v3_classification_prompt_v8"
+    assert "учасник чи об'єкт негативної події" in CLASSIFICATION_PROMPT
+    assert PROMPT_VERSIONS["classification"] == "inference_v3_classification_prompt_v7"

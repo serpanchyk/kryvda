@@ -55,7 +55,7 @@ class FakeClient:
                     }
                 ]
             },
-            "targets": {"claims": {"c1": {"reason": "Шабунін", "evaluated_entity_ids": ["e1"]}}},
+            "targets": {"claims": {"c1": {"reason": "Шабунін", "evaluated": ["Віталій Шабунін"]}}},
             "classification": {
                 "classifications": [
                     {

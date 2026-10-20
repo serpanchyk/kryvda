@@ -46,7 +46,7 @@ def pass_payloads() -> dict[str, dict[str, Any]]:
             ]
         },
         "targets": {
-            "claims": {"c1": {"reason": "канал оцінює Шабуніна", "evaluated_entity_ids": ["e1"]}}
+            "claims": {"c1": {"reason": "канал оцінює Шабуніна", "evaluated": ["Віталій Шабунін"]}}
         },
         "classification": {
             "classifications": [
@@ -370,7 +370,7 @@ async def test_worker_salvages_complete_entity_groups_without_repair() -> None:
 
 async def test_worker_marks_unevaluated_targets_absent_without_classification() -> None:
     payloads = pass_payloads()
-    payloads["targets"] = {"claims": {"c1": {"reason": "нікого", "evaluated_entity_ids": []}}}
+    payloads["targets"] = {"claims": {"c1": {"reason": "нікого", "evaluated": []}}}
     repository = FakeRepository()
     worker = AnalysisWorker(
         repository,  # type: ignore[arg-type]

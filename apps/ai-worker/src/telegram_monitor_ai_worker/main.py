@@ -259,7 +259,7 @@ class AnalysisWorker:
         items = classification_items(job.post_text, entities, claims)
         targets: dict[str, Any] | None = None
         if items:
-            request = target_request(items)
+            request = target_request(items, entities)
             try:
                 targets = await self._execute_pass(
                     job,

@@ -25,7 +25,7 @@ SCHEMA_VERSIONS: dict[PassName, str] = {
     "candidates": "inference_v3_candidates_v1",
     "entities": "inference_v3_entities_v1",
     "claims": "inference_v3_claims_v4",
-    "targets": "inference_v3_targets_v1",
+    "targets": "inference_v3_targets_v2",
     "classification": "inference_v3_classification_v1",
 }
 
@@ -407,34 +407,27 @@ def _sanitize_target_decisions(
     claims: Sequence[Mapping[str, Any]],
     actions: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Keep decisions for supplied claims and only entity IDs that belong to each claim."""
+    """Keep decisions for supplied claims and only actor names offered for each claim."""
     allowed = {
-        cast(str, claim["claim_id"]): {
-            cast(str, entity["entity_id"]) for entity in cast(list[Any], claim["entities"])
-        }
-        for claim in claims
+        cast(str, claim["claim_id"]): set(cast(list[str], claim["actors"])) for claim in claims
     }
     kept: dict[str, Any] = {}
     for claim_id, decision in decisions.items():
         if claim_id not in allowed:
             actions.append({"action": "dropped_unknown_claim", "claim_id": claim_id})
             continue
-        if isinstance(decision, dict) and isinstance(decision.get("evaluated_entity_ids"), list):
-            identifiers: list[Any] = []
-            for identifier in decision["evaluated_entity_ids"]:
-                if identifier in identifiers:
+        if isinstance(decision, dict) and isinstance(decision.get("evaluated"), list):
+            names: list[Any] = []
+            for name in decision["evaluated"]:
+                if name in names:
                     continue
-                if isinstance(identifier, str) and identifier not in allowed[claim_id]:
+                if isinstance(name, str) and name not in allowed[claim_id]:
                     actions.append(
-                        {
-                            "action": "dropped_foreign_target",
-                            "claim_id": claim_id,
-                            "entity_id": identifier,
-                        }
+                        {"action": "dropped_unoffered_actor", "claim_id": claim_id, "actor": name}
                     )
                     continue
-                identifiers.append(identifier)
-            decision = {**decision, "evaluated_entity_ids": identifiers}
+                names.append(name)
+            decision = {**decision, "evaluated": names}
         kept[claim_id] = decision
     return kept
 
@@ -682,11 +675,10 @@ def generation_schema(pass_name: PassName, request: Mapping[str, Any]) -> dict[s
         decision = schema["properties"]["claims"]["additionalProperties"]
         properties = {}
         for claim in claims:
-            identifiers = [cast(str, entity["entity_id"]) for entity in claim["entities"]]
             claim_decision = deepcopy(decision)
-            claim_decision["properties"]["evaluated_entity_ids"]["items"] = {
+            claim_decision["properties"]["evaluated"]["items"] = {
                 "type": "string",
-                "enum": identifiers,
+                "enum": list(claim["actors"]),
             }
             properties[cast(str, claim["claim_id"])] = claim_decision
         schema["properties"]["claims"] = {
@@ -780,7 +772,7 @@ def _validate_candidates(
 
 
 def _validate_targets(payload: Mapping[str, Any], claims: Sequence[Mapping[str, Any]]) -> None:
-    """Require one decision per supplied claim, naming only that claim's entities."""
+    """Require one decision per supplied claim, naming only actors offered for it."""
     issues: list[ValidationIssue] = []
     decisions = cast(Mapping[str, Mapping[str, Any]], payload["claims"])
     for claim in claims:
@@ -788,12 +780,12 @@ def _validate_targets(payload: Mapping[str, Any], claims: Sequence[Mapping[str, 
         if claim_id not in decisions:
             issues.append(ValidationIssue("reference_failure", f"missing claim: {claim_id}"))
             continue
-        allowed = {cast(str, entity["entity_id"]) for entity in cast(list[Any], claim["entities"])}
-        for identifier in cast(list[str], decisions[claim_id]["evaluated_entity_ids"]):
-            if identifier not in allowed:
+        allowed = set(cast(list[str], claim["actors"]))
+        for name in cast(list[str], decisions[claim_id]["evaluated"]):
+            if name not in allowed:
                 issues.append(
                     ValidationIssue(
-                        "reference_failure", f"entity {identifier} is not in claim {claim_id}"
+                        "reference_failure", f"actor {name!r} not offered in {claim_id}"
                     )
                 )
     known = {cast(str, claim["claim_id"]) for claim in claims}

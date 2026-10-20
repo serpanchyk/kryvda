@@ -346,8 +346,18 @@ def classification_items(
     return items
 
 
-def target_request(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """Group Pass 3 pairs by claim for the targets pass, one entry per claim."""
+OTHER_ACTOR = "інший актор або ніхто з переліку"
+
+
+def target_request(
+    items: Sequence[Mapping[str, Any]], entities: Sequence[Mapping[str, Any]]
+) -> dict[str, Any]:
+    """Group Pass 3 pairs by claim for the targets pass, listing every actor of each claim.
+
+    The options include non-monitored actors named in the claim and a catch-all, so the model can
+    name the actor it actually means (a judge rather than her court) instead of being forced to
+    pick the only monitored entity on offer. Options are names, the form the model reasons in.
+    """
     claims: dict[str, dict[str, Any]] = {}
     for item in items:
         claim = claims.setdefault(
@@ -358,10 +368,22 @@ def target_request(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
                 "normalized_claim": item["normalized_claim"],
                 "evidence_text": item["evidence_text"],
                 "local_context": item["local_context"],
-                "entities": [],
+                "actors": [],
             },
         )
-        claim["entities"].append({"entity_id": item["entity_id"], "name": item["target"]})
+        if item["target"] not in claim["actors"]:
+            claim["actors"].append(item["target"])
+    for claim in claims.values():
+        text = f"{claim['normalized_claim']} {claim['evidence_text']}"
+        for entity in entities:
+            name = _entity_label(entity)
+            if name in claim["actors"]:
+                continue
+            if any(mention in text for mention in cast(list[str], entity["mentions"])) or (
+                entity["canonical_name"] and cast(str, entity["canonical_name"]) in text
+            ):
+                claim["actors"].append(name)
+        claim["actors"].append(OTHER_ACTOR)
     return {"claims": list(claims.values())}
 
 
@@ -375,14 +397,14 @@ def split_by_targets(
     if decisions is None:
         return [dict(item) for item in items], []
     evaluated = {
-        (claim_id, entity_id)
+        (claim_id, name)
         for claim_id, decision in cast(Mapping[str, Any], decisions["claims"]).items()
-        for entity_id in cast(Mapping[str, Any], decision)["evaluated_entity_ids"]
+        for name in cast(Mapping[str, Any], decision)["evaluated"]
     }
     to_classify: list[dict[str, Any]] = []
     absent: list[dict[str, Any]] = []
     for item in items:
-        if (item["claim_id"], item["entity_id"]) in evaluated:
+        if (item["claim_id"], item["target"]) in evaluated:
             to_classify.append(dict(item))
         else:
             absent.append(

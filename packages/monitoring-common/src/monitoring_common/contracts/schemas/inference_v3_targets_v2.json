@@ -9,10 +9,10 @@
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["reason", "evaluated_entity_ids"],
+        "required": ["reason", "evaluated"],
         "properties": {
           "reason": {"type": "string"},
-          "evaluated_entity_ids": {"type": "array", "items": {"type": "string"}}
+          "evaluated": {"type": "array", "items": {"type": "string"}}
         }
       }
     }
