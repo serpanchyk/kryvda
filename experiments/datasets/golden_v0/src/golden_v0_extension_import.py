@@ -213,13 +213,16 @@ def calibration_report(batch: Path, annotations: Path) -> dict[str, Any]:
     return agreement(pairs)
 
 
-def import_batches(batches: Sequence[Path], data: Path, annotated_at: str) -> list[str]:
+def import_batches(
+    batches: Sequence[Path], data: Path, annotated_at: str, partition: str = "extension400"
+) -> list[str]:
     """Complete validated batch outputs through the editor and record their provenance.
 
     Args:
         batches: Batch directories whose every output passes the anchor checks.
         data: golden_v0 data directory with ``editor.json``.
         annotated_at: ISO timestamp stored in the provenance records.
+        partition: Provenance partition of the created examples.
 
     Returns:
         Example IDs created, in order.
@@ -274,7 +277,7 @@ def import_batches(batches: Sequence[Path], data: Path, annotated_at: str) -> li
         )
         if response.status_code != 200:
             raise ValueError(f"{post['post_revision_id']}: {response.json()}")
-    _append_provenance(data, created, annotated_at)
+    _append_provenance(data, created, annotated_at, partition)
     return [example_id for example_id, _, _ in created]
 
 
@@ -328,7 +331,10 @@ def renormalize_imported(data: Path) -> list[str]:
 
 
 def _append_provenance(
-    data: Path, created: Sequence[tuple[str, str, int]], annotated_at: str
+    data: Path,
+    created: Sequence[tuple[str, str, int]],
+    annotated_at: str,
+    partition: str = "extension400",
 ) -> None:
     """Record who annotated every completed example, seeding legacy rows on first use."""
     path = data / PROVENANCE_FILE
@@ -350,7 +356,7 @@ def _append_provenance(
             "example_id": example_id,
             "post_revision_id": revision_id,
             "annotator": ANNOTATOR,
-            "partition": "extension400",
+            "partition": partition,
             "batch": batch_name,
             "method": "quote-anchored annotation validated by golden_v0_anchor",
             "annotated_at": annotated_at,
@@ -369,6 +375,8 @@ def main() -> int:
     calibration.add_argument("--batch", type=Path, default=WORK / "batches" / "calib01")
     importer = commands.add_parser("import")
     importer.add_argument("batches", nargs="+")
+    importer.add_argument("--work", type=Path, default=WORK)
+    importer.add_argument("--partition", default="extension400")
     args = parser.parse_args()
     if args.command == "calibration":
         report = calibration_report(args.batch, DATA / "annotations.jsonl")
@@ -378,9 +386,10 @@ def main() -> int:
     if renormalized:
         print(f"Re-resolved variant names in {', '.join(renormalized)}")
     created = import_batches(
-        [WORK / "batches" / name for name in args.batches],
+        [args.work / "batches" / name for name in args.batches],
         DATA,
         datetime.now(UTC).isoformat(timespec="seconds"),
+        args.partition,
     )
     print(f"Imported {len(created)} examples: {created[0]}..{created[-1]}")
     return 0

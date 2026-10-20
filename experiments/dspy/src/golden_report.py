@@ -183,6 +183,7 @@ def benchmark_report(
         for item in all_items
         if item.golden.example_id not in old55_example_ids
         and item.golden.example_id not in extension_ids
+        and item.golden.example_id not in test_ids
     ]
     report = {
         "old55": _section(old, provenance="legacy_adapter"),

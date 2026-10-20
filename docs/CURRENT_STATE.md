@@ -88,9 +88,10 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   v3.5.2 rule that an event involving a target is not the source's evaluation of it. A revision
   with no confirmed monitored entity completes without Pass 2/3. The worker image still runs v3.6 until it is rebuilt; stored
   posts are not re-analyzed without an explicit decision.
-- `golden_v0/test_split.json` fixes 100 `extension400` examples as a measure-only test split:
-  only aggregate metrics are reported on them and their individual errors are never inspected.
-  Prompt work iterates on the other 400 (`--split dev`).
+- `golden_v0/test_split.json` (v2) is a measure-only test split of 249 fresh, registry-matched
+  production posts (the `test` partition, `golden_v0-666`..`golden_v0-914`, 81 negative and 22
+  positive gold pairs) annotated after the prompt work; only aggregate metrics are reported on
+  them. Prompt work iterates on the other 500 (`--split dev`).
 - `golden_v0` is an offline, DVC-tracked pilot for annotation-schema validation. The offline Mamay
   comparison generator reuses the worker's inference request boundary to pair each golden input,
   full reviewed annotation, and Mamay output for external review. Parsed outputs that fail local

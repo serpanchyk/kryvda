@@ -67,9 +67,10 @@ def test_measure_only_test_split_is_read_and_reported_separately(tmp_path: Path)
     assert "test" not in benchmark_report(items, {"golden_v0-001"})
 
 
-def test_repository_test_split_is_a_fifth_of_extension400() -> None:
+def test_repository_test_split_holds_only_examples_added_after_prompt_work() -> None:
     split = json.loads(Path("experiments/datasets/golden_v0/test_split.json").read_text())
     identifiers = split["example_ids"]
 
-    assert len(identifiers) == len(set(identifiers)) == 100
-    assert all(266 <= int(name.removeprefix("golden_v0-")) <= 665 for name in identifiers)
+    assert split["split_version"] == "golden_v0_test_v2"
+    assert len(identifiers) == len(set(identifiers)) == 249
+    assert all(int(name.removeprefix("golden_v0-")) >= 666 for name in identifiers)

@@ -9,7 +9,12 @@ from typing import Any
 import pytest
 from golden_schema import GoldenV0Adapter
 from golden_v0_anchor import AnchorError, check_directory, locate, to_anchor, to_payload
-from golden_v0_extension import normalized_text, select_posts, write_batches
+from golden_v0_extension import (
+    normalized_text,
+    review_sample_posts,
+    select_posts,
+    write_batches,
+)
 from golden_v0_extension_import import (
     agreement,
     import_batches,
@@ -138,6 +143,37 @@ def test_selection_deduplicates_filters_and_prefers_core_posts() -> None:
     assert [post["raw_post_id"] for post in excluded] == [2]
 
 
+def test_selection_core_share_controls_the_core_quota() -> None:
+    rows = [
+        {**POST, "raw_post_id": index, "post_revision_id": index, "text": text * 4}
+        for index, text in enumerate(
+            [
+                "НАБУ провалило перше розслідування, — пише канал. ",
+                "НАБУ провалило друге розслідування, — пише канал. ",
+                "ЗСУ уразили перший склад, повідомив Генштаб. ",
+                "ЗСУ уразили другий склад, повідомив Генштаб. ",
+            ],
+            start=1,
+        )
+    ]
+
+    def match(text: str) -> list[str]:
+        return [name for name in ("НАБУ", "ЗСУ") if name in text]
+
+    all_core = select_posts(rows, match, {"НАБУ"}, set(), set(), target=2, core_share=1.0)
+    assert {post["core"] for post in all_core} == {True}
+
+
+def test_review_sample_posts_reads_channel_message_keys(tmp_path: Path) -> None:
+    sample = tmp_path / "analysis_sample_200.json"
+    assert review_sample_posts(sample) == set()
+    sample.write_text(
+        json.dumps({"samples": [{"post": {"channel_id": 3, "telegram_message_id": 42}}]}),
+        encoding="utf-8",
+    )
+    assert review_sample_posts(sample) == {(3, 42)}
+
+
 def test_agreement_scores_entities_negative_stance_and_rhetoric() -> None:
     adapter = GoldenV0Adapter()
     reference = adapter.convert(materialize(anchor(), POST, "golden_v0-001"))
@@ -170,14 +206,16 @@ def test_import_completes_records_and_records_provenance(tmp_path: Path) -> None
     batch = tmp_path / "b01"
     write_batches([POST], tmp_path, "b")
     (batch / "out" / "7.json").write_text(json.dumps(anchor()), encoding="utf-8")
-    assert import_batches([batch], data, "2026-10-10T00:00:00+00:00") == ["golden_v0-002"]
+    assert import_batches([batch], data, "2026-10-10T00:00:00+00:00", "test100") == [
+        "golden_v0-002"
+    ]
     records = [json.loads(line) for line in (data / "annotations.jsonl").read_text().splitlines()]
     assert [record["example_id"] for record in records] == ["golden_v0-001", "golden_v0-002"]
     assert records[1]["annotations"]["entities"][0]["registry_entity_id"] == "local-1"
     provenance = [
         json.loads(line) for line in (data / "annotation_provenance.jsonl").read_text().splitlines()
     ]
-    assert [row["partition"] for row in provenance] == ["pilot100", "extension400"]
+    assert [row["partition"] for row in provenance] == ["pilot100", "test100"]
     with pytest.raises(ValueError, match="already in the editor"):
         import_batches([batch], data, "2026-10-10T00:00:00+00:00")
 

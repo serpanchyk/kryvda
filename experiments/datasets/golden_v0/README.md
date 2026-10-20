@@ -22,13 +22,24 @@ cross-record references.
 
 ## Measure-only test split
 
-`test_split.json` fixes 100 examples (20% of the 500) as a measure-only test split. Report
-aggregate metrics on them, but never read, print or analyse their individual outputs or errors
-while designing prompts or pipelines; inspect errors only on the other 400 (`dev`). Every example
-in the split is from `extension400`, was outside the samples used to analyse inference v4, had no
-v3.6 errors displayed during the v3.7 analysis, and contains no phrase quoted in a production
-prompt. `pilot100` was inspected extensively and is development data only. When the split has
-been used to choose between many variants, add a fresh test split instead of reusing it.
+`test_split.json` (v2) lists the 249 examples of the `test` partition. Report aggregate metrics
+on them, but never read, print or analyse their individual outputs or errors while designing
+prompts or pipelines; inspect errors only on the other 500 examples (`dev`). The first attempt
+(v1, 100 never-inspected `extension400` posts) held only 11 negative pairs, because the inspected
+examples were exactly the ones with stance, so v2 uses fresh posts instead: the same production
+selection as `extension400` (registry-matched posts only), excluding every earlier golden_v0 post
+and the 200 posts reviewed for inference v3.6, annotated by Claude subagents with the extension
+brief. Gold holds 81 negative and 22 positive post x registry-entity pairs; 187 posts carry no
+stance and measure false positives. When the split has been used to choose between many
+variants, add fresh test posts instead of reusing it.
+
+```bash
+uv run python experiments/datasets/golden_v0/src/golden_v0_extension.py --target 150 \
+  --work experiments/datasets/golden_v0/extension/test_work2 --seed 20261025 --core-share 1.0 \
+  --no-calibration --exclude-review-sample experiments/dspy/data/analysis_sample_200.json
+uv run python experiments/datasets/golden_v0/src/golden_v0_extension_import.py import b01 b02 \
+  --work experiments/datasets/golden_v0/extension/test_work2 --partition test
+```
 
 ## Extension to 500 examples
 

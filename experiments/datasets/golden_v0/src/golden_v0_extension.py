@@ -89,11 +89,12 @@ def select_posts(
     excluded_texts: set[str],
     target: int,
     seed: int = SEED,
+    core_share: float = CORE_SHARE,
 ) -> list[dict[str, Any]]:
     """Choose a reproducible, channel-stratified sample of registry-matched posts.
 
     Channels receive square-root-proportional quotas so small channels stay represented. Within
-    each channel ``CORE_SHARE`` of the quota comes from posts matching a core entity, and no
+    each channel ``core_share`` of the quota comes from posts matching a core entity, and no
     entity may appear in more than ``PER_ENTITY_CAP`` of the sample.
 
     Args:
@@ -104,6 +105,7 @@ def select_posts(
         excluded_texts: Normalized texts already present in the editor.
         target: Number of posts to select.
         seed: Random seed.
+        core_share: Share of each channel quota taken from core-entity posts.
 
     Returns:
         Selected posts with ``matched_entities`` and ``core`` metadata.
@@ -135,7 +137,7 @@ def select_posts(
     chosen: list[dict[str, Any]] = []
     for channel in sorted(pool):
         quota = max(1, round(target * weights[channel] / total_weight))
-        core_quota = round(quota * CORE_SHARE)
+        core_quota = round(quota * core_share)
         core_posts = [post for post in pool[channel] if post["core"]]
         general_posts = [post for post in pool[channel] if not post["core"]]
         taken = 0
@@ -247,7 +249,25 @@ async def fetch_corpus(dsn: str) -> tuple[list[Any], list[Any], list[Any]]:
     return aliases, entities, rows
 
 
-def prepare(target: int, work: Path) -> dict[str, Any]:
+def review_sample_posts(path: Path) -> set[tuple[int, int]]:
+    """Return (channel, message) keys of production posts reviewed while designing prompts."""
+    if not path.exists():
+        return set()
+    samples = json.loads(path.read_text(encoding="utf-8"))["samples"]
+    return {
+        (int(sample["post"]["channel_id"]), int(sample["post"]["telegram_message_id"]))
+        for sample in samples
+    }
+
+
+def prepare(
+    target: int,
+    work: Path,
+    seed: int = SEED,
+    core_share: float = CORE_SHARE,
+    calibration: bool = True,
+    excluded_reviews: set[tuple[int, int]] | None = None,
+) -> dict[str, Any]:
     """Select posts and write the selection, references, and batches into ``work``."""
     sys.path.insert(0, str(REPOSITORY / "experiments/dspy/src"))
     from registry_post_coverage import PreparedRegistryMatcher
@@ -261,6 +281,12 @@ def prepare(target: int, work: Path) -> dict[str, Any]:
         record["example_id"]: record
         for record in map(json.loads, ANNOTATIONS_PATH.read_text(encoding="utf-8").splitlines())
     }
+    reviewed = excluded_reviews or set()
+    rows = [
+        row
+        for row in rows
+        if (int(row["channel_id"]), int(row["telegram_message_id"])) not in reviewed
+    ]
     posts = select_posts(
         ({**dict(row), "published_at": row["published_at"].isoformat()} for row in rows),
         lambda text: [names[entity_id] for entity_id in matcher.matched_entity_ids(text)],
@@ -268,6 +294,8 @@ def prepare(target: int, work: Path) -> dict[str, Any]:
         {int(source["raw_post_id"]) for source in sources},
         {normalized_text(source["text"]) for source in sources},
         target,
+        seed,
+        core_share,
     )
     work.mkdir(parents=True, exist_ok=True)
     (work / "selection.jsonl").write_text(
@@ -280,11 +308,12 @@ def prepare(target: int, work: Path) -> dict[str, Any]:
     (work / "registry.md").write_text(registry_reference(local, entities), encoding="utf-8")
     (work / "fewshot.md").write_text(fewshot_reference(records), encoding="utf-8")
     write_batches(posts, work / "batches", "b")
-    write_batches(
-        [records[example_id]["source"] for example_id in CALIBRATION_IDS],
-        work / "batches",
-        "calib",
-    )
+    if calibration:
+        write_batches(
+            [records[example_id]["source"] for example_id in CALIBRATION_IDS],
+            work / "batches",
+            "calib",
+        )
     return {
         "selected": len(posts),
         "core": sum(post["core"] for post in posts),
@@ -297,8 +326,28 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", type=int, default=400)
     parser.add_argument("--work", type=Path, default=WORK)
+    parser.add_argument("--seed", type=int, default=SEED)
+    parser.add_argument("--core-share", type=float, default=CORE_SHARE)
+    parser.add_argument("--no-calibration", action="store_true")
+    parser.add_argument(
+        "--exclude-review-sample",
+        type=Path,
+        help="analysis sample whose posts were reviewed while designing prompts",
+    )
     args = parser.parse_args()
-    print(prepare(args.target, args.work))
+    reviewed = (
+        review_sample_posts(args.exclude_review_sample) if args.exclude_review_sample else None
+    )
+    print(
+        prepare(
+            args.target,
+            args.work,
+            args.seed,
+            args.core_share,
+            not args.no_calibration,
+            reviewed,
+        )
+    )
     return 0
 
 
