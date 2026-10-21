@@ -176,7 +176,10 @@ uv run dvc add experiments/dspy/data/mamay_vs_golden_v3_7
 The runner defaults to `mamay_vs_golden_v4` and compares contract health with
 `mamay_vs_golden_v3_7`. `mamay_vs_golden_v4`, `_v4_1` and `_v4_2` record the targets-pass
 iterations on two random 100-example dev samples; `golden_test_v2_runs` holds one run per version
-over the measure-only test split.
+over the measure-only test split. `mamay_vs_golden_v4_3` (Pass 2 per monitored entity) and
+`mamay_vs_golden_v4_4` (positive-context Pass 3) cover all 500 dev examples at 32 concurrent
+requests. Runs scored before 2026-10-21 used the gold before the positive-context relabel; rescore
+them with the current `golden_v0` rather than quoting their old positive metrics.
 
 ## Post x entity stance report
 
@@ -189,10 +192,10 @@ shows where reviewed stances were lost (entity not admitted, no claim, other sta
 
 ```bash
 uv run python experiments/dspy/src/entity_stance_report.py report \
-  v4.2=experiments/dspy/data/mamay_vs_golden_v4_2/comparisons.jsonl \
-  v4.3=experiments/dspy/data/mamay_vs_golden_v4_3/comparisons.jsonl --split dev
+  v4.3=experiments/dspy/data/mamay_vs_golden_v4_3/comparisons.jsonl \
+  v4.4=experiments/dspy/data/mamay_vs_golden_v4_4/comparisons.jsonl --split dev
 uv run python experiments/dspy/src/entity_stance_report.py errors \
-  v4.3=experiments/dspy/data/mamay_vs_golden_v4_3/comparisons.jsonl --kind FN-neg
+  v4.4=experiments/dspy/data/mamay_vs_golden_v4_4/comparisons.jsonl --kind FN-neg
 ```
 
 ## Dev and test splits

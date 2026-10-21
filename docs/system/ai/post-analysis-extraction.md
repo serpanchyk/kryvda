@@ -115,5 +115,15 @@ fixed that. On the 249-post measure-only test split negative F1 was v3.5.2 0.626
 prompts reached 0.821. Splitting decisions into narrow calls helped where rewording prompts did
 not. Aggregation and product analytics are intentionally deferred.
 
+v4.3 (branch) runs Pass 2 once per monitored entity with that entity as `focus_entity` and merges
+the claims; on dev it cut negative pairs lost for lack of a claim from 22 to 6 (negative F1
+0.745 → 0.774). v4.4 (branch) adopts the positive-context convention of `golden_v0` v2: Pass 3
+labels a target `позитивне` when the source presents it in a positive light even without
+explicit praise (successes and results, high trust or ratings, the target's own reports of
+success, a favourably framed routine action), keeps flat informational mentions and a target's
+praise of others `відсутнє`, and the targets pass counts a favourable presentation as an
+evaluation. Under the relabelled gold dev positive recall rose 0.32 → 0.64 (F1 0.442 → 0.655,
++0.213, 95% CI +0.146..+0.287) with negative F1 unchanged.
+
 The previous `extraction_schema_v1` remains packaged only so historical DVC experiments can be
 reproduced; it is no longer a production runtime contract.

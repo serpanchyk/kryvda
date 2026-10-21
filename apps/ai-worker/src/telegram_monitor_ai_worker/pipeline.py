@@ -13,7 +13,7 @@ from monitoring_common.contracts import (
 )
 from monitoring_common.contracts import matched_registry_entity_ids as matched_registry_ids
 
-PIPELINE_VERSION = "inference_v4_3"
+PIPELINE_VERSION = "inference_v4_4"
 
 
 def matched_monitored_entity_ids(post_text: str, aliases: Sequence[Mapping[str, Any]]) -> list[int]:

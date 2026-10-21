@@ -130,12 +130,14 @@ reason the annotation is right (then mention it in your final report).
   actor («кум ... партнер ЦПК», «людина Х»), or as part of a scheme the source
   condemns is negative from that source, even without explicit evaluative words about them. Reporting an accusation/suspicion by an unnamed source
   («за даними слідства, він брав хабарі») → negative from external_unnamed.
-- `positive`: the source explicitly praises, supports or justifies the entity with evaluative
-  language.
-- `neutral`: everything else — neutral description of actions or successes without evaluative
-  wording («СБУ затримала агента», «Президент підписав указ»); self-presentation (the entity is
-  the claim's source and speaks about itself, announces its actions, praises others); the entity
-  is a target of someone else's attack but the claim's source does not evaluate it; polls.
+- `positive` (convention v2, 2026-10-21): the source presents the entity in a positive context,
+  even without explicit praise — its successes and results («СБУ знищила НПЗ і танкери»,
+  «лазерна зброя ЗСУ вже збиває FPV-дрони»), high trust or ratings («Буданову довіряють 70%»),
+  the entity's own announcements of its successes, routine actions the post frames favourably,
+  and explicit praise, support or justification.
+- `neutral`: everything else — a flat, informational mention without favourable framing
+  («Президент підписав указ»); the entity speaks about or praises others; the entity is a target
+  of someone else's attack but the claim's source does not evaluate it.
 - Do not use `mixed` or `insufficient_context` (the evaluator cannot map them); split into
   separate stance records instead.
 

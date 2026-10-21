@@ -67,7 +67,21 @@ registry lists twice (`CANONICAL_VARIANTS` and `TYPE_OVERRIDES` in
 `golden_v0_extension_import.py`). Annotators omit named actors that take part in no claim, so
 entity-level extraction recall is less complete in `extension400` than in `pilot100`.
 
-Extension conventions differ from the original pilot in two documented ways: non-evaluative news
-and self-presentation receive `neutral` rather than `positive` stance, and every claim target has
-exactly one stance record overlapping the claim evidence, so the canonical adapter leaves no
-stance unresolved.
+Every extension claim target has exactly one stance record overlapping the claim evidence, so
+the canonical adapter leaves no stance unresolved.
+
+## Positive-context convention (v2)
+
+Since 2026-10-21 `positive` means that the source presents the entity in a positive context,
+even without explicit praise: its successes and results, high trust or ratings, its own
+announcement of its successes, or a routine action the post frames favourably. Only a flat,
+informational mention stays `neutral`. The extension and test annotations originally put all of
+these in `neutral`, so every neutral stance record of all partitions was re-reviewed by Claude
+subagents (blind to model outputs) and the changes appended to `data/stance_relabel_log.jsonl`.
+
+```bash
+uv run python experiments/datasets/golden_v0/src/golden_v0_stance_relabel.py export
+# Reviewers write batches/rNN/out.json next to every items.json; the editor must be stopped.
+uv run python experiments/datasets/golden_v0/src/golden_v0_stance_relabel.py apply
+uv run python experiments/datasets/golden_v0/src/golden_v0_validation.py
+```

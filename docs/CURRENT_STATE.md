@@ -90,9 +90,17 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   split negative F1 is 0.728 against 0.682 for v3.6. The worker image still runs v3.6 until it is
   rebuilt; stored posts are not re-analyzed without an explicit decision.
 - `golden_v0/test_split.json` (v2) is a measure-only test split of 249 fresh, registry-matched
-  production posts (the `test` partition, `golden_v0-666`..`golden_v0-914`, 81 negative and 22
+  production posts (the `test` partition, `golden_v0-666`..`golden_v0-914`, 81 negative and 109
   positive gold pairs) annotated after the prompt work; only aggregate metrics are reported on
   them. Prompt work iterates on the other 500 (`--split dev`).
+- `golden_v0` follows the positive-context stance convention (v2): a source that presents an
+  entity in a positive context — successes, results, high trust, its own reports of success, a
+  favourably framed routine action — is `positive` without explicit praise. All 1484 neutral
+  stance records were re-reviewed and 427 became positive (`data/stance_relabel_log.jsonl`);
+  positive pairs per split went from 22 to 109 on test. Experimental branches `v4.3` (Pass 2 once
+  per monitored entity) and `v4.4` (Pass 3 and targets follow the v2 convention) reach dev
+  negative F1 0.774 and positive F1 0.655 against 0.745 and 0.464 for v4 on main; neither is
+  merged or deployed yet.
 - `golden_v0` is an offline, DVC-tracked pilot for annotation-schema validation. The offline Mamay
   comparison generator reuses the worker's inference request boundary to pair each golden input,
   full reviewed annotation, and Mamay output for external review. Parsed outputs that fail local

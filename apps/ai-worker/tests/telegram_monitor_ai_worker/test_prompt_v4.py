@@ -42,10 +42,13 @@ def test_targets_prompt_asks_for_every_evaluated_actor_by_name() -> None:
     assert "«інший актор або ніхто з\nпереліку»" in TARGET_PROMPT
     assert "оцінюються ВАКС, САП і НАБУ" in TARGET_PROMPT
     assert "імена з actors УСІХ, кого оцінюють" in TARGET_PROMPT
-    assert PROMPT_VERSIONS["targets"] == "inference_v3_targets_prompt_v3"
+    assert "вигідне подання актора — теж оцінка" in TARGET_PROMPT
+    assert PROMPT_VERSIONS["targets"] == "inference_v3_targets_prompt_v4"
 
 
-def test_classification_prompt_keeps_the_v3_7_event_rules() -> None:
+def test_classification_prompt_counts_a_positive_context_as_positive() -> None:
     assert "claim_source" in CLASSIFICATION_PROMPT
     assert "учасник чи об'єкт негативної події" in CLASSIFICATION_PROMPT
-    assert PROMPT_VERSIONS["classification"] == "inference_v3_classification_prompt_v7"
+    assert "у позитивному світлі, навіть без прямої похвали" in CLASSIFICATION_PROMPT
+    assert "результати опитувань" not in CLASSIFICATION_PROMPT
+    assert PROMPT_VERSIONS["classification"] == "inference_v3_classification_prompt_v8"
