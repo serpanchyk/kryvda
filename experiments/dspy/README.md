@@ -178,6 +178,23 @@ The runner defaults to `mamay_vs_golden_v4` and compares contract health with
 iterations on two random 100-example dev samples; `golden_test_v2_runs` holds one run per version
 over the measure-only test split.
 
+## Post x entity stance report
+
+`entity_stance_report.py` scores comparison runs the way production analytics aggregate them:
+for every post and monitored registry entity, whether any classification is negative or positive,
+against the reviewed annotations mapped to the registry through its aliases. `report` prints
+P/R/F1 with 95% bootstrap intervals and paired differences on the shared examples, `stages`
+shows where reviewed stances were lost (entity not admitted, no claim, other stance), and
+`errors` lists individual errors for dev examples only; it refuses the measure-only test split.
+
+```bash
+uv run python experiments/dspy/src/entity_stance_report.py report \
+  v4.2=experiments/dspy/data/mamay_vs_golden_v4_2/comparisons.jsonl \
+  v4.3=experiments/dspy/data/mamay_vs_golden_v4_3/comparisons.jsonl --split dev
+uv run python experiments/dspy/src/entity_stance_report.py errors \
+  v4.3=experiments/dspy/data/mamay_vs_golden_v4_3/comparisons.jsonl --kind FN-neg
+```
+
 ## Dev and test splits
 
 The runner accepts `--split dev` (the 400 examples whose errors may be inspected) or `--split
