@@ -10,7 +10,7 @@ PROMPT_VERSIONS: dict[PassName, str] = {
     "entities": "inference_v3_entities_prompt_v4",
     "claims": "inference_v3_claims_prompt_v9",
     "targets": "inference_v3_targets_prompt_v6",
-    "classification": "inference_v3_classification_prompt_v10",
+    "classification": "inference_v3_classification_prompt_v9",
 }
 
 # Frozen names retained for the DVC-backed v0 experiment only.
@@ -134,8 +134,9 @@ CLASSIFICATION_PROMPT = f"""{COMMON}
 (claim_source) оцінює саме TARGET — і риторику. Класифікуй кожну пару рівно один раз.
 
 claim_source — хто відповідає за твердження ("канал", "неназване джерело" або ім'я актора);
-source_is_target=true, якщо джерело — сам TARGET. Спершу визнач, про кого твердження, кого
-джерело атакує і кого захищає. Stance — лише ставлення claim_source до TARGET,
+source_is_target=true, якщо джерело — сам TARGET; evaluation — попередній висновок, чи джерело
+критикує TARGET, чи підтримує: перевір його за текстом, а не копіюй. Спершу визнач, про кого
+твердження, кого джерело атакує і кого захищає. Stance — лише ставлення claim_source до TARGET,
 а не тон події, не оцінка інших акторів і не ставлення каналу до когось іншого в тому самому
 реченні.
 
