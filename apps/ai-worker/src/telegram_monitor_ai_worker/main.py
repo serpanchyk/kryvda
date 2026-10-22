@@ -41,6 +41,8 @@ from telegram_monitor_ai_worker.models import (
 from telegram_monitor_ai_worker.pipeline import (
     PIPELINE_VERSION,
     admitted_entities,
+    affiliation_needed,
+    affiliation_request,
     assign_claim_ids,
     candidate_request,
     classification_batches,
@@ -51,6 +53,7 @@ from telegram_monitor_ai_worker.pipeline import (
     has_monitored_entity,
     matched_monitored_entity_ids,
     merge_focused_claims,
+    propagate_affiliations,
     registry_candidates,
     salvage_classification_objects,
     salvage_entity_payload,
@@ -304,6 +307,9 @@ class AnalysisWorker:
                 final_parsed_payload={"classifications": []},
             )
         classifications = [*classifications, *absent]
+        claims, classifications, affiliation_failed = await self._propagate_affiliations(
+            job, aliases, entities, claims, classifications
+        )
         run_status = (
             "completed_with_partial_classification"
             if classification_partial
@@ -322,10 +328,54 @@ class AnalysisWorker:
             degradations.append({"pass": "entities", "fallback": "prefilter_entities_only"})
         if classification_partial:
             degradations.append({"pass": "classification", "status": "partial"})
+        if affiliation_failed:
+            degradations.append({"pass": "affiliations", "fallback": "no_propagation"})
         result = final_payload(entities, claims, classifications, run_status, degradations)
         await self._repository.complete(
             job, entities, claims, classifications, result, run_status=run_status
         )
+
+    async def _propagate_affiliations(
+        self,
+        job: ClaimedAnalysisJob,
+        aliases: list[dict[str, Any]],
+        entities: list[dict[str, Any]],
+        claims: list[dict[str, Any]],
+        classifications: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], bool]:
+        """Ask which organizations the post links each person to, then carry negatives over.
+
+        The call runs only when a person in a post with a monitored organization received a
+        negative stance. A failed call keeps the classifications unchanged.
+        """
+        request = affiliation_request(job.post_text, entities, aliases)
+        if request is None or not affiliation_needed(request, entities, classifications):
+            return claims, classifications, False
+        try:
+            decisions = await self._execute_pass(
+                job, "affiliations", request, source_text=job.post_text, entities=[request]
+            )
+        except (InferenceValidationError, ModelOutputError):
+            await self._repository.record_pass_diagnostic(
+                run_id=job.run_id,
+                pass_name="affiliations",
+                raw_primary_output=None,
+                sanitized_primary_payload=None,
+                primary_sanitization_actions=[],
+                primary_validation_errors=[],
+                raw_repair_output=None,
+                sanitized_repair_payload=None,
+                repair_sanitization_actions=[],
+                repair_validation_errors=[],
+                final_validation_status="degraded",
+                final_parsed_payload=None,
+                fallback="no_propagation",
+            )
+            return claims, classifications, True
+        claims, classifications, _ = propagate_affiliations(
+            claims, classifications, entities, decisions
+        )
+        return claims, classifications, False
 
     async def _execute_focused_claims(
         self, job: ClaimedAnalysisJob, entities: Sequence[Mapping[str, Any]]

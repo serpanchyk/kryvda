@@ -125,5 +125,12 @@ praise of others `відсутнє`, and the targets pass counts a favourable pr
 evaluation. Under the relabelled gold dev positive recall rose 0.32 → 0.64 (F1 0.442 → 0.655,
 +0.213, 95% CI +0.146..+0.287) with negative F1 unchanged.
 
+v4.8 (branch `v4.4-golden-v3`) returns to the v4.4 prompts and adds an `affiliations` call. When
+a person in a post with a monitored registry organization receives a negative stance, the call
+names the organizations the post itself links each person to (head, member, employee or former
+employee; never from model knowledge), and code copies the negative stance and rhetoric to each
+linked organization on the same claim. A failed call leaves the classifications unchanged
+(`no_propagation`). Migration 016 admits the new pass name.
+
 The previous `extraction_schema_v1` remains packaged only so historical DVC experiments can be
 reproduced; it is no longer a production runtime contract.

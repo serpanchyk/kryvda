@@ -30,6 +30,7 @@ from golden_schema import CanonicalGolden, load_golden_jsonl
 
 DEFAULT_ANNOTATIONS = Path("experiments/datasets/golden_v0/data/annotations.jsonl")
 DEFAULT_SEED = Path("infra/postgres/init/003_registry_seed.sql")
+AFFILIATIONS_FILE = "affiliations.jsonl"
 NEGATIVE, POSITIVE = "негативне", "позитивне"
 STANCES = {"neg": NEGATIVE, "pos": POSITIVE}
 # Reviewed annotations spell a few registry names differently from every approved alias.
@@ -181,6 +182,25 @@ class StanceReport:
         self.golden = {record.example_id: record for record in load_golden_jsonl(annotations)}
         self.names = registry_names(load_seed_aliases(seed))
         self.test_ids = heldout_example_ids(annotations)
+        self.affiliations: dict[str, set[str]] = {}
+        affiliations = annotations.parent / AFFILIATIONS_FILE
+        if affiliations.exists():
+            for line in affiliations.read_text(encoding="utf-8").splitlines():
+                link = json.loads(line)
+                self.affiliations.setdefault(link["example_id"], set()).update(
+                    link["organizations"]
+                )
+
+    def gold(self, identifier: str) -> dict[str, set[str]]:
+        """Return reviewed stances, with criticism of a linked person carried to the organization.
+
+        ``affiliations.jsonl`` lists, per post, the registry organizations the post links a
+        negatively evaluated person to; those organizations count as negative too.
+        """
+        stances = golden_stances(self.golden[identifier], self.names)
+        for organization in self.affiliations.get(identifier, set()):
+            stances.setdefault(organization, set()).add(NEGATIVE)
+        return stances
 
     def rows(self, path: Path, split: str) -> dict[str, dict[str, Any]]:
         """Load completed rows of one split, keyed by example ID."""
@@ -199,9 +219,7 @@ class StanceReport:
     def counts(self, rows: Mapping[str, Mapping[str, Any]], stance: str) -> dict[str, PostCounts]:
         """Return per-post counts of one stance."""
         return {
-            identifier: post_counts(
-                golden_stances(self.golden[identifier], self.names), predicted_stances(row), stance
-            )
+            identifier: post_counts(self.gold(identifier), predicted_stances(row), stance)
             for identifier, row in rows.items()
         }
 
@@ -210,7 +228,7 @@ class StanceReport:
         stages: Counter[str] = Counter()
         for identifier, row in rows.items():
             predicted = predicted_stances(row)
-            for name, values in golden_stances(self.golden[identifier], self.names).items():
+            for name, values in self.gold(identifier).items():
                 if stance in values:
                     stages[loss_stage(name, stance, row, predicted)] += 1
         return stages
@@ -226,7 +244,7 @@ class StanceReport:
         stance = STANCES[short]
         listed = []
         for identifier, row in sorted(rows.items()):
-            golden = golden_stances(self.golden[identifier], self.names)
+            golden = self.gold(identifier)
             predicted = predicted_stances(row)
             for name in sorted(set(golden) | set(predicted)):
                 gold = stance in golden.get(name, set())

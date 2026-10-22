@@ -90,3 +90,18 @@ uv run python experiments/datasets/golden_v0/src/golden_v0_stance_relabel.py exp
 uv run python experiments/datasets/golden_v0/src/golden_v0_stance_relabel.py apply
 uv run python experiments/datasets/golden_v0/src/golden_v0_validation.py
 ```
+
+## Person-to-organization criticism (2026-10-23)
+
+Criticism of a person is criticism of an organization when the post itself presents the person
+as its head, member, employee or former employee («голова ЦПК Шабунін», «ексдетектив НАБУ»).
+`data/affiliations.jsonl` lists those links for every post with a negatively evaluated person
+and a monitored registry organization in its text (178 posts, 166 links), annotated by Claude
+subagents blind to model outputs; the post x entity stance report adds a negative stance for
+each linked organization. The gold then holds 341 instead of 290 negative dev pairs.
+
+```bash
+uv run python experiments/datasets/golden_v0/src/golden_v0_affiliations.py export
+# Reviewers write batches/aNN/out.json next to every items.json.
+uv run python experiments/datasets/golden_v0/src/golden_v0_affiliations.py collect
+```

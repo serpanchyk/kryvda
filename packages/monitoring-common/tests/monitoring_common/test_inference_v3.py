@@ -537,3 +537,40 @@ def test_shared_surname_alias_admits_every_entity_that_carries_it() -> None:
 )
 def test_alias_occurs_matches_russian_case_forms(text: str, alias: str) -> None:
     assert alias_occurs(text, alias)
+
+
+AFFILIATION_REQUEST = {"people": ["Шабунін", "Лікунов"], "organizations": ["ЦПК", "НАБУ"]}
+
+
+def test_affiliations_schema_requires_every_person_and_offers_only_named_organizations() -> None:
+    schema = generation_schema("affiliations", AFFILIATION_REQUEST)
+
+    people = schema["properties"]["people"]
+    assert people["required"] == ["Шабунін", "Лікунов"]
+    assert people["properties"]["Лікунов"]["properties"]["organizations"]["items"]["enum"] == [
+        "ЦПК",
+        "НАБУ",
+    ]
+
+
+def test_affiliations_sanitize_and_validate_against_the_request() -> None:
+    payload = {
+        "people": {
+            "Шабунін": {"reason": "голова", "organizations": ["ЦПК", "ЦПК", "Мінфін"]},
+            "Невідомий": {"reason": "x", "organizations": []},
+        }
+    }
+
+    result = sanitize_pass_payload_with_actions("affiliations", payload, "", [AFFILIATION_REQUEST])
+
+    assert result.payload == {"people": {"Шабунін": {"reason": "голова", "organizations": ["ЦПК"]}}}
+    assert [action["action"] for action in result.actions] == [
+        "dropped_unoffered_organization",
+        "dropped_unknown_person",
+    ]
+    with pytest.raises(InferenceValidationError, match="missing person"):
+        validate_pass("affiliations", result.payload, "", [AFFILIATION_REQUEST])
+    complete = {
+        "people": {**result.payload["people"], "Лікунов": {"reason": "", "organizations": []}}
+    }
+    validate_pass("affiliations", complete, "", [AFFILIATION_REQUEST])

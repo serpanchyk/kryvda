@@ -32,6 +32,8 @@ from telegram_monitor_ai_worker.models import ModelOutputError, ModelResponse
 from telegram_monitor_ai_worker.pipeline import (
     PIPELINE_VERSION,
     admitted_entities,
+    affiliation_needed,
+    affiliation_request,
     assign_claim_ids,
     candidate_request,
     classification_batches,
@@ -42,6 +44,7 @@ from telegram_monitor_ai_worker.pipeline import (
     has_monitored_entity,
     matched_monitored_entity_ids,
     merge_focused_claims,
+    propagate_affiliations,
     registry_candidates,
     salvage_classification_objects,
     salvage_entity_payload,
@@ -51,8 +54,8 @@ from telegram_monitor_ai_worker.pipeline import (
 
 DEFAULT_ANNOTATIONS = Path("experiments/datasets/golden_v0/data/annotations.jsonl")
 DEFAULT_ALIAS_ADDITIONS = Path("infra/postgres/init/015_registry_aliases.sql")
-DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v4_4/comparisons.jsonl")
-DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v4_3/comparisons.jsonl")
+DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v4_8/comparisons.jsonl")
+DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v4_4/comparisons.jsonl")
 # The tuned old55 partition is defined by the preserved 55-example v3.5 run, not by the baseline.
 OLD55_REFERENCE = Path("experiments/dspy/data/mamay_vs_golden_v3_5/comparisons.jsonl")
 DEFAULT_SEED = Path("infra/postgres/init/003_registry_seed.sql")
@@ -691,6 +694,32 @@ async def analyze_annotation(
             classifications = []
             classification_partial = False
         classifications = [*classifications, *absent]
+        affiliation_failed = False
+        affiliation = affiliation_request(source_text, entities, aliases)
+        if affiliation is not None and affiliation_needed(affiliation, entities, classifications):
+            try:
+                links = await _run_pass(
+                    client,
+                    "affiliations",
+                    affiliation,
+                    source_text,
+                    attempts,
+                    diagnostics,
+                    [affiliation],
+                )
+                claims, classifications, _ = propagate_affiliations(
+                    claims, classifications, entities, links
+                )
+            except (InferenceValidationError, ModelOutputError):
+                affiliation_failed = True
+                diagnostics.append(
+                    {
+                        "pass": "affiliations",
+                        "final_validation_status": "degraded",
+                        "fallback": "no_propagation",
+                        "final_parsed_payload": None,
+                    }
+                )
         status = (
             "completed_with_partial_classification"
             if classification_partial
@@ -709,6 +738,8 @@ async def analyze_annotation(
             degradations.append({"pass": "entities", "fallback": "prefilter_entities_only"})
         if classification_partial:
             degradations.append({"pass": "classification", "status": "partial"})
+        if affiliation_failed:
+            degradations.append({"pass": "affiliations", "fallback": "no_propagation"})
         result = final_payload(
             entities,
             claims,

@@ -11,6 +11,7 @@ PROMPT_VERSIONS: dict[PassName, str] = {
     "claims": "inference_v3_claims_prompt_v9",
     "targets": "inference_v3_targets_prompt_v4",
     "classification": "inference_v3_classification_prompt_v8",
+    "affiliations": "inference_v3_affiliations_prompt_v1",
 }
 
 # Frozen names retained for the DVC-backed v0 experiment only.
@@ -158,12 +159,27 @@ Rhetoric — лише для "негативне", 0-2 найсильніші я
 "зовнішній_контроль_або_нелояльність" (працює на іншу державу чи актора, агент впливу,
 нелояльність Україні)."""
 
+AFFILIATION_PROMPT = f"""{COMMON}
+
+Завдання: для кожної людини з people визнач, до яких організацій з organizations цей пост її
+відносить: очільник, член, працівник чи співробітник, член правління, депутат фракції, а також
+колишній працівник чи член («ексдетектив НАБУ»). Приклади: «голова ЦПК Віталій Шабунін» —
+ЦПК; «детектив НАБУ Магамедрасулов» — НАБУ; «членкиня правління ЦПК Олена Щербан» — ЦПК.
+
+Зв'язок має бути названий у пості або однозначно випливати з нього. Не додавай організацію з
+власних знань, якщо пост її з людиною не пов'язує. Співпраця, контакти, фінансування, спільні
+дії, родичі, клієнти, критика чи підтримка організації — не приналежність.
+
+Для кожної людини спершу в reason коротко назви, як пост пов'язує її з організацією, потім
+organizations — назви з organizations; порожній список, якщо зв'язку немає."""
+
 SYSTEM_PROMPTS: dict[PassName, str] = {
     "candidates": CANDIDATE_PROMPT,
     "entities": ENTITY_PROMPT,
     "claims": CLAIM_PROMPT,
     "targets": TARGET_PROMPT,
     "classification": CLASSIFICATION_PROMPT,
+    "affiliations": AFFILIATION_PROMPT,
 }
 
 

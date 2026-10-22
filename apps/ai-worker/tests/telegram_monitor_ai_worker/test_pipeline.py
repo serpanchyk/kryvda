@@ -1,6 +1,8 @@
 """Tests for backend-only inference-v3 transformations."""
 
 from telegram_monitor_ai_worker.pipeline import (
+    affiliation_needed,
+    affiliation_request,
     assign_claim_ids,
     classification_batches,
     classification_items,
@@ -9,6 +11,7 @@ from telegram_monitor_ai_worker.pipeline import (
     local_context,
     matched_monitored_entity_ids,
     merge_focused_claims,
+    propagate_affiliations,
     resolve_entity_groups,
     salvage_classification_objects,
 )
@@ -254,3 +257,82 @@ def test_merge_focused_claims_unites_entities_of_the_same_quote_and_source() -> 
 
     assert [item["entity_ids"] for item in merged["claims"]] == [["e1", "e2"], ["e2"]]
     assert merged["claims"][0]["normalized_text"] == "НАБУ відбілює ЦПК."
+
+
+AFFILIATION_ENTITIES = [
+    {
+        "id": "e1",
+        "registry_entity_id": 10,
+        "canonical_name": "Віталій Шабунін",
+        "monitored": True,
+        "mentions": ["Шабунін"],
+    },
+    {
+        "id": "e2",
+        "registry_entity_id": 11,
+        "canonical_name": "ЦПК",
+        "monitored": True,
+        "mentions": ["ЦПК"],
+    },
+    {
+        "id": "e3",
+        "registry_entity_id": None,
+        "canonical_name": None,
+        "monitored": False,
+        "mentions": ["Тарас Лікунов"],
+    },
+]
+AFFILIATION_ALIASES = [
+    {"entity_id": 10, "coarse_type": "person"},
+    {"entity_id": 11, "coarse_type": "organization"},
+]
+
+
+def test_affiliation_request_offers_people_and_monitored_organizations() -> None:
+    request = affiliation_request("текст", AFFILIATION_ENTITIES, AFFILIATION_ALIASES)
+
+    assert request == {
+        "post_text": "текст",
+        "people": ["Віталій Шабунін", "Тарас Лікунов"],
+        "organizations": ["ЦПК"],
+    }
+    assert affiliation_request("т", AFFILIATION_ENTITIES[:1], AFFILIATION_ALIASES) is None
+    negative = [{"claim_id": "c1", "entity_id": "e3", "stance": "негативне", "rhetoric": []}]
+    assert affiliation_needed(request, AFFILIATION_ENTITIES, negative)
+    assert not affiliation_needed(
+        request, AFFILIATION_ENTITIES, [{**negative[0], "entity_id": "e2"}]
+    )
+
+
+def test_propagate_affiliations_turns_the_organization_row_negative() -> None:
+    claims = [{"id": "c1", "entity_ids": ["e3", "e2"]}, {"id": "c2", "entity_ids": ["e1"]}]
+    rows = [
+        {"claim_id": "c1", "entity_id": "e3", "stance": "негативне", "rhetoric": ["x"]},
+        {"claim_id": "c1", "entity_id": "e2", "stance": "відсутнє", "rhetoric": []},
+        {"claim_id": "c2", "entity_id": "e1", "stance": "негативне", "rhetoric": []},
+    ]
+    decisions = {
+        "people": {
+            "Тарас Лікунов": {"reason": "ексдетектив", "organizations": ["ЦПК"]},
+            "Віталій Шабунін": {"reason": "голова", "organizations": ["ЦПК"]},
+        }
+    }
+
+    claims_out, rows_out, propagated = propagate_affiliations(
+        claims, rows, AFFILIATION_ENTITIES, decisions
+    )
+
+    assert {(r["claim_id"], r["entity_id"]): r["stance"] for r in rows_out} == {
+        ("c1", "e3"): "негативне",
+        ("c1", "e2"): "негативне",
+        ("c2", "e1"): "негативне",
+        ("c2", "e2"): "негативне",
+    }
+    assert rows_out[1]["rhetoric"] == ["x"]
+    assert claims_out[1]["entity_ids"] == ["e1", "e2"]
+    assert claims[1]["entity_ids"] == ["e1"]
+    assert propagated == [
+        {"claim_id": "c1", "from": "e3", "to": "e2"},
+        {"claim_id": "c2", "from": "e1", "to": "e2"},
+    ]
+    assert propagate_affiliations(claims, rows, AFFILIATION_ENTITIES, None)[2] == []

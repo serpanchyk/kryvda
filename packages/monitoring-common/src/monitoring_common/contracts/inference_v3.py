@@ -12,7 +12,7 @@ from typing import Any, Literal, cast
 
 from jsonschema import Draft202012Validator
 
-PassName = Literal["candidates", "entities", "claims", "targets", "classification"]
+PassName = Literal["candidates", "entities", "claims", "targets", "classification", "affiliations"]
 FailureKind = Literal[
     "generation_failure",
     "json_parse_failure",
@@ -27,6 +27,7 @@ SCHEMA_VERSIONS: dict[PassName, str] = {
     "claims": "inference_v3_claims_v4",
     "targets": "inference_v3_targets_v2",
     "classification": "inference_v3_classification_v1",
+    "affiliations": "inference_v3_affiliations_v1",
 }
 
 
@@ -358,6 +359,12 @@ def sanitize_pass_payload_with_actions(
                 cast(dict[str, Any], sanitized["claims"]), entities, actions
             )
         return SanitizedPayload(sanitized, tuple(actions))
+    if pass_name == "affiliations":
+        if isinstance(sanitized.get("people"), dict):
+            sanitized["people"] = _sanitize_affiliations(
+                cast(dict[str, Any], sanitized["people"]), entities, actions
+            )
+        return SanitizedPayload(sanitized, tuple(actions))
     if pass_name == "candidates":
         if isinstance(sanitized.get("candidates"), dict):
             sanitized["candidates"] = _sanitize_candidate_decisions(
@@ -409,6 +416,35 @@ def _sanitize_candidate_decisions(
             kept[identifier] = decision
         else:
             actions.append({"action": "dropped_unknown_candidate", "candidate_id": identifier})
+    return kept
+
+
+def _sanitize_affiliations(
+    people: dict[str, Any],
+    requests: Sequence[Mapping[str, Any]],
+    actions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Keep supplied people and only offered organizations, without duplicates."""
+    offered_people = {name for request in requests for name in request["people"]}
+    offered_orgs = {name for request in requests for name in request["organizations"]}
+    kept: dict[str, Any] = {}
+    for person, decision in people.items():
+        if person not in offered_people:
+            actions.append({"action": "dropped_unknown_person", "person": person})
+            continue
+        if isinstance(decision, dict) and isinstance(decision.get("organizations"), list):
+            organizations: list[Any] = []
+            for name in decision["organizations"]:
+                if name in organizations or name == person:
+                    continue
+                if isinstance(name, str) and name not in offered_orgs:
+                    actions.append(
+                        {"action": "dropped_unoffered_organization", "person": person, "org": name}
+                    )
+                    continue
+                organizations.append(name)
+            decision = {**decision, "organizations": organizations}
+        kept[person] = decision
     return kept
 
 
@@ -698,6 +734,20 @@ def generation_schema(pass_name: PassName, request: Mapping[str, Any]) -> dict[s
             "properties": properties,
         }
         return schema
+    people = request.get("people")
+    if pass_name == "affiliations" and isinstance(people, list):
+        decision = deepcopy(schema["properties"]["people"]["additionalProperties"])
+        decision["properties"]["organizations"]["items"] = {
+            "type": "string",
+            "enum": list(request["organizations"]),
+        }
+        schema["properties"]["people"] = {
+            "type": "object",
+            "additionalProperties": False,
+            "required": list(people),
+            "properties": {name: decision for name in people},
+        }
+        return schema
     candidates = request.get("candidates")
     if pass_name == "candidates" and isinstance(candidates, list):
         identifiers = [cast(str, candidate["candidate_id"]) for candidate in candidates]
@@ -751,6 +801,8 @@ def validate_pass(
         )
     if pass_name == "candidates":
         _validate_candidates(payload, entities)
+    elif pass_name == "affiliations":
+        _validate_affiliations(payload, entities)
     elif pass_name == "targets":
         _validate_targets(payload, entities)
     elif pass_name == "entities":
@@ -777,6 +829,30 @@ def _validate_candidates(
         for identifier in decided
         if identifier not in expected
     )
+    if issues:
+        raise InferenceValidationError(issues)
+
+
+def _validate_affiliations(
+    payload: Mapping[str, Any], requests: Sequence[Mapping[str, Any]]
+) -> None:
+    """Require one decision per supplied person, naming only offered organizations."""
+    expected = [name for request in requests for name in request["people"]]
+    offered = {name for request in requests for name in request["organizations"]}
+    decisions = cast(Mapping[str, Mapping[str, Any]], payload["people"])
+    issues = [
+        ValidationIssue("reference_failure", f"missing person: {name}")
+        for name in expected
+        if name not in decisions
+    ]
+    for person, decision in decisions.items():
+        if person not in expected:
+            issues.append(ValidationIssue("reference_failure", f"unexpected person: {person}"))
+        issues.extend(
+            ValidationIssue("reference_failure", f"organization {name!r} not offered")
+            for name in cast(list[str], decision["organizations"])
+            if name not in offered
+        )
     if issues:
         raise InferenceValidationError(issues)
 

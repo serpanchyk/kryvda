@@ -13,7 +13,7 @@ from monitoring_common.contracts import (
 )
 from monitoring_common.contracts import matched_registry_entity_ids as matched_registry_ids
 
-PIPELINE_VERSION = "inference_v4_4"
+PIPELINE_VERSION = "inference_v4_8"
 
 
 def matched_monitored_entity_ids(post_text: str, aliases: Sequence[Mapping[str, Any]]) -> list[int]:
@@ -457,6 +457,95 @@ def split_by_targets(
                 }
             )
     return to_classify, absent
+
+
+def affiliation_request(
+    post_text: str, entities: Sequence[Mapping[str, Any]], aliases: Sequence[Mapping[str, Any]]
+) -> dict[str, Any] | None:
+    """Offer every non-organization actor and every monitored registry organization of a post.
+
+    Returns ``None`` when the post has no person or no monitored organization to link.
+    """
+    kinds = {int(row["entity_id"]): row.get("coarse_type") for row in aliases}
+    organizations: list[str] = []
+    people: list[str] = []
+    for entity in entities:
+        registry_id = entity.get("registry_entity_id")
+        is_org = registry_id is not None and kinds.get(int(registry_id)) not in (None, "person")
+        label = _entity_label(entity)
+        if is_org and entity.get("monitored"):
+            organizations.append(label)
+        elif not is_org and label not in people:
+            people.append(label)
+    if not organizations or not people:
+        return None
+    return {"post_text": post_text, "people": people, "organizations": organizations}
+
+
+def affiliation_needed(
+    request: Mapping[str, Any] | None,
+    entities: Sequence[Mapping[str, Any]],
+    classifications: Sequence[Mapping[str, Any]],
+) -> bool:
+    """Return whether any offered person received a negative stance worth propagating."""
+    if request is None:
+        return False
+    people = {
+        cast(str, entity["id"]) for entity in entities if _entity_label(entity) in request["people"]
+    }
+    return any(
+        row["stance"] == "негативне" and row["entity_id"] in people for row in classifications
+    )
+
+
+def propagate_affiliations(
+    claims: Sequence[Mapping[str, Any]],
+    classifications: Sequence[Mapping[str, Any]],
+    entities: Sequence[Mapping[str, Any]],
+    decisions: Mapping[str, Any] | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, str]]]:
+    """Carry a negative stance toward a person over to the organizations the post links them to.
+
+    Criticism of a head, member or former employee is criticism of the organization when the
+    post itself names that link; the organization is added to the claim and receives the same
+    stance and rhetoric. Returns the claims, the classifications and every propagation made.
+    """
+    claims_out = [{**claim, "entity_ids": list(claim["entity_ids"])} for claim in claims]
+    rows = [dict(row) for row in classifications]
+    if not decisions:
+        return claims_out, rows, []
+    ids = {_entity_label(entity): cast(str, entity["id"]) for entity in entities}
+    members: dict[str, list[str]] = {}
+    for person, decision in cast(Mapping[str, Any], decisions["people"]).items():
+        orgs = [ids[name] for name in decision["organizations"] if name in ids]
+        if person in ids and orgs:
+            members[ids[person]] = orgs
+    by_claim = {cast(str, claim["id"]): claim for claim in claims_out}
+    index = {(row["claim_id"], row["entity_id"]): row for row in rows}
+    propagated: list[dict[str, str]] = []
+    for row in list(rows):
+        if row["stance"] != "негативне" or row["entity_id"] not in members:
+            continue
+        for org in members[row["entity_id"]]:
+            existing = index.get((row["claim_id"], org))
+            if existing is not None and existing["stance"] == "негативне":
+                continue
+            new = {
+                "claim_id": row["claim_id"],
+                "entity_id": org,
+                "stance": "негативне",
+                "rhetoric": list(row["rhetoric"]),
+            }
+            if existing is None:
+                rows.append(new)
+            else:
+                existing.update(new)
+            index[(row["claim_id"], org)] = existing or new
+            claim = by_claim.get(cast(str, row["claim_id"]))
+            if claim is not None and org not in claim["entity_ids"]:
+                claim["entity_ids"].append(org)
+            propagated.append({"claim_id": row["claim_id"], "from": row["entity_id"], "to": org})
+    return claims_out, rows, propagated
 
 
 def _entity_label(entity: Mapping[str, Any]) -> str:

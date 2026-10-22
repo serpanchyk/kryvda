@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["people"],
+  "properties": {
+    "people": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", "organizations"],
+        "properties": {
+          "reason": {"type": "string"},
+          "organizations": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

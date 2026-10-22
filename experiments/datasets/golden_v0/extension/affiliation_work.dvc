@@ -1,0 +1,6 @@
+outs:
+- md5: 77c399aa20d3cd7798879795e79623e3.dir
+  size: 506956
+  nfiles: 8
+  hash: md5
+  path: affiliation_work

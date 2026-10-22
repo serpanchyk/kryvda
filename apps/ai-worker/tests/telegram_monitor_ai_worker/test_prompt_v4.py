@@ -6,6 +6,7 @@ from telegram_monitor_ai_worker.prompt import (
     CLASSIFICATION_PROMPT,
     ENTITY_PROMPT,
     PROMPT_VERSIONS,
+    SYSTEM_PROMPTS,
     TARGET_PROMPT,
 )
 
@@ -52,3 +53,9 @@ def test_classification_prompt_counts_a_positive_context_as_positive() -> None:
     assert "у позитивному світлі, навіть без прямої похвали" in CLASSIFICATION_PROMPT
     assert "результати опитувань" not in CLASSIFICATION_PROMPT
     assert PROMPT_VERSIONS["classification"] == "inference_v3_classification_prompt_v8"
+
+
+def test_affiliation_prompt_links_people_only_through_the_post() -> None:
+    assert "голова ЦПК Віталій Шабунін" in SYSTEM_PROMPTS["affiliations"]
+    assert "Не додавай організацію з\nвласних знань" in SYSTEM_PROMPTS["affiliations"]
+    assert PROMPT_VERSIONS["affiliations"] == "inference_v3_affiliations_prompt_v1"

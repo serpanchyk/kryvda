@@ -98,6 +98,9 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   production posts (the `test` partition, `golden_v0-666`..`golden_v0-914`, 81 negative and 109
   positive gold pairs) annotated after the prompt work; only aggregate metrics are reported on
   them. Prompt work iterates on the other 500 (`--split dev`).
+- Inference v4.8 (unmerged) adds an `affiliations` call: a negative stance toward a person the
+  post presents as head, member or former employee of a monitored organization also counts for
+  that organization. `golden_v0/data/affiliations.jsonl` applies the same rule to the gold.
 - `golden_v0` follows the positive-context stance convention (v2): a source that presents an
   entity in a positive context — successes, results, high trust, its own reports of success, a
   favourably framed routine action — is `positive` without explicit praise. All 1484 neutral

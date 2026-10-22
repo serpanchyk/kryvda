@@ -148,7 +148,7 @@ async def test_worker_runs_three_passes_and_persists_final_result() -> None:
     assert await worker.process_next() is True
     assert repository.failures == []
     assert repository.completed is not None
-    assert repository.completed["pipeline_version"] == "inference_v4_4"
+    assert repository.completed["pipeline_version"] == "inference_v4_8"
     assert repository.entities[0]["registry_entity_id"] == 10
     assert [item[:2] for item in repository.attempts] == [
         ("candidates", "primary"),
@@ -496,3 +496,55 @@ async def test_client_scales_classification_budget_to_batch_size() -> None:
     await client.infer("classification", {"items": [{}, {}, {}]})
 
     assert completions.kwargs["max_tokens"] == 512
+
+
+async def test_worker_carries_a_negative_stance_over_to_the_linked_organization() -> None:
+    source = "Голова ЦПК Шабунін бреше."
+    aliases = [
+        *ALIASES,
+        {
+            "entity_id": 20,
+            "canonical_name": "Центр протидії корупції",
+            "coarse_type": "organization",
+            "monitored": True,
+            "alias": "ЦПК",
+            "normalized_alias": "цпк",
+        },
+    ]
+    repository = FakeRepository(aliases, source)
+    payloads = pass_payloads()
+    payloads["candidates"] = {
+        "candidates": {
+            "r1": {"reason": "прізвище", "same_actor": True},
+            "r2": {"reason": "організація", "same_actor": True},
+        }
+    }
+    payloads["claims"]["claims"][0].update(
+        normalized_text="Віталій Шабунін бреше.", evidence_text=source
+    )
+    payloads["classification"]["classifications"][0]["stance"] = "негативне"
+    payloads["affiliations"] = {
+        "people": {
+            "Віталій Шабунін": {
+                "reason": "голова ЦПК",
+                "organizations": ["Центр протидії корупції"],
+            }
+        }
+    }
+    worker = AnalysisWorker(
+        repository,  # type: ignore[arg-type]
+        FakeClient(payloads),  # type: ignore[arg-type]
+        AiWorkerSettings(litellm_api_key="key"),
+        logging.getLogger("test"),
+    )
+
+    assert await worker.process_next() is True
+    assert repository.completed is not None
+    names = {e["id"]: e["canonical_name"] for e in repository.completed["entities"]}
+    negative = {
+        names[row["entity_id"]]
+        for row in repository.completed["classifications"]
+        if row["stance"] == "негативне"
+    }
+    assert negative == {"Віталій Шабунін", "Центр протидії корупції"}
+    assert ("affiliations", "primary") in [item[:2] for item in repository.attempts]

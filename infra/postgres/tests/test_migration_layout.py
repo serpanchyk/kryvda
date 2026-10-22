@@ -82,3 +82,14 @@ def test_registry_alias_migration_allows_shared_aliases_and_is_registered() -> N
     assert "Кирило Буданов\tБуда\n" not in migration
     assert "\\i /database/migrations/015_registry_aliases.sql" in runner
     assert "'015_registry_aliases.sql'" in fresh_init
+
+
+def test_affiliations_pass_migration_is_registered() -> None:
+    migration = (POSTGRES_ROOT / "migrations" / "016_inference_v4_8.sql").read_text()
+    runner = (POSTGRES_ROOT / "migrate.sql").read_text()
+    fresh_init = (POSTGRES_ROOT / "init" / "016_inference_v4_8.sql").read_text()
+
+    assert migration.count("'affiliations'") == 2
+    assert "SET DEFAULT 'inference_v4_8'" in migration
+    assert "\\i /database/migrations/016_inference_v4_8.sql" in runner
+    assert "'016_inference_v4_8.sql'" in fresh_init
