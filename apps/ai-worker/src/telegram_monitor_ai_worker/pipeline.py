@@ -13,7 +13,7 @@ from monitoring_common.contracts import (
 )
 from monitoring_common.contracts import matched_registry_entity_ids as matched_registry_ids
 
-PIPELINE_VERSION = "inference_v4_7"
+PIPELINE_VERSION = "inference_v4_4"
 
 
 def matched_monitored_entity_ids(post_text: str, aliases: Sequence[Mapping[str, Any]]) -> list[int]:
@@ -388,8 +388,6 @@ def classification_items(
 
 
 OTHER_ACTOR = "інший актор або ніхто з переліку"
-# Targets-pass lists and the Ukrainian direction hint each one gives Pass 3.
-TARGET_DIRECTIONS = {"criticized": "критикує", "supported": "підтримує"}
 
 
 def target_request(
@@ -435,23 +433,20 @@ def split_by_targets(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Return pairs whose target the source evaluates, and `відсутнє` rows for the others.
 
-    Each pair sent to Pass 3 carries the targets pass's direction as ``evaluation`` («критикує»,
-    «підтримує» or both), a hint Pass 3 checks against the text. Without valid targets decisions
-    every pair is classified, as before v4.
+    Without valid targets decisions every pair is classified, as before v4.
     """
     if decisions is None:
         return [dict(item) for item in items], []
-    directions: dict[tuple[Any, Any], list[str]] = {}
-    for claim_id, decision in cast(Mapping[str, Any], decisions["claims"]).items():
-        for field, label in TARGET_DIRECTIONS.items():
-            for name in cast(Mapping[str, Any], decision)[field]:
-                directions.setdefault((claim_id, name), []).append(label)
+    evaluated = {
+        (claim_id, name)
+        for claim_id, decision in cast(Mapping[str, Any], decisions["claims"]).items()
+        for name in cast(Mapping[str, Any], decision)["evaluated"]
+    }
     to_classify: list[dict[str, Any]] = []
     absent: list[dict[str, Any]] = []
     for item in items:
-        labels = directions.get((item["claim_id"], item["target"]))
-        if labels:
-            to_classify.append({**item, "evaluation": " і ".join(labels)})
+        if (item["claim_id"], item["target"]) in evaluated:
+            to_classify.append(dict(item))
         else:
             absent.append(
                 {

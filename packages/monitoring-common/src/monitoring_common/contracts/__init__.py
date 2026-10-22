@@ -2,7 +2,6 @@
 
 from monitoring_common.contracts.inference_v3 import (
     SCHEMA_VERSIONS,
-    TARGET_LISTS,
     InferenceValidationError,
     PassName,
     SanitizedPayload,
@@ -38,7 +37,6 @@ __all__ = [
     "PassName",
     "SanitizedPayload",
     "SCHEMA_VERSIONS",
-    "TARGET_LISTS",
     "ValidationIssue",
     "alias_occurs",
     "foreign_state_context",

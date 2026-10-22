@@ -46,13 +46,7 @@ def pass_payloads() -> dict[str, dict[str, Any]]:
             ]
         },
         "targets": {
-            "claims": {
-                "c1": {
-                    "reason": "канал оцінює Шабуніна",
-                    "criticized": ["Віталій Шабунін"],
-                    "supported": [],
-                }
-            }
+            "claims": {"c1": {"reason": "канал оцінює Шабуніна", "evaluated": ["Віталій Шабунін"]}}
         },
         "classification": {
             "classifications": [
@@ -154,7 +148,7 @@ async def test_worker_runs_three_passes_and_persists_final_result() -> None:
     assert await worker.process_next() is True
     assert repository.failures == []
     assert repository.completed is not None
-    assert repository.completed["pipeline_version"] == "inference_v4_7"
+    assert repository.completed["pipeline_version"] == "inference_v4_4"
     assert repository.entities[0]["registry_entity_id"] == 10
     assert [item[:2] for item in repository.attempts] == [
         ("candidates", "primary"),
@@ -376,9 +370,7 @@ async def test_worker_salvages_complete_entity_groups_without_repair() -> None:
 
 async def test_worker_marks_unevaluated_targets_absent_without_classification() -> None:
     payloads = pass_payloads()
-    payloads["targets"] = {
-        "claims": {"c1": {"reason": "нікого", "criticized": [], "supported": []}}
-    }
+    payloads["targets"] = {"claims": {"c1": {"reason": "нікого", "evaluated": []}}}
     repository = FakeRepository()
     worker = AnalysisWorker(
         repository,  # type: ignore[arg-type]

@@ -449,12 +449,8 @@ TARGET_CLAIMS = [
 def test_targets_validation_requires_each_claim_and_offered_actors() -> None:
     valid = {
         "claims": {
-            "c1": {
-                "reason": "критикує Шабуніна",
-                "criticized": ["Віталій Шабунін"],
-                "supported": [],
-            },
-            "c2": {"reason": "нікого", "criticized": [], "supported": []},
+            "c1": {"reason": "критикує Шабуніна", "evaluated": ["Віталій Шабунін"]},
+            "c2": {"reason": "нікого", "evaluated": []},
         }
     }
     validate_pass("targets", valid, TEXT, TARGET_CLAIMS)
@@ -463,10 +459,7 @@ def test_targets_validation_requires_each_claim_and_offered_actors() -> None:
         validate_pass("targets", {"claims": {"c1": valid["claims"]["c1"]}}, TEXT, TARGET_CLAIMS)
 
     unoffered = {
-        "claims": {
-            **valid["claims"],
-            "c2": {"reason": "x", "criticized": ["Віталій Шабунін"], "supported": []},
-        }
+        "claims": {**valid["claims"], "c2": {"reason": "x", "evaluated": ["Віталій Шабунін"]}}
     }
     with pytest.raises(InferenceValidationError, match="not offered in c2"):
         validate_pass("targets", unoffered, TEXT, TARGET_CLAIMS)
@@ -475,16 +468,14 @@ def test_targets_validation_requires_each_claim_and_offered_actors() -> None:
 def test_targets_sanitizer_drops_unknown_claims_and_unoffered_actors() -> None:
     payload = {
         "claims": {
-            "c1": {"reason": "x", "criticized": ["ЦПК", "ЦПК", "НАБУ"], "supported": []},
-            "c9": {"reason": "x", "criticized": [], "supported": []},
+            "c1": {"reason": "x", "evaluated": ["ЦПК", "ЦПК", "НАБУ"]},
+            "c9": {"reason": "x", "evaluated": []},
         }
     }
 
     result = sanitize_pass_payload_with_actions("targets", payload, TEXT, TARGET_CLAIMS)
 
-    assert result.payload == {
-        "claims": {"c1": {"reason": "x", "criticized": ["ЦПК"], "supported": []}}
-    }
+    assert result.payload == {"claims": {"c1": {"reason": "x", "evaluated": ["ЦПК"]}}}
     assert [action["action"] for action in result.actions] == [
         "dropped_unoffered_actor",
         "dropped_unknown_claim",
@@ -496,7 +487,6 @@ def test_targets_generation_schema_limits_each_claim_to_its_actors() -> None:
 
     claims = schema["properties"]["claims"]
     assert claims["required"] == ["c1", "c2"]
-    c2 = claims["properties"]["c2"]["properties"]
-    assert c2["criticized"]["items"]["enum"] == ["ЦПК", "інший актор"]
-    assert c2["supported"]["items"]["enum"] == ["ЦПК", "інший актор"]
+    c2_items = claims["properties"]["c2"]["properties"]["evaluated"]["items"]
+    assert c2_items["enum"] == ["ЦПК", "інший актор"]
     assert "enum" not in str(load_inference_schema("targets"))

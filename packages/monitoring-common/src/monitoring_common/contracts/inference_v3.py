@@ -25,7 +25,7 @@ SCHEMA_VERSIONS: dict[PassName, str] = {
     "candidates": "inference_v3_candidates_v1",
     "entities": "inference_v3_entities_v1",
     "claims": "inference_v3_claims_v4",
-    "targets": "inference_v3_targets_v3",
+    "targets": "inference_v3_targets_v2",
     "classification": "inference_v3_classification_v1",
 }
 
@@ -402,10 +402,6 @@ def _sanitize_candidate_decisions(
     return kept
 
 
-# The targets pass names the actors a claim source criticizes and those it supports.
-TARGET_LISTS = ("criticized", "supported")
-
-
 def _sanitize_target_decisions(
     decisions: dict[str, Any],
     claims: Sequence[Mapping[str, Any]],
@@ -420,11 +416,9 @@ def _sanitize_target_decisions(
         if claim_id not in allowed:
             actions.append({"action": "dropped_unknown_claim", "claim_id": claim_id})
             continue
-        for field in TARGET_LISTS:
-            if not isinstance(decision, dict) or not isinstance(decision.get(field), list):
-                continue
+        if isinstance(decision, dict) and isinstance(decision.get("evaluated"), list):
             names: list[Any] = []
-            for name in decision[field]:
+            for name in decision["evaluated"]:
                 if name in names:
                     continue
                 if isinstance(name, str) and name not in allowed[claim_id]:
@@ -433,7 +427,7 @@ def _sanitize_target_decisions(
                     )
                     continue
                 names.append(name)
-            decision = {**decision, field: names}
+            decision = {**decision, "evaluated": names}
         kept[claim_id] = decision
     return kept
 
@@ -682,11 +676,10 @@ def generation_schema(pass_name: PassName, request: Mapping[str, Any]) -> dict[s
         properties = {}
         for claim in claims:
             claim_decision = deepcopy(decision)
-            for field in TARGET_LISTS:
-                claim_decision["properties"][field]["items"] = {
-                    "type": "string",
-                    "enum": list(claim["actors"]),
-                }
+            claim_decision["properties"]["evaluated"]["items"] = {
+                "type": "string",
+                "enum": list(claim["actors"]),
+            }
             properties[cast(str, claim["claim_id"])] = claim_decision
         schema["properties"]["claims"] = {
             "type": "object",
@@ -788,8 +781,7 @@ def _validate_targets(payload: Mapping[str, Any], claims: Sequence[Mapping[str, 
             issues.append(ValidationIssue("reference_failure", f"missing claim: {claim_id}"))
             continue
         allowed = set(cast(list[str], claim["actors"]))
-        names = [name for field in TARGET_LISTS for name in decisions[claim_id][field]]
-        for name in cast(list[str], names):
+        for name in cast(list[str], decisions[claim_id]["evaluated"]):
             if name not in allowed:
                 issues.append(
                     ValidationIssue(
