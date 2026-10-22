@@ -257,25 +257,15 @@ def test_merge_focused_claims_unites_entities_of_the_same_quote_and_source() -> 
     assert merged["claims"][0]["normalized_text"] == "НАБУ відбілює ЦПК."
 
 
-def test_split_by_targets_hints_the_direction_and_marks_the_rest_absent() -> None:
+def test_split_by_targets_classifies_criticized_and_supported_actors_only() -> None:
     items = [
         {"claim_id": "c1", "entity_id": "e1", "target": "СБУ"},
         {"claim_id": "c1", "entity_id": "e2", "target": "НАБУ"},
         {"claim_id": "c1", "entity_id": "e3", "target": "ЦПК"},
     ]
-    decisions = {
-        "claims": {
-            "c1": {"reason": "x", "criticized": ["НАБУ", "ЦПК"], "supported": ["СБУ", "ЦПК"]}
-        }
-    }
+    decisions = {"claims": {"c1": {"reason": "x", "criticized": ["НАБУ"], "supported": ["СБУ"]}}}
 
     to_classify, absent = split_by_targets(items, decisions)
 
-    assert [(item["target"], item["evaluation"]) for item in to_classify] == [
-        ("СБУ", "підтримує"),
-        ("НАБУ", "критикує"),
-        ("ЦПК", "критикує і підтримує"),
-    ]
-    assert absent == []
-    _, absent = split_by_targets(items, {"claims": {"c1": {"criticized": [], "supported": []}}})
-    assert [row["stance"] for row in absent] == ["відсутнє"] * 3
+    assert to_classify == items[:2]
+    assert absent == [{"claim_id": "c1", "entity_id": "e3", "stance": "відсутнє", "rhetoric": []}]

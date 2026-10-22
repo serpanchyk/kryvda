@@ -43,7 +43,8 @@ def test_targets_prompt_separates_criticized_and_supported_actors() -> None:
     assert "ВАКС підтримують, САП і НАБУ критикують" in TARGET_PROMPT
     assert "У полемічних постах розрізняй сторони" in TARGET_PROMPT
     assert "criticized і supported" in TARGET_PROMPT
-    assert PROMPT_VERSIONS["targets"] == "inference_v3_targets_prompt_v5"
+    assert "це не підтримка" in TARGET_PROMPT
+    assert PROMPT_VERSIONS["targets"] == "inference_v3_targets_prompt_v6"
 
 
 def test_classification_prompt_counts_a_positive_context_as_positive() -> None:
@@ -51,6 +52,6 @@ def test_classification_prompt_counts_a_positive_context_as_positive() -> None:
     assert "учасник чи об'єкт негативної події" in CLASSIFICATION_PROMPT
     assert "у позитивному світлі, навіть без прямої похвали" in CLASSIFICATION_PROMPT
     assert "результати опитувань" not in CLASSIFICATION_PROMPT
-    assert "evaluation — попередній висновок" in CLASSIFICATION_PROMPT
+    assert "evaluation" not in CLASSIFICATION_PROMPT
     assert "не є негативом до СБУ" in CLASSIFICATION_PROMPT
-    assert PROMPT_VERSIONS["classification"] == "inference_v3_classification_prompt_v9"
+    assert PROMPT_VERSIONS["classification"] == "inference_v3_classification_prompt_v10"
