@@ -78,6 +78,11 @@ announcement of its successes, or a routine action the post frames favourably. O
 informational mention stays `neutral`. The extension and test annotations originally put all of
 these in `neutral`, so every neutral stance record of all partitions was re-reviewed by Claude
 subagents (blind to model outputs) and the changes appended to `data/stance_relabel_log.jsonl`.
+On 2026-10-22 the owner adjudicated 40 dev disagreements between Mamay v4.4 and the gold
+(`extension/adjudication_v4_4`): the gold was right on 17 of 21 decided negative pairs but on
+only 8 of 15 positive ones, because self-presentation and received support had stayed neutral.
+A second blind pass with that calibration (`extension/relabel_v3_work`, convention
+`positive_context_v3_owner_calibrated`) turned 155 more neutral records positive.
 
 ```bash
 uv run python experiments/datasets/golden_v0/src/golden_v0_stance_relabel.py export

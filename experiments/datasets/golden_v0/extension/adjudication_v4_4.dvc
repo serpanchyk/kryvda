@@ -1,0 +1,6 @@
+outs:
+- md5: 53734bc83d8f5a2d8620e67bae6014b0.dir
+  size: 74985
+  nfiles: 2
+  hash: md5
+  path: adjudication_v4_4

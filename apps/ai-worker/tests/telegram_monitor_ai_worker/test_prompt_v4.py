@@ -37,13 +37,13 @@ def test_claim_prompt_keeps_background_entities_out_of_claim_targets() -> None:
     assert PROMPT_VERSIONS["claims"] == "inference_v3_claims_prompt_v9"
 
 
-def test_targets_prompt_asks_for_every_evaluated_actor_by_name() -> None:
+def test_targets_prompt_separates_criticized_and_supported_actors() -> None:
     assert "actors — усі актори твердження" in TARGET_PROMPT
     assert "«інший актор або ніхто з\nпереліку»" in TARGET_PROMPT
-    assert "оцінюються ВАКС, САП і НАБУ" in TARGET_PROMPT
-    assert "імена з actors УСІХ, кого оцінюють" in TARGET_PROMPT
-    assert "вигідне подання актора — теж оцінка" in TARGET_PROMPT
-    assert PROMPT_VERSIONS["targets"] == "inference_v3_targets_prompt_v4"
+    assert "ВАКС підтримують, САП і НАБУ критикують" in TARGET_PROMPT
+    assert "У полемічних постах розрізняй сторони" in TARGET_PROMPT
+    assert "criticized і supported" in TARGET_PROMPT
+    assert PROMPT_VERSIONS["targets"] == "inference_v3_targets_prompt_v5"
 
 
 def test_classification_prompt_counts_a_positive_context_as_positive() -> None:
@@ -51,4 +51,6 @@ def test_classification_prompt_counts_a_positive_context_as_positive() -> None:
     assert "учасник чи об'єкт негативної події" in CLASSIFICATION_PROMPT
     assert "у позитивному світлі, навіть без прямої похвали" in CLASSIFICATION_PROMPT
     assert "результати опитувань" not in CLASSIFICATION_PROMPT
-    assert PROMPT_VERSIONS["classification"] == "inference_v3_classification_prompt_v8"
+    assert "evaluation — попередній висновок" in CLASSIFICATION_PROMPT
+    assert "не є негативом до СБУ" in CLASSIFICATION_PROMPT
+    assert PROMPT_VERSIONS["classification"] == "inference_v3_classification_prompt_v9"

@@ -50,8 +50,8 @@ from telegram_monitor_ai_worker.pipeline import (
 )
 
 DEFAULT_ANNOTATIONS = Path("experiments/datasets/golden_v0/data/annotations.jsonl")
-DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v4_4/comparisons.jsonl")
-DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v4_3/comparisons.jsonl")
+DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v4_5/comparisons.jsonl")
+DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v4_4/comparisons.jsonl")
 # The tuned old55 partition is defined by the preserved 55-example v3.5 run, not by the baseline.
 OLD55_REFERENCE = Path("experiments/dspy/data/mamay_vs_golden_v3_5/comparisons.jsonl")
 DEFAULT_SEED = Path("infra/postgres/init/003_registry_seed.sql")

@@ -42,8 +42,11 @@ def _overlaps(left: Sequence[Mapping[str, int]], right: Sequence[Mapping[str, in
     return any(a["start"] < b["end"] and b["start"] < a["end"] for a in left for b in right)
 
 
-def review_items(record: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """Return one review item per neutral stance record of an annotated example."""
+def review_items(record: Mapping[str, Any], self_only: bool = False) -> list[dict[str, Any]]:
+    """Return one review item per neutral stance record of an annotated example.
+
+    ``self_only`` keeps only self-presentation: records whose perspective is the entity itself.
+    """
     text = record["source"]["text"]
     annotations = record["annotations"]
     entities = {entity["id"]: entity for entity in annotations["entities"]}
@@ -56,10 +59,12 @@ def review_items(record: Mapping[str, Any]) -> list[dict[str, Any]]:
 
     items = []
     for index, stance in enumerate(annotations["stances"]):
-        if stance["value"] != "neutral":
+        perspective = stance["perspective"]
+        if stance["value"] != "neutral" or (
+            self_only and perspective.get("source_entity_id") != stance["entity_id"]
+        ):
             continue
         spans = stance["evidence_spans"]
-        perspective = stance["perspective"]
         items.append(
             {
                 "item_id": f"{record['example_id']}:s{index}",
@@ -78,7 +83,9 @@ def review_items(record: Mapping[str, Any]) -> list[dict[str, Any]]:
     return items
 
 
-def export(records: Sequence[Mapping[str, Any]], work: Path, batches: int) -> list[int]:
+def export(
+    records: Sequence[Mapping[str, Any]], work: Path, batches: int, self_only: bool = False
+) -> list[int]:
     """Write review batches of whole posts with roughly equal item counts.
 
     Returns:
@@ -87,7 +94,7 @@ def export(records: Sequence[Mapping[str, Any]], work: Path, batches: int) -> li
     posts = [
         {"example_id": record["example_id"], "text": record["source"]["text"], "items": items}
         for record in records
-        if (items := review_items(record))
+        if (items := review_items(record, self_only))
     ]
     target = sum(len(post["items"]) for post in posts) / batches
     groups: list[list[dict[str, Any]]] = [[]]
@@ -126,7 +133,12 @@ def load_decisions(work: Path) -> dict[str, dict[str, str]]:
     return decisions
 
 
-def apply(data: Path, decisions: Mapping[str, Mapping[str, str]], changed_at: str) -> int:
+def apply(
+    data: Path,
+    decisions: Mapping[str, Mapping[str, str]],
+    changed_at: str,
+    convention: str = CONVENTION,
+) -> int:
     """Save positive decisions through the editor and log them; reruns are idempotent.
 
     Returns:
@@ -157,7 +169,7 @@ def apply(data: Path, decisions: Mapping[str, Mapping[str, str]], changed_at: st
                     "from": "neutral",
                     "to": "positive",
                     "reason": decision["reason"],
-                    "convention": CONVENTION,
+                    "convention": convention,
                     "changed_at": changed_at,
                 }
             )
@@ -180,7 +192,10 @@ def main(arguments: Sequence[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     exporter = commands.add_parser("export")
     exporter.add_argument("--batches", type=int, default=8)
-    for command in (exporter, commands.add_parser("apply")):
+    exporter.add_argument("--self-only", action="store_true", help="only self-presentation")
+    applier = commands.add_parser("apply")
+    applier.add_argument("--convention", default=CONVENTION)
+    for command in (exporter, applier):
         command.add_argument("--work", type=Path, default=WORK)
         command.add_argument("--data", type=Path, default=DATA)
     args = parser.parse_args(arguments)
@@ -189,11 +204,14 @@ def main(arguments: Sequence[str] | None = None) -> int:
             json.loads(line)
             for line in (args.data / "annotations.jsonl").read_text(encoding="utf-8").splitlines()
         ]
-        sizes = export(records, args.work, args.batches)
+        sizes = export(records, args.work, args.batches, args.self_only)
         sys.stdout.write(f"Exported {sum(sizes)} neutral stance records: {sizes}\n")
         return 0
     changed = apply(
-        args.data, load_decisions(args.work), datetime.now(UTC).isoformat(timespec="seconds")
+        args.data,
+        load_decisions(args.work),
+        datetime.now(UTC).isoformat(timespec="seconds"),
+        args.convention,
     )
     sys.stdout.write(f"Relabelled {changed} stance records neutral -> positive\n")
     return 0
