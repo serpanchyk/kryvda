@@ -67,7 +67,12 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   channel's negative stance toward that target.
 - The supplied 128-entry registry seed is active and monitored. Approved aliases alone drive
   filtering and resolution. Registry expansion backfills only the latest accessible revision of
-  each stored post.
+  each stored post. Migration 015 adds 896 aliases (Russian names, abbreviations, colloquial
+  names, nicknames, insults and collective forms; `experiments/registry_aliases`), raising
+  golden test-split mention recall from 86.5% to 99.0% and the share of sampled stored posts
+  that pass the prefilter from 27% to 38%. One alias may now name several entities; the
+  candidates pass picks the one a post means, and the implicit person surname comes only from
+  the canonical name. The migration does not enqueue re-analysis of stored posts.
 - The AI worker runs 16 jobs with at most 16 PostgreSQL-coordinated provider requests; Pass 3
   batch concurrency stays 1. A 2026-10-09 benchmark ran 8 concurrent requests per process without
   provider errors at about five times the single-request throughput. API `/analysis/health`

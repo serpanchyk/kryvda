@@ -68,3 +68,17 @@ def test_v3_base_schema_can_retain_partial_transition_registry() -> None:
 
     assert "CREATE TABLE IF NOT EXISTS registry_entities" in content
     assert "CREATE TABLE IF NOT EXISTS inference_pass_attempts" in content
+
+
+def test_registry_alias_migration_allows_shared_aliases_and_is_registered() -> None:
+    migration = (POSTGRES_ROOT / "migrations" / "015_registry_aliases.sql").read_text()
+    runner = (POSTGRES_ROOT / "migrate.sql").read_text()
+    fresh_init = (POSTGRES_ROOT / "init" / "015_registry_aliases.sql").read_text()
+
+    assert "DROP CONSTRAINT IF EXISTS entity_aliases_normalized_alias_key" in migration
+    assert "UNIQUE (entity_id, normalized_alias)" in migration
+    assert "Руслан Кравченко\tКравченко\n" in migration
+    assert "Станіслав Кравченко\tКравченко\n" in migration
+    assert "Кирило Буданов\tБуда\n" not in migration
+    assert "\\i /database/migrations/015_registry_aliases.sql" in runner
+    assert "'015_registry_aliases.sql'" in fresh_init

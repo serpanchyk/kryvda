@@ -167,7 +167,8 @@ class CollectionRepository:
                 json.dumps(post.attachments),
             )
             aliases = await connection.fetch(
-                """SELECT entity.id AS entity_id, entity.coarse_type, entity.monitored, alias.alias
+                """SELECT entity.id AS entity_id, entity.canonical_name, entity.coarse_type,
+                          entity.monitored, alias.alias
                    FROM entity_aliases AS alias
                    JOIN registry_entities AS entity ON entity.id = alias.entity_id
                    WHERE entity.monitored"""

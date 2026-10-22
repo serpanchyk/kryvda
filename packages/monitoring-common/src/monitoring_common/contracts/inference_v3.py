@@ -127,7 +127,7 @@ def matched_registry_entity_ids(
 ) -> list[int]:
     """Return entities admitted by direct aliases or unique person-surname forms.
 
-    A surname inferred from a multi-token person alias is safe only when it maps to one eligible
+    A surname taken from a person's canonical name is safe only when it maps to one eligible
     registry entity. This admits inflected surname-only Telegram mentions without guessing among
     people who share a surname.
     """
@@ -137,16 +137,27 @@ def matched_registry_entity_ids(
     }
     surname_owners: dict[str, set[int]] = {}
     for row in eligible:
-        if row.get("coarse_type") != "person":
-            continue
-        tokens = _word_tokens(cast(str, row["alias"]))
-        if len(tokens) < 2 or len(tokens[-1]) < 4:
-            continue
-        surname_owners.setdefault(tokens[-1], set()).add(int(row["entity_id"]))
+        surname = _registry_surname(row)
+        if surname is not None:
+            surname_owners.setdefault(surname, set()).add(int(row["entity_id"]))
     for surname, owners in surname_owners.items():
         if len(owners) == 1 and alias_occurs(source_text, surname):
             matched.update(owners)
     return sorted(matched)
+
+
+def _registry_surname(row: Mapping[str, Any]) -> str | None:
+    """Return the surname implied by a person's canonical name, if long enough to be safe.
+
+    Only the canonical name counts: descriptive aliases (``мер Києва``) and reversed ones
+    (``Корецький Сергій``) would otherwise turn a city or a first name into a "surname".
+    """
+    if row.get("coarse_type") != "person":
+        return None
+    tokens = _word_tokens(cast(str, row.get("canonical_name") or row["alias"]))
+    if len(tokens) < 2 or len(tokens[-1]) < 4:
+        return None
+    return tokens[-1]
 
 
 def matched_registry_entities(
@@ -161,14 +172,8 @@ def matched_registry_entities(
         for row in rows:
             surfaces.extend(_registry_alias_surfaces(source_text, row))
         if not surfaces:
-            surname_rows = [
-                row
-                for row in rows
-                if row.get("coarse_type") == "person"
-                and len(_word_tokens(cast(str, row["alias"]))) >= 2
-            ]
-            for row in surname_rows:
-                surname = _word_tokens(cast(str, row["alias"]))[-1]
+            surnames = {surname for row in rows if (surname := _registry_surname(row))}
+            for surname in surnames:
                 surfaces.extend(_alias_surfaces(source_text, surname))
         mentions: list[str] = []
         for _, surface in sorted(set(surfaces)):
@@ -252,16 +257,11 @@ def resolve_registry_mention(
     matches = exact or [row for row in aliases if _registry_alias_occurs(mention, row)]
     entity_ids = {int(row["entity_id"]) for row in matches}
     if not entity_ids:
-        surname_matches = []
-        for row in aliases:
-            tokens = _word_tokens(cast(str, row["alias"]))
-            if (
-                row.get("coarse_type") == "person"
-                and len(tokens) >= 2
-                and len(tokens[-1]) >= 4
-                and alias_occurs(mention, tokens[-1])
-            ):
-                surname_matches.append(row)
+        surname_matches = [
+            row
+            for row in aliases
+            if (surname := _registry_surname(row)) is not None and alias_occurs(mention, surname)
+        ]
         entity_ids = {int(row["entity_id"]) for row in surname_matches}
         matches = surname_matches
     if len(entity_ids) != 1:
@@ -278,12 +278,21 @@ def _inflection_forms(token: str) -> frozenset[str]:
     forms = {normalized}
     if normalized.endswith(("ій", "ий", "ый")):
         stem = normalized[:-2]
-        forms.update(stem + suffix for suffix in ("ого", "ому", "им", "ым", "ім"))
+        forms.update(stem + suffix for suffix in ("ого", "ому", "им", "ым", "ім", "ом"))
         if normalized.endswith("ій"):
             forms.update(stem + suffix for suffix in ("ія", "ію", "ієм", "ієві"))
+    elif normalized.endswith(("ая", "яя")):
+        stem = normalized[:-2]
+        forms.update(stem + suffix for suffix in ("ой", "ей", "ую", "юю", "ою", "ею"))
+    elif normalized.endswith(("ое", "ее")):
+        stem = normalized[:-2]
+        forms.update(stem + suffix for suffix in ("ого", "его", "ому", "ему", "ым", "им", "ом"))
+    elif normalized.endswith("ия"):
+        stem = normalized[:-2]
+        forms.update(stem + suffix for suffix in ("ии", "ию", "ией"))
     elif normalized.endswith("а"):
         stem = normalized[:-1]
-        forms.update(stem + suffix for suffix in ("и", "і", "у", "ою", "е", "о"))
+        forms.update(stem + suffix for suffix in ("и", "і", "у", "ою", "е", "о", "ы", "ой"))
         if normalized.endswith(("ська", "цька", "зька", "на", "ва", "ла", "ра")):
             forms.update(stem + suffix for suffix in ("ої", "ій"))
     elif normalized.endswith("я"):
@@ -300,7 +309,8 @@ def _inflection_forms(token: str) -> frozenset[str]:
         forms.update(stem + suffix for suffix in ("я", "ю", "ем", "єм", "і", "е"))
     elif re.search(r"[бвгґджзклмнпрстфхцчшщ]$", normalized):
         forms.update(
-            normalized + suffix for suffix in ("а", "у", "ом", "ем", "ім", "им", "і", "ові", "еві")
+            normalized + suffix
+            for suffix in ("а", "у", "ом", "ем", "ім", "им", "і", "ові", "еві", "е")
         )
     return frozenset(forms)
 

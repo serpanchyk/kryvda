@@ -50,6 +50,7 @@ from telegram_monitor_ai_worker.pipeline import (
 )
 
 DEFAULT_ANNOTATIONS = Path("experiments/datasets/golden_v0/data/annotations.jsonl")
+DEFAULT_ALIAS_ADDITIONS = Path("infra/postgres/init/015_registry_aliases.sql")
 DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v4_4/comparisons.jsonl")
 DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v4_3/comparisons.jsonl")
 # The tuned old55 partition is defined by the preserved 55-example v3.5 run, not by the baseline.
@@ -90,14 +91,26 @@ def load_annotations(path: Path) -> list[dict[str, Any]]:
     return records
 
 
-def load_seed_aliases(path: Path) -> list[dict[str, Any]]:
-    """Read the SQL COPY seed into the same shape as the production registry query."""
+def load_seed_aliases(
+    path: Path, additions: Path | None = DEFAULT_ALIAS_ADDITIONS
+) -> list[dict[str, Any]]:
+    """Read the SQL COPY seed, plus the migration-015 alias additions, like the registry query."""
     content = path.read_text(encoding="utf-8")
     copy_data = content.split("FROM stdin;\n", 1)[1].split("\n\\.\n", 1)[0]
+    extra: dict[str, list[str]] = {}
+    if additions is not None and additions.exists():
+        added = additions.read_text(encoding="utf-8").split("FROM stdin;\n", 1)[1]
+        for line in added.split("\n\\.\n", 1)[0].splitlines():
+            name, alias = line.split("\t")
+            extra.setdefault(name, []).append(alias)
     rows: list[dict[str, Any]] = []
     for entity_id, line in enumerate(copy_data.splitlines(), start=1):
         canonical_name, coarse_type, raw_aliases = line.split("\t")
-        aliases = [canonical_name, *(value.strip() for value in raw_aliases.split(";"))]
+        aliases = [
+            canonical_name,
+            *(value.strip() for value in raw_aliases.split(";")),
+            *extra.get(canonical_name, []),
+        ]
         normalized_seen: set[str] = set()
         for alias in aliases:
             normalized = " ".join(alias.casefold().split())

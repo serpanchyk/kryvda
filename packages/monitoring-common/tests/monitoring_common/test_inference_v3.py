@@ -490,3 +490,50 @@ def test_targets_generation_schema_limits_each_claim_to_its_actors() -> None:
     c2_items = claims["properties"]["c2"]["properties"]["evaluated"]["items"]
     assert c2_items["enum"] == ["ЦПК", "інший актор"]
     assert "enum" not in str(load_inference_schema("targets"))
+
+
+def _person(entity_id: int, canonical_name: str, *aliases: str) -> list[dict[str, object]]:
+    return [
+        {
+            "entity_id": entity_id,
+            "canonical_name": canonical_name,
+            "coarse_type": "person",
+            "monitored": True,
+            "alias": alias,
+        }
+        for alias in (canonical_name, *aliases)
+    ]
+
+
+def test_implicit_surname_comes_only_from_the_canonical_name() -> None:
+    aliases = [
+        *_person(1, "Віталій Кличко", "мер Києва"),
+        *_person(2, "Сергій Корецький", "Корецький Сергій"),
+    ]
+
+    assert matched_registry_entity_ids("У Києві знову вимкнули світло.", aliases) == []
+    assert matched_registry_entity_ids("Сергій Притула зібрав гроші.", aliases) == []
+    assert matched_registry_entity_ids("Кличка критикують за світло.", aliases) == [1]
+    assert matched_registry_entity_ids("Мер Києва заявив про світло.", aliases) == [1]
+
+
+def test_shared_surname_alias_admits_every_entity_that_carries_it() -> None:
+    aliases = [
+        *_person(1, "Руслан Кравченко", "Кравченко"),
+        *_person(2, "Станіслав Кравченко", "Кравченко"),
+    ]
+
+    assert matched_registry_entity_ids("Кравченко підписав підозру.", aliases) == [1, 2]
+
+
+@pytest.mark.parametrize(
+    ("text", "alias"),
+    [
+        ("Украинской правды", "Украинская правда"),
+        ("в Кабмине", "Кабмин"),
+        ("полиции", "полиция"),
+        ("Офиса президента", "Офис президента"),
+    ],
+)
+def test_alias_occurs_matches_russian_case_forms(text: str, alias: str) -> None:
+    assert alias_occurs(text, alias)

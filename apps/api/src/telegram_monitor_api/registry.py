@@ -247,7 +247,8 @@ class RegistryRepository:
         connection: asyncpg.Connection, entity_id: int, trigger_kind: str
     ) -> int:
         aliases = await connection.fetch(
-            """SELECT entity.id AS entity_id, entity.coarse_type, entity.monitored, alias.alias
+            """SELECT entity.id AS entity_id, entity.canonical_name, entity.coarse_type,
+                      entity.monitored, alias.alias
                FROM registry_entities AS entity
                JOIN entity_aliases AS alias ON alias.entity_id = entity.id
                WHERE entity.monitored"""
