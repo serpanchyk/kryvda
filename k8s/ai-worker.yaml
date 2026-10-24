@@ -27,7 +27,7 @@ spec:
       - name: ghcr-secret
       containers:
       - name: ai-worker
-        image: ghcr.io/serpanchyk/kryvda-ai-worker:sha-a7a5e1502fcdd7d12bb8092e81ac7ed225d2b1e5
+        image: ghcr.io/serpanchyk/kryvda-ai-worker:sha-9b2c039423338cec6166d13f8d6af035a1790fb0
         env:
         - name: POSTGRES_DSN
           valueFrom:
