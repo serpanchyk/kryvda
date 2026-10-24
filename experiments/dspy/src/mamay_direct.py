@@ -51,8 +51,8 @@ from telegram_monitor_ai_worker.pipeline import (
 )
 from telegram_monitor_ai_worker.prompt import COMMON
 
-PIPELINE_VERSION = "direct_v1"
-DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_direct_v1/comparisons.jsonl")
+PIPELINE_VERSION = "direct_v2"
+DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_direct_v2/comparisons.jsonl")
 RHETORIC = [
     "корупція_або_особиста_вигода",
     "злочинна_або_незаконна_поведінка",
@@ -130,6 +130,46 @@ DIRECT_SCHEMA: dict[str, Any] = {
 }
 
 
+VERIFY_PROMPT = f"""{COMMON}
+
+Завдання: тобі дають пост, сутність TARGET (mentions — форми, якими пост її називає), вид
+оцінки (kind: "атака" чи "похвала") і цитати з поста, які нібито містять цю оцінку TARGET. Для
+кожної цитати перевір, чи джерело в ній справді оцінює САМЕ TARGET саме так.
+
+Відповідай false, якщо: у цитаті атакують чи хвалять іншого актора, а TARGET лише згаданий
+поруч чи не згаданий узагалі; TARGET — жертва, свідок, адресат звернення, нейтральне тло чи
+сторона, яку захищають; TARGET сам критикує чи хвалить когось іншого; це нейтральна новина
+про дії, рішення чи підозру щодо TARGET без оцінки джерела; оцінку спростовують. Критика
+очільника, члена чи працівника TARGET, якого пост пов'язує з TARGET, — це атака на TARGET;
+займенник, що однозначно відсилає до TARGET, — теж TARGET.
+
+Для кожного quote_id спершу в reason коротко назви, кого і як оцінює джерело в цитаті, потім
+verdict: true лише тоді, коли цитата оцінює саме TARGET."""
+
+
+def verify_schema(quote_ids: Sequence[str]) -> dict[str, Any]:
+    """Require one verdict per offered quote."""
+    verdict = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["reason", "verdict"],
+        "properties": {"reason": {"type": "string"}, "verdict": {"type": "boolean"}},
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["quotes"],
+        "properties": {
+            "quotes": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": list(quote_ids),
+                "properties": {quote_id: verdict for quote_id in quote_ids},
+            }
+        },
+    }
+
+
 def grounded(quote: str, text: str) -> bool:
     """Whether a quote occurs in the post up to whitespace."""
     squash = lambda value: re.sub(r"\s+", " ", value).strip()  # noqa: E731
@@ -190,7 +230,7 @@ async def ask_entity(
         response = await client._request(  # noqa: SLF001
             cast(Any, "direct"),
             [{"role": "system", "content": DIRECT_PROMPT}, {"role": "user", "content": message}],
-            1024,
+            1536,
             DIRECT_SCHEMA,
         )
         record = {
@@ -206,6 +246,114 @@ async def ask_entity(
         except json.JSONDecodeError as error:
             attempts.append(record | {"status": "invalid", "error": str(error)})
     return None
+
+
+async def verify_answer(
+    client: LiteLlmInferenceClient,
+    text: str,
+    entity: Mapping[str, Any],
+    answer: Mapping[str, Any],
+    attempts: list[Any],
+) -> dict[str, Any]:
+    """Keep only the attack and praise quotes a narrow check confirms are about the entity.
+
+    An attack or praise whose every quote fails the check is dropped; one that has no grounded
+    quote at all cannot be checked and is dropped too.
+    """
+    verified = dict(answer)
+    for flag, key, kind in (("attacked", "attacks", "атака"), ("praised", "praises", "похвала")):
+        items = [item for item in answer.get(key, []) if grounded(item["quote"], text)]
+        if not answer.get(flag) or not items:
+            verified[flag], verified[key] = False, []
+            continue
+        quote_ids = [f"q{index + 1}" for index in range(len(items))]
+        request = {
+            "post_text": text,
+            "target": entity["canonical_name"],
+            "mentions": entity["mentions"],
+            "kind": kind,
+            "quotes": {qid: item["quote"] for qid, item in zip(quote_ids, items, strict=True)},
+        }
+        message = f"PASS: verify\nINPUT JSON:\n{json.dumps(request, ensure_ascii=False)}"
+        response = await client._request(  # noqa: SLF001
+            cast(Any, "verify"),
+            [{"role": "system", "content": VERIFY_PROMPT}, {"role": "user", "content": message}],
+            128 + 192 * len(items),
+            verify_schema(quote_ids),
+        )
+        record = {
+            "pass": "verify",
+            "entity": entity["canonical_name"],
+            "kind": kind,
+            "raw_output": response.raw_output,
+        }
+        try:
+            verdicts = json.loads(response.raw_output)["quotes"]
+            attempts.append(record | {"status": "valid", "parsed_payload": verdicts})
+        except (json.JSONDecodeError, KeyError, TypeError) as error:
+            attempts.append(record | {"status": "invalid", "error": str(error)})
+            continue
+        kept = [
+            item
+            for qid, item in zip(quote_ids, items, strict=True)
+            if verdicts.get(qid, {}).get("verdict") is True
+        ]
+        verified[flag], verified[key] = bool(kept), kept
+    return verified
+
+
+async def analyze_verified(
+    previous: Mapping[str, Any], client: LiteLlmInferenceClient
+) -> dict[str, Any]:
+    """Re-score one direct-v1 row: reuse its answers, re-ask broken ones, verify every stance."""
+    output = previous.get("final_output")
+    if previous.get("status") in ("filtered_out", "failed") or not output:
+        return dict(previous) | {
+            "run_metadata": {**previous["run_metadata"], "pipeline_version": PIPELINE_VERSION}
+        }
+    text = cast(str, previous["input"]["post_text"])
+    answers = {
+        a["entity"]: a["parsed_payload"]
+        for a in previous.get("attempts", [])
+        if a.get("pass") == "direct" and a.get("status") == "valid"
+    }
+    attempts: list[dict[str, Any]] = [
+        a for a in previous.get("attempts", []) if a.get("pass") != "direct"
+    ]
+    entities = output["entities"]
+    monitored = [entity for entity in entities if entity.get("monitored")]
+
+    async def one(entity: Mapping[str, Any]) -> dict[str, Any] | None:
+        answer = answers.get(entity["canonical_name"])
+        if answer is None:
+            answer = await ask_entity(client, text, entity, attempts)
+        if answer is None:
+            return None
+        return await verify_answer(client, text, entity, answer, attempts)
+
+    results = await asyncio.gather(*(one(entity) for entity in monitored))
+    claims: list[dict[str, Any]] = []
+    classifications: list[dict[str, Any]] = []
+    failed = []
+    for entity, answer in zip(monitored, results, strict=True):
+        if answer is None:
+            failed.append(entity["canonical_name"])
+            continue
+        new_claims, rows = direct_rows(entity, answer, text, len(claims))
+        claims.extend(new_claims)
+        classifications.extend(rows)
+    return dict(previous) | {
+        "status": "completed_with_failed_entities" if failed else "completed",
+        "run_metadata": {**previous["run_metadata"], "pipeline_version": PIPELINE_VERSION},
+        "attempts": attempts,
+        "final_output": {
+            "pipeline_version": PIPELINE_VERSION,
+            "entities": entities,
+            "claims": claims,
+            "classifications": classifications,
+            "failed_entities": failed,
+        },
+    }
 
 
 async def analyze_direct(
@@ -246,9 +394,14 @@ async def analyze_direct(
             decisions = None
         entities = admitted_entities(candidates, decisions, [], aliases, text)
         monitored = [entity for entity in entities if entity.get("monitored")]
-        answers = await asyncio.gather(
-            *(ask_entity(client, text, entity, attempts) for entity in monitored)
-        )
+
+        async def asked(entity: Mapping[str, Any]) -> dict[str, Any] | None:
+            answer = await ask_entity(client, text, entity, attempts)
+            if answer is None:
+                return None
+            return await verify_answer(client, text, entity, answer, attempts)
+
+        answers = await asyncio.gather(*(asked(entity) for entity in monitored))
         claims: list[dict[str, Any]] = []
         classifications: list[dict[str, Any]] = []
         failed = []
@@ -288,6 +441,11 @@ async def run(args: argparse.Namespace, logger: logging.Logger) -> None:
     annotations = select_split(
         load_annotations(args.annotations), args.split, heldout_example_ids(args.annotations)
     )
+    previous: dict[str, Mapping[str, Any]] = {}
+    if args.from_run is not None:
+        for line in args.from_run.read_text(encoding="utf-8").splitlines():
+            row = json.loads(line)
+            previous[row["input"]["example_id"]] = row
     aliases = load_seed_aliases(args.seed)
     done = completed_example_ids(args.output)
     queue: asyncio.Queue[Mapping[str, Any]] = asyncio.Queue()
@@ -306,6 +464,16 @@ async def run(args: argparse.Namespace, logger: logging.Logger) -> None:
         async def worker() -> None:
             while not queue.empty():
                 annotation = queue.get_nowait()
+                earlier = previous.get(annotation["example_id"])
+                if earlier is not None:
+                    row = await analyze_verified(earlier, client)
+                    output.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
+                    output.flush()
+                    logger.info(
+                        "comparison row written",
+                        extra={"example_id": annotation["example_id"], "status": row["status"]},
+                    )
+                    continue
                 row = await analyze_direct(annotation, aliases, client)
                 for attempt in range(2):
                     if not is_transient_failure(row):
@@ -332,6 +500,12 @@ def main(arguments: Sequence[str] | None = None) -> None:
     parser.add_argument("--concurrency", type=int, default=16)
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
+    parser.add_argument(
+        "--from-run",
+        type=Path,
+        default=None,
+        help="reuse the direct answers of an earlier run and only verify them",
+    )
     args = parser.parse_args(arguments)
     asyncio.run(run(args, setup_logging("telegram-monitor-mamay-direct-experiment")))
 
