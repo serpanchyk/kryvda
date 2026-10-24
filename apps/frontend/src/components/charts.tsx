@@ -245,10 +245,10 @@ export function TargetMap({ items, href, minimum = 5 }: { items: Summary[]; href
       </ScatterChart> : null}
     </div>
     <p className="mt-1 text-center text-xs text-muted-foreground"><TermLabel term={glossary.metric.evaluative}>Кількість оціночних класифікацій</TermLabel> (логарифмічна шкала) · вертикально — <TermLabel term={glossary.metric.negativeShare}>частка негативу</TermLabel> · розмір — кількість тверджень</p>
-    <section className="mt-5" data-export-ignore="true" aria-label="Мапа списком">
-      <h3 className="eyebrow mb-2">Мапа списком</h3>
-      <QuadrantList points={points} />
-    </section>
+    <details className="disclosure mt-4" data-export-ignore="true">
+      <summary>Мапа списком</summary>
+      <div className="pt-3"><QuadrantList points={points} /></div>
+    </details>
   </div>;
 }
 

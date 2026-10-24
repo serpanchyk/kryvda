@@ -313,12 +313,13 @@ export function Segmented<T extends string>({ options, value, onChange, label, c
   useEffect(() => {
     const node = root.current;
     if (!node || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => measure(false));
+    // Follow layout changes smoothly once the thumb exists; only the very first placement snaps.
+    const observer = new ResizeObserver(() => measure(true));
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
   return <div ref={root} role="group" aria-label={label} className={`segmented ${className}`} data-export-ignore="true">
     {thumb ? <span aria-hidden="true" className="segmented-thumb" style={{ width: thumb.w, transform: `translateX(${thumb.x - 3}px)`, left: 3, transition: thumb.animate ? undefined : "none" }} /> : null}
-    {options.map((option) => <button key={option.value} type="button" aria-pressed={value === option.value} onClick={() => onChange(option.value)} className={size === "sm" ? "!px-3 !py-1 !text-xs" : ""}>{option.label}</button>)}
+    {options.map((option) => <button key={option.value} type="button" aria-pressed={value === option.value} onClick={() => onChange(option.value)} data-label={typeof option.label === "string" ? option.label : undefined} className={`${typeof option.label === "string" ? "weight-stable" : ""} ${size === "sm" ? "!px-3 !py-1 !text-xs" : ""}`}>{option.label}</button>)}
   </div>;
 }

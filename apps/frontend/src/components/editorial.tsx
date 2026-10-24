@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useId, useLayoutEffect, useRef, useState, ty
 import { Dialog } from "@base-ui/react/dialog";
 import { ArrowDown, ArrowUp, CalendarDays, ChevronLeft, ChevronRight, Clock3, Download, Menu, RotateCw, X } from "lucide-react";
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useIsFetching } from "@tanstack/react-query";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceArea, ReferenceLine, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 
@@ -68,7 +69,8 @@ function NavCapsule() {
       key={item.to}
       end={item.to === "/"}
       to={navHref(item.to, params)}
-      className={({ isActive }) => `relative z-[1] rounded-full px-4 py-2 text-sm transition-[color,background-color] duration-200 ${isActive ? "is-active font-semibold text-foreground" : "font-medium text-muted-foreground hover:bg-white/50 hover:text-foreground"}`}
+      data-label={item.label}
+      className={({ isActive }) => `weight-stable relative z-[1] rounded-full px-4 py-2 text-sm transition-[color,background-color] duration-200 ${isActive ? "is-active font-semibold text-foreground" : "font-medium text-muted-foreground hover:bg-white/50 hover:text-foreground"}`}
     >{item.label}</NavLink>)}
   </nav>;
 }
@@ -91,9 +93,24 @@ function useScrolled(threshold = 12): boolean {
   return scrolled;
 }
 
+/** A thin line under the header while data refreshes; it overlays the page and moves nothing. */
+function FetchingLine() {
+  const fetching = useIsFetching() > 0;
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (!fetching) { setVisible(false); return; }
+    const timer = window.setTimeout(() => setVisible(true), 180);
+    return () => window.clearTimeout(timer);
+  }, [fetching]);
+  return <div aria-hidden="true" className={`pointer-events-none fixed inset-x-0 top-0 z-50 h-[3px] overflow-hidden transition-opacity duration-300 ${visible ? "opacity-100" : "opacity-0"}`}>
+    <div className="fetch-line h-full w-2/5 rounded-full bg-[linear-gradient(90deg,transparent,var(--negative-vivid),transparent)]" />
+  </div>;
+}
+
 export function Shell() {
   const scrolled = useScrolled();
   return <div className="relative min-h-dvh text-foreground">
+    <FetchingLine />
     <AsciiField />
     <LiquidLens />
     <a href="#main" className="sr-only z-50 rounded-full bg-ink px-4 py-2 font-semibold text-white focus:not-sr-only focus:fixed focus:left-4 focus:top-4">Перейти до змісту</a>

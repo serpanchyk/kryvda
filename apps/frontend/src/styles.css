@@ -59,6 +59,7 @@
 }
 
 :root {
+  interpolate-size: allow-keywords;
   --background: #e8eaef;
   --foreground: #0e0f12;
   --card: #ffffff;
@@ -226,6 +227,11 @@
   .segmented { @apply relative inline-grid auto-cols-fr grid-flow-col rounded-full p-[3px]; background: color-mix(in srgb, var(--foreground) 7%, transparent); }
   .segmented > button { @apply relative z-[1] whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-medium text-foreground transition-colors; }
   .segmented > button[aria-pressed="true"] { @apply font-semibold; }
+  /* Reserve the bold width so a label never shifts its neighbours when it becomes active. */
+  .weight-stable { display: inline-flex; flex-direction: column; align-items: center; }
+  .weight-stable::before { content: attr(data-label); height: 0; overflow: hidden; visibility: hidden; font-weight: 600; pointer-events: none; user-select: none; }
+  @keyframes fetch-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+  .fetch-line { animation: fetch-slide 1.3s var(--ease-glide) infinite; }
   .segmented > button:not([aria-pressed="true"]) { color: var(--muted-foreground); }
   .segmented > button:not([aria-pressed="true"]):hover { color: var(--foreground); background: rgb(255 255 255 / 0.42); }
   .glass-dark .segmented > button:not([aria-pressed="true"]):hover { background: rgb(255 255 255 / 0.08); }
@@ -251,6 +257,9 @@
   .disclosure > summary { @apply inline-flex cursor-pointer items-center gap-1.5 rounded-full text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground; }
   .disclosure > summary::before { content: ""; width: 7px; height: 7px; border-right: 1.75px solid currentColor; border-bottom: 1.75px solid currentColor; transform: rotate(-45deg); transition: transform 0.25s var(--ease-out-expo); margin-right: 2px; }
   .disclosure[open] > summary::before { transform: rotate(45deg); }
+  /* Disclosures open and close by animating their height instead of snapping. */
+  .disclosure::details-content { block-size: 0; overflow: hidden; transition: block-size 0.42s var(--ease-glide), content-visibility 0.42s allow-discrete; }
+  .disclosure[open]::details-content { block-size: auto; }
 
   .term-label { @apply cursor-help underline decoration-dotted underline-offset-[3px]; text-decoration-color: color-mix(in srgb, var(--muted-foreground) 45%, transparent); }
 
@@ -286,7 +295,9 @@
   .loading-bar, .bar-fill, .tile-in { animation: none; }
   .loading-fade { animation: loading-fade-still 0.3s ease both; }
   :is(a, button).glass:hover, :is(a, button).glass:active, a.tile:hover, .group:hover .group-hover\:-translate-x-0\.5 { transform: none; }
-  .segmented-thumb { transition: none; }
+  .segmented-thumb { transition-property: opacity; }
+  .fetch-line { animation: none; width: 100%; opacity: 0.6; }
+  .disclosure::details-content { transition: none; }
   * { scroll-behavior: auto !important; }
 }
 @keyframes loading-fade-still { from { opacity: 0; } to { opacity: 1; } }
