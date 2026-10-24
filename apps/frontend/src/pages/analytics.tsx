@@ -642,6 +642,24 @@ function EntityFilterBar({ profile, entityId, dates }: { profile: EntityProfile;
   </section>;
 }
 
+/** Lead of a profile: the share of negative evaluations, its sample and its change, beside the stance chart. */
+function StanceHero({ current, before, children }: { current: { positive_count: number; negative_count: number }; before?: { positive_count: number; negative_count: number }; children: ReactNode }) {
+  const sample = current.positive_count + current.negative_count;
+  const share = sample ? current.negative_count / sample : 0;
+  const previousSample = before ? before.positive_count + before.negative_count : 0;
+  const previous = before && previousSample ? before.negative_count / previousSample : undefined;
+  const points = previous === undefined ? 0 : Math.round((share - previous) * 100);
+  return <div className="grid gap-6 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:gap-10">
+    <dl className="min-w-0">
+      <dt className="eyebrow"><TermLabel term={glossary.metric.negativeShare} /></dt>
+      <dd className="mt-2 font-heading text-[64px] font-bold leading-[0.9] tracking-[-0.055em] tabular-nums text-negative md:text-[88px]">{sample ? formatPercent(share) : "—"}</dd>
+      <dd className="mt-3 text-sm leading-6 text-muted-foreground"><strong className="font-semibold text-foreground">{formatNumber(current.negative_count)}</strong> із {formatNumber(sample)} {pluralUk(sample, "оцінки", "оцінок", "оцінок")}</dd>
+      {previous !== undefined && sample ? <dd className="mt-1 text-xs text-muted-foreground">{points === 0 ? "як у попередньому періоді" : `${points > 0 ? "+" : "−"}${Math.abs(points)} в. п. до попереднього періоду (було ${formatPercent(previous)})`}</dd> : null}
+    </dl>
+    {children}
+  </div>;
+}
+
 /** A freshness line: when this subject last appeared, flagged when it has gone quiet. */
 function Freshness({ last, noun }: { last?: string | null; noun: string }) {
   if (!last) return <span>{noun}: немає за період</span>;
@@ -696,7 +714,7 @@ export function EntityPage() {
               { label: "Позитивні", term: glossary.metric.positive, value: summary.positive_count, delta: relativeChange(summary.positive_count, before?.positive_count), previous: before?.positive_count, trend: data.daily.map((day) => day.positive_count) },
               { label: "Негативні", term: glossary.metric.negative, value: summary.negative_count, accent: true, delta: relativeChange(summary.negative_count, before?.negative_count), previous: before?.negative_count, deltaTone: "negative", trend: data.daily.map((day) => day.negative_count) },
             ]} />
-            <Graphic section="Тональність у часі" subject={name} scope={scope} title={stanceThesis(name, summary, before)} dek="Стовпчики — позитивні й негативні класифікації, лінія — ковзна частка негативу. Натисніть на стовпчик, щоб звузити профіль до цього проміжку."><DailyChart data={data.daily} mode="stance" onDate={chooseDate} onRange={chooseRange} /></Graphic>
+            <Graphic variant="dark" section="Тональність у часі" subject={name} scope={scope} title={stanceThesis(name, summary, before)} dek="Стовпчики — позитивні й негативні класифікації, лінія — ковзна частка негативу. Натисніть на стовпчик, щоб звузити профіль до цього проміжку."><StanceHero current={summary} before={before}><DailyChart data={data.daily} mode="stance" onDate={chooseDate} onRange={chooseRange} /></StanceHero></Graphic>
             <div className="grid grid-cols-1 items-start gap-4 md:gap-5 lg:grid-cols-2 xl:grid-cols-3">
               <Graphic section="Риторика атак" term={glossary.section.rhetoric} subject={name} scope={scope} title={rhetoricThesis(data.rhetoric, rhetoricLabels, "Які типи атак використовували найчастіше")} dek="Частка від усіх призначених риторичних міток."><DistributionBars items={data.rhetoric} labels={rhetoricLabels} group="rhetoric" selected={filters.rhetoric} onSelect={(key) => setEntityFilter("rhetoric", key)} /></Graphic>
               <Graphic section="Епістемічний статус" term={glossary.section.epistemicStatus} subject={name} scope={scope} title={epistemicThesis(data.epistemic, "Наскільки категорично сформульовані твердження")} dek="Частка від унікальних тверджень."><DistributionBars items={data.epistemic} labels={epistemicLabels} group="epistemic" selected={filters.epistemic_status} onSelect={(key) => setEntityFilter("epistemic", key)} tone="ink" /></Graphic>
@@ -788,7 +806,7 @@ export function ChannelPage() {
             { label: glossary.metric.entity.label, term: glossary.metric.entity, value: data.summary.entity_count ?? 0, hint: "згадані за період" },
             { label: glossary.metric.negative.label, term: glossary.metric.negative, value: data.summary.negative_count, accent: true, delta: relativeChange(data.summary.negative_count, before?.negative_count), previous: before?.negative_count, deltaTone: "negative", trend: data.daily.map((day) => day.negative_count) },
           ]} />
-          <Graphic section="Тональність у часі" subject={subject} scope={scope} title={stanceThesis(subject, data.summary, before)} dek="Стовпчики — позитивні й негативні класифікації щодо цільових сутностей, лінія — ковзна частка негативу. Натисніть на стовпчик, щоб звузити профіль до цього проміжку."><DailyChart data={data.daily} mode="stance" onDate={chooseDate} onRange={chooseRange} /></Graphic>
+          <Graphic variant="dark" section="Тональність у часі" subject={subject} scope={scope} title={stanceThesis(subject, data.summary, before)} dek="Стовпчики — позитивні й негативні класифікації щодо цільових сутностей, лінія — ковзна частка негативу. Натисніть на стовпчик, щоб звузити профіль до цього проміжку."><StanceHero current={data.summary} before={before}><DailyChart data={data.daily} mode="stance" onDate={chooseDate} onRange={chooseRange} /></StanceHero></Graphic>
           <Graphic section="Мапа мішеней" subject={subject} scope={scope} title={channelMapTitle(mapEntities.data?.entities.items)} dek="Кожна точка — сутність, яку оцінював цей канал: праворуч більше оцінок, вище — більша частка негативу, розмір — кількість тверджень. Натисніть точку, щоб відкрити профіль сутності лише з оцінками цього каналу.">
             {mapEntities.isLoading ? <LoadState compact /> : mapEntities.isError ? <ErrorState onRetry={() => void mapEntities.refetch()} /> : <TargetMap items={mapEntities.data?.entities.items ?? []} href={(item) => { const next = dateParams(params); next.set("channel", id); return `/entities/${item.id}?${next.toString()}`; }} />}
           </Graphic>
