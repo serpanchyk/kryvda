@@ -39,6 +39,11 @@ spec:
             secretKeyRef:
               name: kryvda-secret
               key: LITELLM_MASTER_KEY
+        # Match the Compose concurrency; the worker defaults to one post at a time.
+        - name: ANALYSIS_CONCURRENCY
+          value: '16'
+        - name: LLM_MAX_CONCURRENCY
+          value: '16'
         resources:
           requests:
             cpu: 100m
