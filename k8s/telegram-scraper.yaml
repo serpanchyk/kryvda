@@ -34,11 +34,9 @@ spec:
             secretKeyRef:
               name: kryvda-secret
               key: POSTGRES_DSN
+        # The gateway address is public; the sealed secret still holds the local Compose name.
         - name: TELEGRAM_GATEWAY_URL
-          valueFrom:
-            secretKeyRef:
-              name: kryvda-secret
-              key: TELEGRAM_GATEWAY_URL
+          value: https://telegram-gateway-ten.vercel.app
         - name: TELEGRAM_GATEWAY_TOKEN
           valueFrom:
             secretKeyRef:
