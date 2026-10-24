@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { AmbientToggle, AsciiField, LiquidLens, Segmented, emitRipple } from "@/components/liquid";
+import { PhotoCredits } from "@/components/avatars";
 import { aggregateWeekly, defaultGranularity, detectSpikes, rangeFrom, rollingNegativeShare, type Granularity } from "@/lib/charts";
 import { glossary, termOf, type GlossaryGroup, type Term } from "@/lib/glossary";
 import {
@@ -124,6 +125,7 @@ function SiteFooter() {
     <BrandLockup size="sm" />
     <p className="max-w-2xl text-balance">{SOURCE_LINE}</p>
     <p className="max-w-2xl text-balance">{CREDIT_LINE}</p>
+    <div className="mt-1 w-full"><PhotoCredits /></div>
   </footer>;
 }
 

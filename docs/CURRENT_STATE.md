@@ -263,7 +263,12 @@ The identity is the lowercase «кривда» wordmark closed by a round red fu
 which gathers into a glass bubble once the page scrolls; favicons and the app icon are a dark
 rounded plate with a white Inter Bold «к» and the red dot (`apps/frontend/public/kryvda-mark.svg`,
 `favicon.ico`, `apple-touch-icon.png`). When collection has stopped inside the chosen window, the
-overview hero says since which day there are no new posts. Entity and channel profiles flag sources whose last claim or post is more
+overview hero says since which day there are no new posts. Registry entities show a portrait or emblem
+where Wikidata links a freely licensed Wikimedia Commons image to a confidently matched item (68 of
+128: 55 portraits, 13 near-square emblems; wide text logos and ambiguous namesakes fall back to
+initials). Files live in `apps/frontend/public/entity-photos/`, the manifest with author, licence
+and source in `apps/frontend/src/lib/entity-photos.json`, and the site footer lists every
+attribution. Entity and channel profiles flag sources whose last claim or post is more
 than three days old. Failed requests show a retry action that keeps URL-backed filters. `/system`
 is a non-exportable admin overview: a status pill, a 7/30/90-day window, a dark throughput hero
 (finished runs per Kyiv day by outcome with the collected-post line on its own scale, typical run
