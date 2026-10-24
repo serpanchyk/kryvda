@@ -102,6 +102,7 @@ def test_error_listing_refuses_measure_only_test_examples() -> None:
     report.names = NAMES
     report.test_ids = {"golden_v0-001"}
     report.affiliations = {}
+    report.supplement = {}
 
     with pytest.raises(MeasureOnlySplitError):
         report.errors({"golden_v0-001": row()}, "FP-neg")
@@ -118,5 +119,8 @@ def test_gold_carries_a_linked_persons_criticism_to_the_organization() -> None:
     report.golden = {"golden_v0-001": golden()}
     report.names = NAMES
     report.affiliations = {"golden_v0-001": {"Центр протидії корупції"}}
+    report.supplement = {"golden_v0-001": {"Служба безпеки України": {"позитивне"}}}
 
-    assert report.gold("golden_v0-001")["Центр протидії корупції"] == {"відсутнє", "негативне"}
+    gold = report.gold("golden_v0-001")
+    assert gold["Центр протидії корупції"] == {"відсутнє", "негативне"}
+    assert gold["Служба безпеки України"] == {"позитивне"}

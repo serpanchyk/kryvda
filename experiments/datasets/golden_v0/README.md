@@ -105,3 +105,16 @@ uv run python experiments/datasets/golden_v0/src/golden_v0_affiliations.py expor
 # Reviewers write batches/aNN/out.json next to every items.json.
 uv run python experiments/datasets/golden_v0/src/golden_v0_affiliations.py collect
 ```
+
+## Gold supplement for registry aliases v2 (2026-10-24)
+
+Registry aliases v2 admit entities annotators had skipped as background (police, the army, the
+Rada, the President). For the 525 post x registry-entity pairs the prefilter now matches without a
+gold record, Claude subagents (blind to model outputs) decided whether the post really refers to
+the entity and whether it attacks or praises it; `data/supplement_stances.jsonl` keeps the 263
+referenced pairs and the stance report merges them into the gold.
+
+```bash
+uv run python experiments/datasets/golden_v0/src/golden_v0_supplement.py export
+uv run python experiments/datasets/golden_v0/src/golden_v0_supplement.py collect
+```

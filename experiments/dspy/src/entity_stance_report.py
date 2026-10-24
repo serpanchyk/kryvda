@@ -31,6 +31,7 @@ from golden_schema import CanonicalGolden, load_golden_jsonl
 DEFAULT_ANNOTATIONS = Path("experiments/datasets/golden_v0/data/annotations.jsonl")
 DEFAULT_SEED = Path("infra/postgres/init/003_registry_seed.sql")
 AFFILIATIONS_FILE = "affiliations.jsonl"
+SUPPLEMENT_FILE = "supplement_stances.jsonl"
 NEGATIVE, POSITIVE = "негативне", "позитивне"
 STANCES = {"neg": NEGATIVE, "pos": POSITIVE}
 # Reviewed annotations spell a few registry names differently from every approved alias.
@@ -182,6 +183,14 @@ class StanceReport:
         self.golden = {record.example_id: record for record in load_golden_jsonl(annotations)}
         self.names = registry_names(load_seed_aliases(seed))
         self.test_ids = heldout_example_ids(annotations)
+        self.supplement: dict[str, dict[str, set[str]]] = {}
+        supplement = annotations.parent / SUPPLEMENT_FILE
+        if supplement.exists():
+            for line in supplement.read_text(encoding="utf-8").splitlines():
+                row = json.loads(line)
+                self.supplement.setdefault(row["example_id"], {}).setdefault(
+                    row["entity"], set()
+                ).update(row["stances"])
         self.affiliations: dict[str, set[str]] = {}
         affiliations = annotations.parent / AFFILIATIONS_FILE
         if affiliations.exists():
@@ -194,10 +203,13 @@ class StanceReport:
     def gold(self, identifier: str) -> dict[str, set[str]]:
         """Return reviewed stances, with criticism of a linked person carried to the organization.
 
+        ``supplement_stances.jsonl`` adds registry entities the annotators had skipped, and
         ``affiliations.jsonl`` lists, per post, the registry organizations the post links a
         negatively evaluated person to; those organizations count as negative too.
         """
         stances = golden_stances(self.golden[identifier], self.names)
+        for entity, values in self.supplement.get(identifier, {}).items():
+            stances.setdefault(entity, set()).update(values)
         for organization in self.affiliations.get(identifier, set()):
             stances.setdefault(organization, set()).add(NEGATIVE)
         return stances
