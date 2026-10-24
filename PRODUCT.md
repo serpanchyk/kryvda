@@ -66,10 +66,14 @@ Every number in the interface traces back to auditable claims and source posts.
 
 - The product name is Кривда.
 - The interface is Ukrainian-only. All visible text and accessible names use Ukrainian terms from
-  the glossary; Latin script is allowed only for «Telegram» and data such as channel names. A
-  regression test enforces this.
-- The current wordmark, palette, and typefaces are the incumbent implementation, not locked brand
-  assets.
+  the glossary; Latin script is allowed only for «Telegram», the partner name «Lapathoniia», and
+  data such as channel names. A regression test enforces this.
+- The wordmark is the lowercase «кривда» with a round red full stop; the app icon is a dark rounded
+  plate with a white «к» and the red dot.
+- The visual direction is Apple-grade lightness: liquid glass, rounded forms, calm motion. The
+  user rejected the earlier broadsheet look (beige paper, slab serif, hairline boxes) as dated.
+- Credits: a joint project of ЦПК, the катедра СШІ of Lviv Polytechnic, and the Lapathoniia
+  language-model inference platform; the site footer and exported cards say so.
 
 ## Evidence on Hand
 

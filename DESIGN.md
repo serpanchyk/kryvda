@@ -1,361 +1,291 @@
 ---
 name: Кривда
-description: Investigative broadsheet for exposing how Telegram channels attack monitored actors
+description: An investigation instrument for ЦПК analysts, made of light and glass over a calm ASCII field.
 colors:
-  newsprint-paper: "#f4f1e9"
-  galley-proof: "#faf8f2"
-  newsprint-shade: "#e8e3d9"
-  column-rule: "#d5d0c7"
-  field-rule: "#b9b3a9"
-  unrated-grey: "#aaa49a"
-  faded-ink: "#6d6962"
-  press-ink: "#171714"
-  proofmark-red: "#c72c32"
-  archive-blue: "#2d5d9f"
+  cool-ground: "#e8eaef"
+  graphite-ink: "#0e0f12"
+  slate-muted: "#5b6170"
+  glass-white: "#ffffff"
+  frost-panel: "#eef0f3"
+  popover-mist: "#fbfbfc"
+  hairline: "#dcdfe5"
+  field-stroke: "#cfd3da"
+  exposure-red: "#c8241e"
+  signal-red: "#f0352f"
+  counterweight-blue: "#2559d9"
+  neutral-grey: "#b7bcc6"
+  quiet-bar: "#c3c8d1"
+  night-glass: "#0d0f14"
+  accent-glass: "#c9261f"
 typography:
+  hero-number:
+    fontFamily: "-apple-system, BlinkMacSystemFont, \"SF Pro Display\", \"Inter Variable\", system-ui, sans-serif"
+    fontSize: "clamp(72px, 7vw, 96px)"
+    fontWeight: 700
+    lineHeight: 0.9
+    letterSpacing: "-0.055em"
+    fontFeature: "\"tnum\""
   display:
-    fontFamily: "Kyiv Type Serif, Georgia, serif"
-    fontSize: "clamp(1.875rem, 4vw, 3rem)"
-    fontWeight: 900
-    lineHeight: 1.02
-    letterSpacing: "0.015em"
-  wordmark:
-    fontFamily: "Kyiv Type Serif, Georgia, serif"
-    fontSize: "1.5rem"
-    fontWeight: 900
-    lineHeight: 1
-    letterSpacing: "0.04em"
-  headline:
-    fontFamily: "Kyiv Type Serif, Georgia, serif"
-    fontSize: "1.75rem"
+    fontFamily: "-apple-system, BlinkMacSystemFont, \"SF Pro Display\", \"Inter Variable\", system-ui, sans-serif"
+    fontSize: "clamp(34px, 4.5vw, 56px)"
     fontWeight: 700
-    lineHeight: 1.25
-    letterSpacing: "0.015em"
-  title:
-    fontFamily: "Kyiv Type Serif, Georgia, serif"
-    fontSize: "1.125rem"
-    fontWeight: 700
-    lineHeight: 1.375
-    letterSpacing: "0.015em"
+    lineHeight: 1.04
+    letterSpacing: "-0.04em"
   metric:
-    fontFamily: "Fixel Text, sans-serif"
-    fontSize: "1.875rem"
-    fontWeight: 900
+    fontFamily: "-apple-system, BlinkMacSystemFont, \"SF Pro Display\", \"Inter Variable\", system-ui, sans-serif"
+    fontSize: "36px"
+    fontWeight: 700
+    lineHeight: 1
+    letterSpacing: "-0.04em"
+    fontFeature: "\"tnum\""
+  title:
+    fontFamily: "-apple-system, BlinkMacSystemFont, \"SF Pro Display\", \"Inter Variable\", system-ui, sans-serif"
+    fontSize: "22px"
+    fontWeight: 600
     lineHeight: 1.2
-    fontFeature: "tnum"
+    letterSpacing: "-0.025em"
+  wordmark:
+    fontFamily: "-apple-system, BlinkMacSystemFont, \"SF Pro Display\", \"Inter Variable\", system-ui, sans-serif"
+    fontSize: "22px"
+    fontWeight: 700
+    lineHeight: 1
+    letterSpacing: "-0.045em"
   body:
-    fontFamily: "Fixel Text, sans-serif"
-    fontSize: "0.875rem"
+    fontFamily: "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"Inter Variable\", system-ui, sans-serif"
+    fontSize: "15px"
     fontWeight: 400
-    lineHeight: 1.5rem
-  reading:
-    fontFamily: "Fixel Text, sans-serif"
-    fontSize: "17px"
-    fontWeight: 400
-    lineHeight: 2rem
-  dateline:
-    fontFamily: "Fixel Text, sans-serif"
-    fontSize: "13px"
-    fontWeight: 400
-    lineHeight: 1.25rem
+    lineHeight: 1.6
+    letterSpacing: "-0.006em"
+    fontFeature: "\"cv11\", \"ss03\""
   label:
-    fontFamily: "Fixel Text, sans-serif"
-    fontSize: "11px"
-    fontWeight: 800
+    fontFamily: "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"Inter Variable\", system-ui, sans-serif"
+    fontSize: "13px"
+    fontWeight: 500
     lineHeight: 1.4
-    letterSpacing: "0.14em"
+    letterSpacing: "-0.003em"
 rounded:
-  none: "0px"
-  sm: "2px"
-  md: "3px"
-  lg: "4px"
+  sm: "8px"
+  md: "10px"
+  lg: "14px"
+  xl: "18px"
+  metric: "22px"
+  tile: "28px"
+  pill: "999px"
 spacing:
-  hairline: "4px"
-  row: "10px"
-  gutter: "16px"
-  card: "20px"
-  grid: "24px"
-  gutter-wide: "32px"
-  section: "32px"
+  gutter-mobile: "12px"
+  gutter: "32px"
+  tile-pad-mobile: "20px"
+  tile-pad: "28px"
+  grid-gap-mobile: "16px"
+  grid-gap: "20px"
+  container: "1320px"
 components:
+  tile-glass:
+    backgroundColor: "rgb(255 255 255 / 0.4)"
+    textColor: "{colors.graphite-ink}"
+    rounded: "{rounded.tile}"
+    padding: "28px"
+  tile-dark:
+    backgroundColor: "rgb(13 15 20 / 0.86)"
+    textColor: "#f5f6f8"
+    rounded: "{rounded.tile}"
+    padding: "28px"
+  tile-accent:
+    backgroundColor: "rgb(201 38 31 / 0.9)"
+    textColor: "{colors.glass-white}"
+    rounded: "{rounded.tile}"
+    padding: "28px"
+  metric-tile:
+    backgroundColor: "rgb(255 255 255 / 0.4)"
+    rounded: "{rounded.metric}"
+    padding: "20px"
   button-primary:
-    backgroundColor: "{colors.press-ink}"
-    textColor: "{colors.newsprint-paper}"
-    rounded: "{rounded.lg}"
-    padding: "0 10px"
-    height: "32px"
-  button-ghost:
-    textColor: "{colors.press-ink}"
-    rounded: "{rounded.md}"
-    padding: "0 10px"
-    height: "28px"
-  button-ghost-hover:
-    backgroundColor: "{colors.newsprint-shade}"
-  select-trigger:
-    backgroundColor: "{colors.newsprint-paper}"
-    textColor: "{colors.press-ink}"
-    rounded: "{rounded.none}"
-    padding: "8px 12px"
-    height: "40px"
-  input-field:
-    backgroundColor: "{colors.newsprint-paper}"
-    textColor: "{colors.press-ink}"
-    rounded: "{rounded.none}"
-    padding: "8px 12px"
-    height: "40px"
-  badge-negative:
-    textColor: "{colors.proofmark-red}"
-    rounded: "{rounded.none}"
-    padding: "2px 8px"
-    height: "20px"
-  badge-positive:
-    textColor: "{colors.archive-blue}"
-    rounded: "{rounded.none}"
-    padding: "2px 8px"
-    height: "20px"
-  chart-card:
-    backgroundColor: "{colors.galley-proof}"
-    textColor: "{colors.press-ink}"
-    rounded: "{rounded.none}"
-    padding: "{spacing.card}"
-  masthead:
-    backgroundColor: "{colors.newsprint-paper}"
-    textColor: "{colors.press-ink}"
-    height: "64px"
-  tooltip:
-    backgroundColor: "{colors.galley-proof}"
-    textColor: "{colors.press-ink}"
-    padding: "8px 12px"
+    backgroundColor: "{colors.graphite-ink}"
+    textColor: "{colors.glass-white}"
+    rounded: "{rounded.pill}"
+    padding: "0 16px"
+    height: "36px"
+  button-primary-large:
+    backgroundColor: "{colors.graphite-ink}"
+    textColor: "{colors.glass-white}"
+    rounded: "{rounded.pill}"
+    padding: "0 20px"
+    height: "44px"
+  button-outline:
+    backgroundColor: "rgb(255 255 255 / 0.6)"
+    textColor: "{colors.graphite-ink}"
+    rounded: "{rounded.pill}"
+    padding: "0 16px"
+    height: "36px"
+  segmented-track:
+    backgroundColor: "rgb(14 15 18 / 0.07)"
+    rounded: "{rounded.pill}"
+    padding: "3px"
+  segmented-thumb:
+    backgroundColor: "{colors.glass-white}"
+    textColor: "{colors.graphite-ink}"
+    rounded: "{rounded.pill}"
+    padding: "6px 14px"
+  nav-capsule:
+    backgroundColor: "rgb(255 255 255 / 0.4)"
+    textColor: "{colors.slate-muted}"
+    rounded: "{rounded.pill}"
+    padding: "5px"
+  chip:
+    backgroundColor: "rgb(255 255 255 / 0.55)"
+    textColor: "{colors.graphite-ink}"
+    rounded: "{rounded.pill}"
+    padding: "4px 12px"
+  input:
+    backgroundColor: "rgb(255 255 255 / 0.6)"
+    textColor: "{colors.graphite-ink}"
+    rounded: "16px"
+    padding: "8px 14px"
+    height: "44px"
 ---
 
 # Design System: Кривда
 
 ## Overview
 
-**Creative North Star: "Шпальта розслідування" (The Investigative Broadsheet)**
+**Creative North Star: "The Glass Instrument"**
 
-Кривда looks and behaves like the front page of an investigative newspaper that has just found
-something. Every screen is a printed page: warm newsprint ground, heavy black serif theses set
-like headlines, hairline column rules instead of boxes, and one exposing red that marks what is
-being attacked. The tone is sharp and accusatory in its presentation, never in its numbers: a
-headline states the finding bluntly, while the graphic beneath it shows its sample size, its
-denominator, and the period it covers.
+Кривда is an Apple-grade instrument made of light and glass, not paper. A cool grey ground sits under a slowly breathing field of ASCII characters; on top of it float white liquid-glass tiles with a specular rim and a fixed top-left highlight. One dark glass hero carries the period's attack pulse, one red glass tile carries the single most important figure, and everything else is calm white glass arranged as a bento. The field is the system's pulse: when an analyst hovers a daily bar, a «сплеск» ripples outward from that bar across the background, sized by the day's negative count and red on spike days.
 
-Density is that of a broadsheet, not a SaaS dashboard. Wide screens set chart cards in a
-three-column grid under a 1480 px masthead; each card is a self-contained story with a thesis
-headline, a dateline (section, subject, period with year, active filters), a dek, the graphic, and
-a signed footer, so it can be torn out and posted publicly as a PNG without losing meaning.
-Ornament is absent; emphasis comes from weight, rules, and red.
+Density is analytical but airy: large numbers set in the display face with tight negative tracking, quiet 13px labels in sentence case, and grey bars that let red spikes speak. The broadsheet world (beige newsprint, slab serif, hairline boxes, a signature on every card) is retired, and the generic grey admin template is refused. Motion is a calm glide with no overshoot; nothing follows the pointer (pointer-following effects were rejected as laggy).
 
-The identity is a newspaper nameplate: КРИВДА in Kyiv Type Serif Black closed by a red square
-full stop. Where a square mark is needed (favicon, app icon) it becomes a press-ink plate with a
-paper К outlined from the same face and the red square at its baseline
-(`apps/frontend/public/kryvda-mark.svg`).
-
-The system is light-only: newsprint is the identity, and no dark theme is defined.
+The working screen and the exported card are two states of one object. On export a tile drops its glass and renders on solid white with the wordmark, section label and source line, so a public PNG explains itself.
 
 **Key Characteristics:**
-- Newsprint paper and press ink, with red reserved for exposure and blue for its opposite.
-- Black-weight Kyiv Type Serif theses; every number and label in Fixel Text.
-- Rules, not shadows: hairline column rules and a 2 px ink rule that opens every story.
-- Square, nearly cornerless forms (0–4 px).
-- Every chart card is export-ready, carries its own context, and is signed with the mark.
+- Light only: cool ground (#e8eaef) under a calm ASCII field at 20 fps that holds still while scrolling.
+- White liquid-glass tiles (radius 28), one dark glass hero, at most one red accent tile per view.
+- SF Pro on Apple devices, self-hosted Inter Variable with optical sizes elsewhere; display 700 with negative tracking.
+- Red exposes negative, blue is its colour-blind-safe counterweight, grey carries ordinary days.
+- Glossy white thumbs on segmented controls and the nav capsule; hover brightens and lifts 1px, press scales to .97.
+- Wordmark «кривда» closed by a round red dot; it gathers into a glass bubble once the page scrolls.
 
 ## Colors
 
-A two-ink newspaper palette on warm unbleached paper, with one alarm colour and one counterweight.
+A cool, near-neutral grey world with two evaluation inks: red that exposes and blue that counterweights.
 
 ### Primary
-- **Proofmark Red** (`proofmark-red`): the exposing mark. Negative classifications in every chart,
-  bar, badge, and number; the square full stop of the nameplate; the active masthead underline;
-  focus outlines; the hairline beside quoted evidence; stale data and data errors.
+- **Exposure Red** (#c8241e): negative counts, negative text, negative share bars, the destructive state and the text caret. The working ink of the product's subject.
+- **Signal Red** (#f0352f): vivid fills only, never text: spike bars (as a gradient), the wordmark dot, the loading pulse flare, the mark. On dark glass the red lightens to #ff5a52 for contrast.
 
 ### Secondary
-- **Archive Blue** (`archive-blue`): positive classifications only, always opposite red on a shared
-  axis. It is the colour-vision-deficiency-safe counterweight to red.
+- **Counterweight Blue** (#2559d9): positive counts and shares, focus rings and the focus outline. On dark glass it lightens to #6f9bff.
 
 ### Neutral
-- **Newsprint Paper** (`newsprint-paper`): page ground, masthead, select fields, primary button text.
-- **Galley Proof** (`galley-proof`): the slightly brighter stock of chart cards, popovers, and
-  tooltips, lifting a story off the page without a shadow.
-- **Newsprint Shade** (`newsprint-shade`): hover and pressed fills for ghost buttons and menus.
-- **Column Rule** (`column-rule`): every hairline divider, row separator, and card border.
-- **Field Rule** (`field-rule`): text input strokes.
-- **Unrated Grey** (`unrated-grey`): the technical «без оцінки» classification and empty bar tracks.
-- **Faded Ink** (`faded-ink`): deks, captions, axis text, sample sizes, inactive navigation.
-- **Press Ink** (`press-ink`): body text, headlines, the 2 px story rule, axes, primary buttons.
+- **Cool Ground** (#e8eaef): the page, washed by two faint glows (red top left, blue bottom right, 9% each).
+- **Graphite Ink** (#0e0f12): all primary text, the primary button, the ASCII glyphs at low alpha.
+- **Slate Muted** (#5b6170): datelines, deks, labels, axis ticks.
+- **Glass White** (#ffffff) and **Frost Panel** (#eef0f3): glass thumbs and quiet secondary surfaces.
+- **Hairline** (#dcdfe5) and **Field Stroke** (#cfd3da): rare dividers and input strokes.
+- **Neutral Grey** (#b7bcc6) and **Quiet Bar** (#c3c8d1): neutral evaluations and ordinary-day bars.
+- **Night Glass** (#0d0f14 at 86%): the dark hero tile only. **Accent Glass** (#c9261f at 90%): the single red accent tile.
 
 ### Named Rules
-**The Proofmark Rule.** Red means negative evaluation, the brand mark, or a data error. It is never
-decorative; if red appears, a reader must be able to say what is being exposed.
+**The Two Inks Rule.** Red means negative and blue means positive, everywhere, including charts and deltas. Neither ever decorates.
 
-**The Two Inks of Judgment Rule.** Negative is red, positive is blue, unrated is grey, and each
-always carries a text label. Green never encodes evaluation.
+**The Quiet Day Rule.** Ordinary days are grey bars; only spike days turn red. If everything is red, nothing is a spike.
+
+**The One Accent Tile Rule.** A view carries at most one red glass tile, reserved for its single most telling figure.
 
 ## Typography
 
-**Display Font:** Kyiv Type Serif (with Georgia, serif)
-**Body Font:** Fixel Text (with sans-serif)
+**Display Font:** SF Pro Display on Apple devices (with Inter Variable, then system-ui)
+**Body Font:** SF Pro Text on Apple devices (with Inter Variable, then system-ui)
+**Label/Mono Font:** none for UI; the ASCII field alone uses ui-monospace / SF Mono at 13px.
 
-**Character:** A Ukrainian-made pairing: Kyiv Type Serif in black weight gives theses the weight of
-a front-page headline, while Fixel Text keeps data, labels, and controls neutral and legible.
+**Character:** One neo-grotesque family across optical sizes: heavy, tightly tracked display numbers against relaxed body text with `cv11` and `ss03` alternates. Numbers are always tabular.
 
 ### Hierarchy
-- **Display** (900, 30 → 36 → 48 px by breakpoint, 1.02): one page thesis per screen in the
-  page header, stated as a finding.
-- **Wordmark** (900, 24 px, 0.04em tracking): «КРИВДА» closed by a red square full stop, in the
-  masthead and every exported card footer (16 px there).
-- **Headline** (700, 24 px, 28 px from md, 1.25): the thesis of each chart card, generated from
-  the data and falling back to a neutral description below the sample guardrails.
-- **Dateline** (400, 13 px, 20 px leading): under every headline; section in bold ink, then subject,
-  period with year, and scope, separated by thin rules.
-- **Title** (700, 18–20 px, 1.375): claim and post headlines in lists; hover turns red.
-- **Metric** (Fixel 900, 30 px, tabular figures): headline counts in the metric strip.
-- **Body** (400, 14 px, 24 px leading): deks, list rows, filters; deks cap at roughly 42rem.
-- **Reading** (400, 17 px, 32 px leading): full source-post text, under a 2 px ink rule.
-- **Label** (800, 11 px, 0.14em, uppercase): filter labels and metric names only; never above a
-  headline.
+- **Hero number** (700, 72px rising to 96px, line-height 0.9, -0.055em): the dark hero's negative count only. Accent and profile figures use 64 to 76px at -0.05em.
+- **Display** (700, 34px / 48px / 56px, line-height 1.04, -0.04em): page titles, balanced.
+- **Metric** (700, 30px rising to 36px, -0.04em, tabular): metric tile values.
+- **Title** (600, 20px rising to 22px, -0.025em): tile headings, written as a finding rather than a category.
+- **Body** (400, 15 to 16px, line-height 1.6): deks capped near 65ch; secondary text 14px.
+- **Label** (500, 13px, -0.003em, sentence case, muted): metric labels, filter labels, field names.
 
 ### Named Rules
-**The Thesis Rule.** Serif is for statements: page and card headlines that say what was found.
-Numbers, labels, and controls are never set in the serif. A headline names a finding only when its
-guardrail passes (`apps/frontend/src/lib/theses.ts`: at least 10 evaluations, 5 classifications, or
-a 20-evaluation, 60%-negative leader for "main target"); otherwise it describes the graphic.
+**The Sentence-Case Label Rule.** Small labels are quiet sentence case in muted ink. Never tracked capitals.
 
-**The Dateline Rule.** Context goes under the headline, not above it. No kicker or eyebrow sits
-over a heading; the dateline carries section, subject, period with year, and active filters.
-
-**The Tabular Figures Rule.** Every count, share, rank, and delta uses tabular numerals so columns
-of evidence align.
+**The Ukrainian-Only Rule.** Every interface word is Ukrainian; Latin appears only for Telegram, Lapathoniia and data (channel names, quotes).
 
 ## Layout
 
-A single centred column, max 1480 px, with 16 px side gutters on mobile and 32 px from `md`. Pages
-stack sections 32 px apart (24 px vertical padding on mobile, 40 px from `md`). Chart cards sit in a
-grid with 24 px gaps: one column on mobile, two from `lg`, three from `xl`; wide stories span two
-or all three columns. The metric strip runs two columns on mobile and three to five on desktop,
-divided by hairline rules.
-
-The masthead is a 64 px sticky bar with the wordmark, inline navigation from `md`, and the period
-control on the right; below `md` navigation and the period control move into a right-side sheet.
-Post detail uses a source/analysis split view.
-
-Lists are rows, not cards: 10 px vertical padding, hairline separators, a full-width hover tint.
+A centred container (1320px max) with 12px side gutters on mobile and 32px from md. The sticky header is a three-column grid: wordmark left, glass nav capsule centred, period pill right; on mobile the capsule becomes a 44px glass menu button opening a right sheet. Pages open with a large title, dateline and dek on the left and the glossy period segmented control on the right (lg and up). Below sits a full-width dark hero (number left, daily chart right), then a bento of glass tiles with 16px gaps on mobile and 20px from md. Tiles pad 20px on mobile and 28px from md. All filter and period state lives in the URL.
 
 ## Elevation & Depth
 
-Flat by default. Depth is conveyed by paper stock and rules: chart cards use the brighter Galley
-Proof stock, a hairline Column Rule border, and a 2 px Press Ink top rule. The only shadows belong to
-floating layers (tooltips, popovers, menus), and the sticky masthead uses a 95% paper fill with a
-light backdrop blur.
+Depth is glass, not paper: every surface is a translucent layer over the moving field, separated by backdrop blur (12px, saturate 185%), an inner specular rim, a fixed soft-light highlight from the top left, and a long soft drop shadow. In Chromium the nav capsule, pills, dark hero and accent tile also refract the field at their edges through an SVG displacement map; large white tiles keep the plain frosted blur for performance. Under reduced transparency glass turns solid (#fbfbfc, #14161b, #c9261f).
 
 ### Shadow Vocabulary
-- **Floating layer** (`box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)`):
-  chart tooltips and popovers only.
+- **Glass** (`inset 0 1px 1px rgb(255 255 255/.95), inset 0 -1px 1px rgb(255 255 255/.3), inset 0 -22px 34px -26px rgb(255 255 255/.75), 0 1px 2px rgb(14 15 18/.05), 0 22px 44px -22px rgb(14 15 18/.24)`): every white glass surface.
+- **Dark glass** (`… 0 30px 60px -28px rgb(14 15 18/.5)`): the hero tile.
+- **Accent glass** (`… inset 0 -40px 60px -40px rgb(255 140 130/.55), 0 26px 50px -24px rgb(200 20 27/.5)`): the red tile, glowing in its own hue.
+- **Gloss** (`inset 0 1px 0 #fff, 0 1px 2px rgb(14 15 18/.08), 0 6px 16px -4px rgb(14 15 18/.18)`): segmented thumbs, nav indicator, active pills.
 
 ### Named Rules
-**The Hairline Rule.** Stories are separated by rules, never by shadows. A card that needs a
-shadow to stand out needs a stronger top rule or a brighter stock instead.
+**The Light Not Paper Rule.** Surfaces are separated by blur, rim light and soft shadow, never by hairline boxes or offset shadows.
 
 ## Shapes
 
-Square-cut, like set type. Radii are tiny (2, 3, 4 px) and many surfaces are deliberately square:
-select fields, badges, skeletons, chart cards, legend swatches, and bar marks have no rounding.
-Buttons take 4 px at most; inputs are square like selects. Bars are flat rectangles; evaluative strips are 4–10 px
-tall.
+Continuous, generous curves. Tiles are 28px, metric tiles 22px, inner panels and empty states 24px, inputs 16px, rows 16px, and every control (buttons, pills, chips, segmented controls, nav) is a full capsule. Data bars and tracks are rounded capsules too. Entity avatars are squircles (10 / 12 / 18px); channel avatars are circles. The mark is a 22.5% rounded square in graphite with a white К and a red dot.
 
 ## Components
 
 ### Buttons
-Quiet and typographic; the data carries the voice.
-- **Shape:** gently squared (4 px; 3 px at small sizes).
-- **Primary:** Press Ink fill with Newsprint Paper text, 32 px tall, 10 px horizontal padding,
-  14 px medium weight; hover drops the ink fill to 80% opacity.
-- **Ghost:** transparent with Press Ink text; hover fills Newsprint Shade. Used for presets, pagers.
-- **Icon action:** 32 px square with a hairline Column Rule border and Faded Ink icon; hover inks
-  both border and icon (export button on every card).
-- **Focus:** 3 px ring at 50% ink; pressed buttons drop 1 px.
+- **Shape:** full capsule (999px), 36px default, 44px large.
+- **Primary:** graphite gradient (#2b2e35 to #0e0f12), white semibold text, inner top highlight and soft dark shadow.
+- **Hover / Focus:** brightens and lifts 1px; focus shows a 3px blue outline at 55%. Press scales to .97.
+- **Outline / Ghost:** white at 60% with a 1px inner ink stroke; ghost is transparent and fills to ink at 6%. Icon buttons are 36px circles at ink 6%.
 
-### Chips / Badges
-- **Style:** square outline badges, 20 px tall, 12 px medium text, with the stance or status
-  colour applied to both border and text: red negative, blue positive, grey unrated, half-ink for
-  epistemic status.
-- **State:** linked badges show a red 2 px focus ring.
+### Segmented Controls
+- **Style:** ink-at-7% capsule track, 3px inset; a glossy white thumb glides to the pressed option on cubic-bezier(.32,.72,0,1) over 420ms, no overshoot. Inactive labels are muted and brighten to white 42% on hover. On dark glass the thumb stays white with graphite text.
 
-### Cards / Containers (Story Card)
-- **Corner Style:** square.
-- **Background:** Galley Proof.
-- **Shadow Strategy:** none (see Elevation).
-- **Border:** hairline Column Rule with a 2 px Press Ink top rule.
-- **Internal Padding:** 16 px, 20 px from `md`.
-- **Anatomy:** serif thesis headline → dateline (section · subject · period with year · scope) →
-  muted dek → graphic (with a keyboard data table where it is interactive) → footer with the
-  nameplate and «Джерело: погоджений пул публічних Telegram-каналів · класифікація мовною
-  моделлю».
-- **Export:** the download button renders the PNG first and opens a preview dialog listing the
-  headline, context, and file name; nothing is saved until the analyst confirms.
+### Chips
+- **Style:** white at 55% capsules with a 1px inner stroke; hover turns solid white with a small shadow.
+
+### Cards / Containers
+- **Corner Style:** 28px.
+- **Background:** white glass at 40%; one dark glass hero; at most one red accent tile.
+- **Shadow Strategy:** the Glass shadow plus rim and highlight (see Elevation).
+- **Border:** none; the rim gradient is the edge.
+- **Internal Padding:** 20px, 28px from md. Linked tiles lift 3px on hover; tiles enter with a 14px rise on an exponential ease-out.
 
 ### Inputs / Fields
-- **Select trigger:** square, Newsprint Paper fill, hairline Column Rule border, 40 px tall; hover
-  inks the border; focus turns the border red with a 2 px soft red ring.
-- **Text input:** identical to the select trigger: square, Newsprint Paper fill, hairline Column Rule
-  border, 40 px tall, red focus.
-- **Filter label:** uppercase label type in Faded Ink above every control.
+- **Style:** 44px, radius 16px, white at 60% with a 1px inner ink stroke.
+- **Focus:** solid white, blue inner stroke and a 4px blue halo at 14%. The caret is red.
 
-### Navigation (Masthead)
-- **Style:** bold 14 px Fixel links in Faded Ink, 28 px apart, 20 px vertical padding.
-- **Active / Hover:** text inks; the active link gets a 2 px Proofmark Red underline that scales in
-  from the left.
-- **Period control:** a text button with a calendar icon and a 1 px ink underline that turns red
-  on hover.
-- **Mobile:** a hamburger opens a right sheet (88vw, max 384 px) with the period control and 18 px
-  links.
+### Navigation
+- **Style:** a floating glass capsule with a glossy indicator that glides to the active section; active is semibold ink, inactive medium muted, hover white at 50%. Mobile: a glass menu button and a right sheet with 18px items, the active one glossy.
 
-### Metric Strip
-A definition list of headline counts between top and bottom hairlines: uppercase label, a 30 px
-black tabular number (red when it counts negatives), a 64 × 20 px sparkline, and a delta line
-(▲/▼ percentage against the previous equal period).
+### Wordmark
+«кривда» in the display face, 700, -0.045em, closed by a round red dot (0.3em). At rest it sits on the page; past 12px of scroll it gathers into a glass bubble.
 
-### Diverging Bars
-The signature ranking: negative extends left in red and positive right in blue from one shared
-ink axis on one shared scale. Each row carries a zero-padded rank, the name, the evaluative
-sample size, and the negative share.
+### Daily Chart and the ASCII Field
+Grey capsule bars for ordinary days, a red gradient for spikes, positive spikes in ink. Hovering a bar emits a «сплеск» from that point. The field paints at 20 fps, pauses while scrolling and when the tab is hidden, spawns an occasional ambient ripple, and freezes to a still frame under reduced motion. Waiting states show a forming bar chart breathing in grey with one red flare.
 
-### Target Map
-Points are named only where a label fits right beside its point; there are no leader lines, and a
-label never covers a point, another label, an axis, or a quadrant name. Negative entities get the
-free space first; unlabelled points stay reachable through the tooltip and «Мапа списком».
-Quadrant names sit in the margins above and below the plot, and the median split is labelled with
-its value. Tooltips appear in place with no slide animation. The chart is sized from a measured
-width, not Recharts' responsive container. The overview maps the whole pool; each channel profile
-maps only that channel's evaluations, and its points open channel-filtered entity profiles.
-
-### Daily Chart
-Bars only, never areas. Spikes (mean + 2σ and at least 5) keep full opacity while other bars fade
-to 45%; a dashed ink mean line is labelled «середнє». Clicking a bar narrows the page to that day
-or week.
+### Graphic Export
+Every exportable tile renders to PNG on solid white (#ffffff, 2x): glass, blur and rim drop, dark and accent tiles fall back to light inks, and the section label, wordmark and source line appear only in the export.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** open every story with a 2 px Press Ink rule and a thesis headline, with the dateline under it.
-- **Do** write card headlines as theses that state the finding, guarded by the sample thresholds;
-  put method and caveats in the dek.
-- **Do** show absolute values beside percentage changes, and absolute changes alone below a base of 10.
-- **Do** flag stale sources in red where freshness matters (last post or claim more than 3 days old).
-- **Do** show the evaluative sample size and the denominator next to every share.
-- **Do** set every number in Fixel Text with tabular figures.
-- **Do** keep every chart card export-ready: self-explanatory headline, period, source line, and
-  the КРИВДА nameplate; mark controls `data-export-ignore`.
-- **Do** take all visible text from the Ukrainian glossary and attach its definition as a tooltip.
+- **Do** keep the ground at #e8eaef under the ASCII field and build every surface from white glass with radius 28.
+- **Do** use one dark glass hero and at most one red accent tile per view.
+- **Do** colour negative text #c8241e, vivid fills #f0352f, positive #2559d9, ordinary bars grey.
+- **Do** set display and numbers in 700 with negative tracking, numbers tabular.
+- **Do** use cubic-bezier(.32,.72,0,1) for thumbs and indicators and an exponential ease-out for reveals; hover brightens and lifts 1px, press scales to .97.
+- **Do** turn all motion off under reduced motion and make glass solid under reduced transparency.
+- **Do** render exports on solid white with section label, wordmark and source line.
 
 ### Don't:
-- **Don't** use Proofmark Red for decoration, generic emphasis, or positive data.
-- **Don't** encode evaluation with green, or with colour alone without a text label.
-- **Don't** put drop shadows on cards or rows; shadows belong only to floating layers.
-- **Don't** round corners beyond 4 px; badges and selects are square.
-- **Don't** draw interpolated area or smoothed line charts for daily counts.
-- **Don't** set numbers, labels, or controls in the serif.
-- **Don't** show Latin-script interface text; only «Telegram» and data such as channel names.
-- **Don't** set a kicker or eyebrow label above any heading.
-- **Don't** use Unicode glyphs (▲ ◀ ▶) as icons; use the Lucide set.
+- **Don't** add a dark theme.
+- **Don't** add pointer-following effects or cursor-tracking light; they were rejected as laggy.
+- **Don't** use overshoot or spring bounce in motion.
+- **Don't** return to beige newsprint, slab serifs, hairline-boxed cards or a signature on every card.
+- **Don't** show section labels above tile titles on the working screen; they belong to the exported card.
+- **Don't** use tracked uppercase labels or English words in the interface.
+- **Don't** use red or blue decoratively; they carry evaluation only.

@@ -47,7 +47,7 @@ function MetadataValue({
   action?: MetadataAction;
 }) {
   const className =
-    "font-semibold hover:text-negative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative";
+    "rounded font-semibold transition-colors hover:text-negative";
   if (action?.href)
     return (
       <Link to={action.href} className={className}>
@@ -73,7 +73,7 @@ function MetadataBadge({
   className: string;
 }) {
   const badge = (
-    <Badge variant="outline" className={cn("rounded-none", className)}>
+    <Badge variant="outline" className={cn("h-6 rounded-full border-transparent px-2.5 text-xs font-medium transition-colors", className)}>
       {children}
     </Badge>
   );
@@ -81,7 +81,7 @@ function MetadataBadge({
     return (
       <Link
         to={action.href}
-        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
+        className="rounded-full"
       >
         {badge}
       </Link>
@@ -91,7 +91,7 @@ function MetadataBadge({
       <button
         type="button"
         onClick={action.onClick}
-        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
+        className="rounded-full"
       >
         {badge}
       </button>
@@ -108,10 +108,10 @@ export function StanceBadge({
 }) {
   const className =
     stance === "негативне"
-      ? "border-negative text-negative"
+      ? "bg-negative/10 text-negative hover:bg-negative/15"
       : stance === "позитивне"
-        ? "border-positive text-positive"
-        : "border-neutral text-muted-foreground";
+        ? "bg-positive/10 text-positive hover:bg-positive/15"
+        : "bg-foreground/[0.06] text-muted-foreground";
   return (
     <MetadataBadge action={action} className={className}>
       <TermLabel term={termOf("stance", stance)} />
@@ -127,7 +127,7 @@ export function EpistemicBadge({
   action?: MetadataAction;
 }) {
   return (
-    <MetadataBadge action={action} className="border-ink/50 text-ink">
+    <MetadataBadge action={action} className="bg-foreground/[0.06] text-foreground hover:bg-foreground/10">
       <TermLabel term={termOf("epistemic", status)} />
     </MetadataBadge>
   );
@@ -148,7 +148,7 @@ export function RhetoricBadges({
         <MetadataBadge
           key={label}
           action={action?.(label)}
-          className="border-rule text-muted-foreground"
+          className="bg-white/60 text-muted-foreground shadow-[inset_0_0_0_1px_rgb(14_15_18/0.08)] hover:bg-white"
         >
           <TermLabel term={termOf("rhetoric", label)} />
         </MetadataBadge>
@@ -199,7 +199,7 @@ export function ClaimMetadata({
   className?: string;
 }) {
   return (
-    <div className={cn("grid grid-cols-2 gap-x-4 gap-y-3 border-t border-rule pt-3 text-sm xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-start", className)}>
+    <div className={cn("grid grid-cols-2 gap-x-4 gap-y-3 text-sm xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-start", className)}>
       {hidePublication ? null : <div>
         <p className="eyebrow text-muted-foreground">Опубліковано</p>
         <MetadataValue action={actions?.channel}>

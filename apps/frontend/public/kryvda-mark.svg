@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <title>Кривда</title>
-  <rect width="64" height="64" fill="#171714"/>
-  <path transform="translate(8.2 49) scale(0.048 -0.048)" fill="#F4F1E9" d="M25 188H105V512H25V700H392V512H304V434H401L454 512H452V700H744V512H686L581 367L703 188H755V0H443V188H446L392 266H304V188H391V0H25Z"/>
-  <rect x="46" y="40" width="9" height="9" fill="#C72C32"/>
+  <rect width="100" height="100" rx="22.5" fill="#111318"/>
+  <path fill="#ffffff" d="M26.57 73V36.91H36.62V51.09H39.45L50.51 36.91H62.41L48.72 54.52L62.54 73H50.54L40.51 59.51H36.62V73Z"/>
+  <circle cx="72" cy="67" r="7.5" fill="#f0352f"/>
 </svg>

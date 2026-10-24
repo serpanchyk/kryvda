@@ -1,216 +1,317 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-09T19:10:57+00:00",
+  "generatedAt": "2026-10-24T15:35:12+00:00",
   "title": "Design System: Кривда",
   "extensions": {
     "colorMeta": {
-      "newsprint-paper": {
+      "cool-ground": {
         "role": "neutral",
-        "displayName": "Newsprint Paper",
-        "canonical": "oklch(95.8% 0.011 89.7)",
+        "displayName": "Cool Ground",
+        "canonical": "#e8eaef",
         "tonalRamp": [
-          "#0d0b06",
-          "#27251f",
-          "#44423b",
-          "#64615a",
-          "#85827b",
-          "#a8a59d",
-          "#ccc9c1",
-          "#f1eee6"
+          "#191c24",
+          "#323848",
+          "#4b546b",
+          "#64708f",
+          "#8590aa",
+          "#a9b0c3",
+          "#ccd1dc",
+          "#f0f1f5"
         ]
       },
-      "galley-proof": {
+      "graphite-ink": {
         "role": "neutral",
-        "displayName": "Galley Proof",
-        "canonical": "oklch(97.9% 0.008 91.5)",
+        "displayName": "Graphite Ink",
+        "canonical": "#0e0f12",
         "tonalRamp": [
-          "#0c0b07",
-          "#262521",
-          "#43423d",
-          "#63615c",
-          "#84827d",
-          "#a7a59f",
-          "#cbc9c3",
-          "#f0eee8"
+          "#1b1d22",
+          "#353944",
+          "#505566",
+          "#6a7288",
+          "#8b91a4",
+          "#adb1bf",
+          "#cfd1d9",
+          "#f1f1f4"
         ]
       },
-      "newsprint-shade": {
+      "slate-muted": {
         "role": "neutral",
-        "displayName": "Newsprint Shade",
-        "canonical": "oklch(91.7% 0.014 84.6)",
+        "displayName": "Slate Muted",
+        "canonical": "#5b6170",
         "tonalRamp": [
-          "#0e0b05",
-          "#28251d",
-          "#464239",
-          "#656158",
-          "#868279",
-          "#a9a49b",
-          "#cdc9bf",
-          "#f3eee4"
+          "#1b1d22",
+          "#373a43",
+          "#525764",
+          "#6d7486",
+          "#8d93a2",
+          "#aeb3bd",
+          "#d0d2d8",
+          "#f1f2f4"
         ]
       },
-      "column-rule": {
+      "glass-white": {
         "role": "neutral",
-        "displayName": "Column Rule",
-        "canonical": "oklch(85.9% 0.013 82.4)",
+        "displayName": "Glass White",
+        "canonical": "#ffffff",
         "tonalRamp": [
-          "#0e0b05",
-          "#28251e",
-          "#46413a",
-          "#656159",
-          "#868279",
-          "#a9a49c",
-          "#cdc8c0",
-          "#f3eee5"
+          "#1f1f1f",
+          "#3d3d3d",
+          "#5b5b5b",
+          "#797979",
+          "#989898",
+          "#b6b6b6",
+          "#d4d4d4",
+          "#f2f2f2"
         ]
       },
-      "field-rule": {
+      "frost-panel": {
         "role": "neutral",
-        "displayName": "Field Rule",
-        "canonical": "oklch(76.9% 0.016 80.7)",
+        "displayName": "Frost Panel",
+        "canonical": "#eef0f3",
         "tonalRamp": [
-          "#0f0a05",
-          "#29241d",
-          "#464139",
-          "#666057",
-          "#878278",
-          "#aaa49a",
-          "#cec8be",
-          "#f4eee3"
+          "#191e24",
+          "#323b47",
+          "#4b586b",
+          "#64758e",
+          "#8694a9",
+          "#a9b3c2",
+          "#cdd3db",
+          "#f0f2f4"
         ]
       },
-      "unrated-grey": {
+      "popover-mist": {
         "role": "neutral",
-        "displayName": "Unrated Grey",
-        "canonical": "oklch(72.1% 0.016 80.7)",
+        "displayName": "Popover Mist",
+        "canonical": "#fbfbfc",
         "tonalRamp": [
-          "#0f0a05",
-          "#29241c",
-          "#464139",
-          "#666057",
-          "#878278",
-          "#aaa49a",
-          "#cec8be",
-          "#f4eee3"
+          "#1a1a23",
+          "#343446",
+          "#4e4e68",
+          "#68688b",
+          "#8989a6",
+          "#ababc0",
+          "#ceceda",
+          "#f0f0f4"
         ]
       },
-      "faded-ink": {
+      "hairline": {
         "role": "neutral",
-        "displayName": "Faded Ink",
-        "canonical": "oklch(52.2% 0.012 81.8)",
+        "displayName": "Hairline",
+        "canonical": "#dcdfe5",
         "tonalRamp": [
-          "#0e0b06",
-          "#28251f",
-          "#45413b",
-          "#65615a",
-          "#86827a",
-          "#a9a49d",
-          "#cdc8c1",
-          "#f2eee6"
+          "#1a1d23",
+          "#343a46",
+          "#4e5769",
+          "#67738b",
+          "#8892a7",
+          "#abb2c1",
+          "#ced2da",
+          "#f0f2f4"
         ]
       },
-      "press-ink": {
+      "field-stroke": {
         "role": "neutral",
-        "displayName": "Press Ink",
-        "canonical": "oklch(20.3% 0.006 106.9)",
+        "displayName": "Field Stroke",
+        "canonical": "#cfd3da",
         "tonalRamp": [
-          "#0b0b09",
-          "#252522",
-          "#42423f",
-          "#61615e",
-          "#82837f",
-          "#a5a5a1",
-          "#c9c9c5",
-          "#efefea"
+          "#1b1e23",
+          "#353b45",
+          "#4f5867",
+          "#6a7589",
+          "#8a94a5",
+          "#acb3bf",
+          "#ced2da",
+          "#f1f2f4"
         ]
       },
-      "proofmark-red": {
+      "exposure-red": {
         "role": "primary",
-        "displayName": "Proofmark Red",
-        "canonical": "oklch(54.5% 0.191 24.6)",
+        "displayName": "Exposure Red",
+        "canonical": "#c8241e",
         "tonalRamp": [
-          "#220000",
-          "#4e0005",
-          "#810011",
-          "#b51222",
-          "#dd4444",
-          "#ff6a66",
-          "#ffafa8",
-          "#ffe6e3"
+          "#350a08",
+          "#6a1310",
+          "#9e1d18",
+          "#d32620",
+          "#e4504b",
+          "#ec8380",
+          "#f4b6b4",
+          "#fce9e9"
         ]
       },
-      "archive-blue": {
-        "role": "secondary",
-        "displayName": "Archive Blue",
-        "canonical": "oklch(47.9% 0.119 257.0)",
+      "signal-red": {
+        "role": "primary",
+        "displayName": "Signal Red",
+        "canonical": "#f0352f",
         "tonalRamp": [
-          "#00003b",
-          "#00205d",
-          "#0f407f",
-          "#3161a3",
-          "#5283c8",
-          "#74a7ef",
-          "#a5ccff",
-          "#e1f0ff"
+          "#390604",
+          "#710b08",
+          "#aa110c",
+          "#e21710",
+          "#f1443e",
+          "#f57a76",
+          "#f9b1af",
+          "#fde8e7"
+        ]
+      },
+      "counterweight-blue": {
+        "role": "secondary",
+        "displayName": "Counterweight Blue",
+        "canonical": "#2559d9",
+        "tonalRamp": [
+          "#091534",
+          "#122b68",
+          "#1b409c",
+          "#2355cf",
+          "#4e79e1",
+          "#82a0ea",
+          "#b6c7f2",
+          "#e9eefb"
+        ]
+      },
+      "neutral-grey": {
+        "role": "neutral",
+        "displayName": "Neutral Grey",
+        "canonical": "#b7bcc6",
+        "tonalRamp": [
+          "#1b1d22",
+          "#363a44",
+          "#505866",
+          "#6b7587",
+          "#8c94a4",
+          "#adb3be",
+          "#cfd2d9",
+          "#f1f2f4"
+        ]
+      },
+      "quiet-bar": {
+        "role": "neutral",
+        "displayName": "Quiet Bar",
+        "canonical": "#c3c8d1",
+        "tonalRamp": [
+          "#1b1d23",
+          "#353b45",
+          "#4f5867",
+          "#697589",
+          "#8a94a5",
+          "#acb3bf",
+          "#ced2da",
+          "#f1f2f4"
+        ]
+      },
+      "night-glass": {
+        "role": "neutral",
+        "displayName": "Night Glass",
+        "canonical": "#0d0f14",
+        "tonalRamp": [
+          "#181c25",
+          "#30374a",
+          "#48536e",
+          "#606e93",
+          "#828ead",
+          "#a6afc5",
+          "#cbd0dd",
+          "#f0f1f5"
+        ]
+      },
+      "accent-glass": {
+        "role": "primary",
+        "displayName": "Accent Glass",
+        "canonical": "#c9261f",
+        "tonalRamp": [
+          "#350a08",
+          "#691410",
+          "#9e1e18",
+          "#d22820",
+          "#e3524c",
+          "#eb8580",
+          "#f4b7b5",
+          "#fceae9"
         ]
       }
     },
     "typographyMeta": {
+      "hero-number": {
+        "displayName": "Hero number",
+        "purpose": "The dark hero's negative count only."
+      },
       "display": {
         "displayName": "Display",
-        "purpose": "One page thesis per screen in the page header."
-      },
-      "wordmark": {
-        "displayName": "Wordmark",
-        "purpose": "«КРИВДА.» in the masthead and exported card footers."
-      },
-      "headline": {
-        "displayName": "Headline",
-        "purpose": "Thesis of each chart card (24 px, 28 px from md)."
-      },
-      "title": {
-        "displayName": "Title",
-        "purpose": "Claim and post headlines in lists."
+        "purpose": "Page titles."
       },
       "metric": {
         "displayName": "Metric",
-        "purpose": "Headline counts in the metric strip, tabular figures."
+        "purpose": "Metric tile values, tabular."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Tile headings written as findings."
+      },
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "«кривда» lockup with the red dot."
       },
       "body": {
         "displayName": "Body",
-        "purpose": "Deks, list rows, filters."
-      },
-      "reading": {
-        "displayName": "Reading",
-        "purpose": "Full source-post text."
+        "purpose": "Deks and running text."
       },
       "label": {
         "displayName": "Label",
-        "purpose": "Uppercase eyebrows, filter labels, metric names."
+        "purpose": "Quiet sentence-case labels for metrics and fields."
       }
     },
     "shadows": [
       {
-        "name": "floating-layer",
-        "value": "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
-        "purpose": "Chart tooltips and popovers only."
+        "name": "glass",
+        "value": "inset 0 1px 1px rgb(255 255 255 / 0.95), inset 0 -1px 1px rgb(255 255 255 / 0.3), inset 0 -22px 34px -26px rgb(255 255 255 / 0.75), 0 1px 2px rgb(14 15 18 / 0.05), 0 22px 44px -22px rgb(14 15 18 / 0.24)",
+        "purpose": "Every white glass surface."
+      },
+      {
+        "name": "glass-hover",
+        "value": "var(--glass-shadow), 0 12px 26px -14px rgb(14 15 18 / 0.32)",
+        "purpose": "Interactive glass on hover, with a 1px lift."
+      },
+      {
+        "name": "glass-dark",
+        "value": "inset 0 1px 1px rgb(255 255 255 / 0.22), inset 0 -1px 1px rgb(255 255 255 / 0.06), inset 0 -40px 60px -50px rgb(255 255 255 / 0.18), 0 30px 60px -28px rgb(14 15 18 / 0.5)",
+        "purpose": "The dark hero tile."
+      },
+      {
+        "name": "glass-accent",
+        "value": "inset 0 1px 1px rgb(255 255 255 / 0.55), inset 0 -1px 1px rgb(255 255 255 / 0.18), inset 0 -40px 60px -40px rgb(255 140 130 / 0.55), 0 26px 50px -24px rgb(200 20 27 / 0.5)",
+        "purpose": "The single red accent tile."
+      },
+      {
+        "name": "gloss",
+        "value": "inset 0 1px 0 #fff, inset 0 -1px 0 rgb(14 15 18 / 0.04), 0 1px 2px rgb(14 15 18 / 0.08), 0 6px 16px -4px rgb(14 15 18 / 0.18)",
+        "purpose": "Segmented thumbs, nav indicator, active pills."
       }
     ],
     "motion": [
       {
-        "name": "ease-standard",
-        "value": "150ms cubic-bezier(0.4, 0, 0.2, 1)",
-        "purpose": "Colour, border and background transitions on hover and focus."
+        "name": "ease-glide",
+        "value": "cubic-bezier(0.32, 0.72, 0, 1)",
+        "purpose": "Thumbs, indicators, interactive glass; no overshoot."
       },
       {
-        "name": "underline-reveal",
-        "value": "transform scaleX(0→1), origin left, 150ms",
-        "purpose": "Active and hovered masthead link underline in Proofmark Red."
+        "name": "ease-out-expo",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Reveals: tile entry (700ms, 14px rise), bar growth (900ms)."
+      },
+      {
+        "name": "thumb-glide",
+        "value": "420ms",
+        "purpose": "Segmented thumb travel; nav indicator 450ms."
       },
       {
         "name": "press",
-        "value": "translateY(1px)",
-        "purpose": "Pressed buttons."
+        "value": "scale(0.97) over 120ms",
+        "purpose": "Pressed buttons and glass."
+      },
+      {
+        "name": "ascii-field",
+        "value": "20 fps, paused while scrolling and when hidden",
+        "purpose": "Background field; ripples («сплески») from hovered daily bars; nothing follows the pointer."
       }
     ],
     "breakpoints": [
@@ -227,12 +328,8 @@
         "value": "1024px"
       },
       {
-        "name": "xl",
-        "value": "1280px"
-      },
-      {
         "name": "container",
-        "value": "1480px"
+        "value": "1320px"
       }
     ]
   },
@@ -241,135 +338,143 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Ink-filled action for confirming a choice.",
-      "html": "<button class=\"ds-btn-primary\">Застосувати</button>",
-      "css": ".ds-btn-primary { height: 32px; padding: 0 10px; background: var(--foreground, #171714); color: var(--background, #f4f1e9); border: 1px solid transparent; border-radius: 4px; font: 500 14px/1 'Fixel Text', sans-serif; cursor: pointer; transition: background-color .15s, transform .15s; } .ds-btn-primary:hover { background: color-mix(in srgb, #171714 80%, transparent); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(23 23 20 / .5); } .ds-btn-primary:active { transform: translateY(1px); }"
+      "description": "Graphite capsule for the one committed action in a view.",
+      "html": "<button class=\"ds-btn-primary\">Спробувати ще раз</button>",
+      "css": ".ds-btn-primary{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter Variable',system-ui,sans-serif;height:44px;padding:0 20px;border:0;border-radius:999px;background:linear-gradient(180deg,#2b2e35,#0e0f12);color:#fff;font-size:15px;font-weight:600;box-shadow:inset 0 1px 0 rgb(255 255 255/.22),0 6px 16px -6px rgb(14 15 18/.55);transition:transform .2s cubic-bezier(.32,.72,0,1),filter .2s,box-shadow .2s;cursor:pointer}.ds-btn-primary:hover{transform:translateY(-1px);filter:brightness(1.25);box-shadow:inset 0 1px 0 rgb(255 255 255/.25),0 12px 24px -8px rgb(14 15 18/.6)}.ds-btn-primary:active{transform:scale(.97)}.ds-btn-primary:focus-visible{outline:3px solid rgb(37 89 217/.55);outline-offset:2px}"
     },
     {
-      "name": "Ghost Button",
+      "name": "Outline Button",
       "kind": "button",
-      "refersTo": "button-ghost",
-      "description": "Quiet preset or pager action.",
-      "html": "<button class=\"ds-btn-ghost\">30 днів</button>",
-      "css": ".ds-btn-ghost { height: 28px; padding: 0 10px; background: transparent; color: #171714; border: 1px solid transparent; border-radius: 3px; font: 500 12.8px/1 'Fixel Text', sans-serif; cursor: pointer; transition: background-color .15s; } .ds-btn-ghost:hover { background: #e8e3d9; } .ds-btn-ghost:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(23 23 20 / .5); }"
+      "refersTo": "button-outline",
+      "description": "Translucent white capsule for secondary actions.",
+      "html": "<button class=\"ds-btn-outline\">Відкрити пошук тверджень</button>",
+      "css": ".ds-btn-outline{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter Variable',system-ui,sans-serif;height:36px;padding:0 16px;border:0;border-radius:999px;background:rgb(255 255 255/.6);color:#0e0f12;font-size:14px;font-weight:500;box-shadow:inset 0 0 0 1px rgb(14 15 18/.08),inset 0 1px 0 #fff;transition:background-color .2s,transform .2s;cursor:pointer}.ds-btn-outline:hover{background:#fff}.ds-btn-outline:active{transform:scale(.97)}.ds-btn-outline:focus-visible{outline:3px solid rgb(37 89 217/.55);outline-offset:2px}"
     },
     {
-      "name": "Select Trigger",
-      "kind": "input",
-      "refersTo": "select-trigger",
-      "description": "Square filter control with uppercase label.",
-      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Позиція</span><button class=\"ds-select\">Усі оцінки <svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"m6 9 6 6 6-6\"/></svg></button></label>",
-      "css": ".ds-field { display: grid; gap: 6px; width: 240px; } .ds-field-label { font: 800 11px/1.4 'Fixel Text', sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #6d6962; } .ds-select { display: flex; align-items: center; justify-content: space-between; min-height: 40px; padding: 8px 12px; background: #f4f1e9; color: #171714; border: 1px solid #d5d0c7; border-radius: 0; font: 400 14px/1.4 'Fixel Text', sans-serif; cursor: pointer; transition: border-color .15s; } .ds-select:hover { border-color: #171714; } .ds-select:focus-visible { outline: none; border-color: #c72c32; box-shadow: 0 0 0 2px rgb(199 44 50 / .2); }"
-    },
-    {
-      "name": "Search Input",
-      "kind": "input",
-      "refersTo": "input-field",
-      "description": "Text search for entities and claims.",
-      "html": "<input class=\"ds-input\" placeholder=\"Знайти сутність\" />",
-      "css": ".ds-input { height: 40px; width: 260px; padding: 8px 12px; background: #f4f1e9; color: #171714; border: 1px solid #d5d0c7; border-radius: 0; font: 400 14px/1.4 'Fixel Text', sans-serif; transition: border-color .15s; } .ds-input:hover { border-color: #171714; } .ds-input::placeholder { color: #6d6962; } .ds-input:focus-visible { outline: none; border-color: #c72c32; box-shadow: 0 0 0 2px rgb(199 44 50 / .2); }"
-    },
-    {
-      "name": "Masthead",
-      "kind": "nav",
-      "refersTo": "masthead",
-      "description": "Sticky newspaper masthead: КРИВДА nameplate with a red square full stop and a red active underline.",
-      "html": "<header class=\"ds-mast\"><a class=\"ds-mark\">КРИВДА<span></span></a><nav class=\"ds-nav\"><a class=\"is-active\">Огляд</a><a>Сутності</a><a>Канали</a><a>Твердження</a></nav></header>",
-      "css": ".ds-mast { display: flex; align-items: center; gap: 32px; height: 64px; padding: 0 32px; background: rgb(244 241 233 / .95); border-bottom: 1px solid #d5d0c7; } .ds-mark { display: inline-flex; align-items: baseline; font: 900 24px/1 'Kyiv Type Serif', Georgia, serif; letter-spacing: .04em; color: #171714; } .ds-nav { display: flex; gap: 28px; } .ds-nav a { position: relative; padding: 20px 0; font: 700 14px/1 'Fixel Text', sans-serif; color: #6d6962; cursor: pointer; transition: color .15s; } .ds-nav a:hover, .ds-nav a.is-active { color: #171714; } .ds-nav a::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: #c72c32; transform: scaleX(0); transform-origin: left; transition: transform .15s; } .ds-nav a.is-active::after, .ds-nav a:hover::after { transform: scaleX(1); } .ds-mark span { display: inline-block; width: .26em; height: .26em; margin-left: .08em; background: #c72c32; }"
-    },
-    {
-      "name": "Stance Badges",
+      "name": "Segmented Control",
       "kind": "chip",
-      "refersTo": "badge-negative",
-      "description": "Square outline badges coloured by evaluation.",
-      "html": "<span class=\"ds-badge ds-neg\">Негативне</span> <span class=\"ds-badge ds-pos\">Позитивне</span> <span class=\"ds-badge ds-abs\">Без оцінки</span>",
-      "css": ".ds-badge { display: inline-flex; align-items: center; height: 20px; padding: 2px 8px; border: 1px solid; border-radius: 0; font: 500 12px/1 'Fixel Text', sans-serif; } .ds-neg { color: #c72c32; border-color: #c72c32; } .ds-pos { color: #2d5d9f; border-color: #2d5d9f; } .ds-abs { color: #6d6962; border-color: #aaa49a; }"
+      "refersTo": "segmented-thumb",
+      "description": "Period and mode switch with a glossy thumb that glides, no overshoot.",
+      "html": "<div class=\"ds-seg\" role=\"group\"><span class=\"ds-seg-thumb\"></span><button aria-pressed=\"false\">7 днів</button><button aria-pressed=\"true\">30 днів</button><button aria-pressed=\"false\">90 днів</button><button aria-pressed=\"false\">Увесь час</button></div>",
+      "css": ".ds-seg{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter Variable',system-ui,sans-serif;position:relative;display:inline-grid;grid-auto-flow:column;grid-auto-columns:1fr;padding:3px;border-radius:999px;background:rgb(14 15 18/.07)}.ds-seg-thumb{position:absolute;top:3px;bottom:3px;left:25%;width:calc(25% - 1.5px);border-radius:999px;background:linear-gradient(180deg,#fff 0%,#f6f7f9 100%);box-shadow:inset 0 1px 0 #fff,0 1px 2px rgb(14 15 18/.08),0 6px 16px -4px rgb(14 15 18/.18);transition:transform .42s cubic-bezier(.32,.72,0,1),width .42s cubic-bezier(.32,.72,0,1)}.ds-seg button{position:relative;z-index:1;border:0;background:transparent;border-radius:999px;padding:6px 14px;font-size:13px;font-weight:500;color:#5b6170;white-space:nowrap;cursor:pointer;transition:color .2s,background-color .2s}.ds-seg button[aria-pressed=true]{color:#0e0f12;font-weight:600}.ds-seg button[aria-pressed=false]:hover{color:#0e0f12;background:rgb(255 255 255/.42)}.ds-seg button:focus-visible{outline:3px solid rgb(37 89 217/.55);outline-offset:2px}"
     },
     {
-      "name": "Story Card",
+      "name": "Nav Capsule",
+      "kind": "nav",
+      "refersTo": "nav-capsule",
+      "description": "Floating glass capsule; a glossy indicator glides to the active section.",
+      "html": "<nav class=\"ds-nav\"><a class=\"is-active\" href=\"#\">Огляд</a><a href=\"#\">Сутності</a><a href=\"#\">Канали</a><a href=\"#\">Твердження</a><a href=\"#\">Система</a></nav>",
+      "css": ".ds-nav{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter Variable',system-ui,sans-serif;position:relative;isolation:isolate;background:rgb(255 255 255/.4);-webkit-backdrop-filter:blur(12px) saturate(185%) brightness(1.04);backdrop-filter:blur(12px) saturate(185%) brightness(1.04);box-shadow:inset 0 1px 1px rgb(255 255 255/.95),inset 0 -1px 1px rgb(255 255 255/.3),inset 0 -22px 34px -26px rgb(255 255 255/.75),0 1px 2px rgb(14 15 18/.05),0 22px 44px -22px rgb(14 15 18/.24);display:inline-flex;padding:5px;border-radius:999px}.ds-nav a{padding:8px 16px;border-radius:999px;font-size:14px;font-weight:500;color:#5b6170;text-decoration:none;transition:color .2s,background-color .2s}.ds-nav a:hover{background:rgb(255 255 255/.5);color:#0e0f12}.ds-nav a.is-active{background:linear-gradient(180deg,#fff 0%,#f6f7f9 100%);box-shadow:inset 0 1px 0 #fff,0 1px 2px rgb(14 15 18/.08),0 6px 16px -4px rgb(14 15 18/.18);color:#0e0f12;font-weight:600}.ds-nav a:focus-visible{outline:3px solid rgb(37 89 217/.55);outline-offset:2px}"
+    },
+    {
+      "name": "Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Translucent capsule for filters and linked facets.",
+      "html": "<a class=\"ds-chip\" href=\"#\">Делегітимізація</a>",
+      "css": ".ds-chip{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter Variable',system-ui,sans-serif;display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;font-size:14px;color:#0e0f12;text-decoration:none;background:rgb(255 255 255/.55);box-shadow:inset 0 0 0 1px rgb(14 15 18/.08),inset 0 1px 0 #fff;transition:background-color .2s,box-shadow .2s}.ds-chip:hover{background:#fff;box-shadow:inset 0 0 0 1px rgb(14 15 18/.12),0 6px 14px -8px rgb(14 15 18/.3)}.ds-chip:focus-visible{outline:3px solid rgb(37 89 217/.55);outline-offset:2px}"
+    },
+    {
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "44px translucent field; blue halo on focus, red caret.",
+      "html": "<input class=\"ds-input\" placeholder=\"Пошук тверджень\">",
+      "css": ".ds-input{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter Variable',system-ui,sans-serif;height:44px;width:280px;padding:8px 14px;border:0;border-radius:16px;font-size:16px;color:#0e0f12;caret-color:#c8241e;background:rgb(255 255 255/.6);box-shadow:inset 0 0 0 1px rgb(14 15 18/.08),inset 0 1px 2px rgb(14 15 18/.04);outline:none;transition:background-color .2s,box-shadow .2s}.ds-input:hover{background:rgb(255 255 255/.8)}.ds-input:focus-visible{background:#fff;box-shadow:inset 0 0 0 1px rgb(37 89 217/.45),0 0 0 4px rgb(37 89 217/.14)}"
+    },
+    {
+      "name": "Metric Tile",
       "kind": "card",
-      "refersTo": "chart-card",
-      "description": "Export-ready chart card: thesis headline, dateline, signed footer.",
-      "html": "<section class=\"ds-card\"><h2 class=\"ds-thesis\">Негатив щодо сутності зріс з 4 до 19</h2><p class=\"ds-dateline\"><b>Тональність у часі</b> / Назва сутності / 9 вер. — 9 жовт. 2026 / усі канали та джерела</p><p class=\"ds-dek\">Стовпчики — позитивні й негативні класифікації.</p><div class=\"ds-plot\"></div><footer class=\"ds-foot\"><span class=\"ds-sig\">КРИВДА</span><span class=\"ds-src\">Джерело: погоджений пул публічних Telegram-каналів · класифікація мовною моделлю</span></footer></section>",
-      "css": ".ds-card { display: flex; flex-direction: column; max-width: 440px; padding: 20px; background: #faf8f2; border: 1px solid #d5d0c7; border-top: 2px solid #171714; color: #171714; } .ds-dateline { margin: 8px 0 0; font: 400 13px/20px 'Fixel Text', sans-serif; color: #6d6962; } .ds-dateline b { color: #171714; } .ds-thesis { margin: 0; font: 700 28px/1.25 'Kyiv Type Serif', Georgia, serif; letter-spacing: .015em; } .ds-dek { margin: 6px 0 0; font: 400 14px/24px 'Fixel Text', sans-serif; color: #6d6962; } .ds-plot { height: 96px; margin-top: 16px; background: repeating-linear-gradient(90deg, #c72c32 0 14px, transparent 14px 20px); opacity: .85; } .ds-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-top: 20px; padding-top: 12px; border-top: 1px solid #d5d0c7; } .ds-sig { font: 900 16px/1 'Kyiv Type Serif', Georgia, serif; letter-spacing: .04em; }  .ds-src { font: 400 12px/1.4 'Fixel Text', sans-serif; color: #6d6962; } .ds-sig::after { content: ''; display: inline-block; width: .3em; height: .3em; margin-left: .08em; background: #c72c32; }"
+      "refersTo": "metric-tile",
+      "description": "Small glass tile: quiet label, large tabular number, change underneath.",
+      "html": "<div class=\"ds-metric\"><span class=\"ds-metric-label\">Твердження</span><strong>2 267</strong><span class=\"ds-metric-delta\">+60,3% до попереднього періоду</span></div>",
+      "css": ".ds-metric{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter Variable',system-ui,sans-serif;position:relative;isolation:isolate;background:rgb(255 255 255/.4);-webkit-backdrop-filter:blur(12px) saturate(185%) brightness(1.04);backdrop-filter:blur(12px) saturate(185%) brightness(1.04);box-shadow:inset 0 1px 1px rgb(255 255 255/.95),inset 0 -1px 1px rgb(255 255 255/.3),inset 0 -22px 34px -26px rgb(255 255 255/.75),0 1px 2px rgb(14 15 18/.05),0 22px 44px -22px rgb(14 15 18/.24);display:flex;flex-direction:column;justify-content:space-between;min-height:132px;width:200px;padding:20px;border-radius:22px;color:#0e0f12}.ds-metric-label{font-size:13px;font-weight:500;color:#5b6170}.ds-metric strong{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter Variable',system-ui,sans-serif;font-size:36px;font-weight:700;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums;margin-top:12px}.ds-metric-delta{font-size:12px;color:#5b6170;margin-top:6px}"
     },
     {
-      "name": "Diverging Bar Row",
+      "name": "Dark Hero Tile",
       "kind": "custom",
-      "description": "Signature ranking row: negative left in red, positive right in blue on one axis.",
-      "html": "<a class=\"ds-div\"><span class=\"ds-div-head\"><span class=\"ds-rank\">01</span><span class=\"ds-name\">Назва сутності</span><span class=\"ds-n\">вибірка 186</span></span><span class=\"ds-div-bars\"><span class=\"ds-l\"><b>142</b><i style=\"width:76%\"></i></span><span class=\"ds-r\"><i style=\"width:24%\"></i><b>44</b></span></span></a>",
-      "css": ".ds-div { display: block; width: 420px; padding: 10px 0; border-bottom: 1px solid #d5d0c7; color: #171714; font-family: 'Fixel Text', sans-serif; cursor: pointer; transition: background-color .15s; } .ds-div:hover { background: rgb(23 23 20 / .035); } .ds-div-head { display: flex; align-items: baseline; gap: 12px; } .ds-rank { width: 24px; font-size: 14px; color: #6d6962; font-variant-numeric: tabular-nums; } .ds-name { flex: 1; font-weight: 600; } .ds-n { font-size: 12px; color: #6d6962; font-variant-numeric: tabular-nums; } .ds-div-bars { display: grid; grid-template-columns: 1fr 1fr; margin-top: 6px; font: 700 12px/1 'Fixel Text', sans-serif; font-variant-numeric: tabular-nums; } .ds-l { display: flex; justify-content: flex-end; align-items: center; gap: 6px; color: #c72c32; } .ds-r { display: flex; align-items: center; gap: 6px; border-left: 1px solid #171714; color: #2d5d9f; } .ds-l i, .ds-r i { display: block; height: 10px; } .ds-l i { background: #c72c32; } .ds-r i { background: #2d5d9f; }"
+      "refersTo": "tile-dark",
+      "description": "The one dark glass tile per view: the period's negative count.",
+      "html": "<section class=\"ds-hero\"><h2>Пік атак — 02 жовт.</h2><span class=\"ds-hero-label\">Негативні класифікації</span><strong>499</strong></section>",
+      "css": ".ds-hero{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter Variable',system-ui,sans-serif;position:relative;width:420px;padding:28px;border-radius:28px;color:#f5f6f8;background:rgb(13 15 20/.86);-webkit-backdrop-filter:blur(16px) saturate(170%);backdrop-filter:blur(16px) saturate(170%);box-shadow:inset 0 1px 1px rgb(255 255 255/.22),inset 0 -1px 1px rgb(255 255 255/.06),inset 0 -40px 60px -50px rgb(255 255 255/.18),0 30px 60px -28px rgb(14 15 18/.5)}.ds-hero h2{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter Variable',system-ui,sans-serif;margin:0 0 20px;font-size:22px;font-weight:600;letter-spacing:-.025em}.ds-hero-label{display:block;font-size:13px;font-weight:500;color:rgb(245 246 248/.64)}.ds-hero strong{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter Variable',system-ui,sans-serif;display:block;font-size:96px;font-weight:700;line-height:.9;letter-spacing:-.055em;color:#ff5a52;font-variant-numeric:tabular-nums}"
     },
     {
-      "name": "Metric Cell",
+      "name": "Accent Tile",
       "kind": "custom",
-      "description": "Headline count with sparkline and period delta.",
-      "html": "<dl class=\"ds-metric\"><dt>Негативні класифікації</dt><dd class=\"ds-val\">1 284 <svg viewBox=\"0 0 64 20\" width=\"64\" height=\"20\"><polyline points=\"0,15 16,12 32,14 48,6 64,3\" fill=\"none\" stroke=\"#c72c32\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/></svg></dd><dd class=\"ds-delta\">▲ 18% <span>до попередніх 30 днів</span></dd></dl>",
-      "css": ".ds-metric { width: 240px; margin: 0; padding: 12px 16px 12px 0; border-top: 1px solid #d5d0c7; border-bottom: 1px solid #d5d0c7; font-family: 'Fixel Text', sans-serif; } .ds-metric dt { font: 800 11px/1.4 'Fixel Text', sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #6d6962; } .ds-val { display: flex; align-items: flex-end; justify-content: space-between; margin: 4px 0 0; font-size: 30px; font-weight: 900; color: #c72c32; font-variant-numeric: tabular-nums; } .ds-delta { margin: 2px 0 0; font-size: 12px; font-weight: 600; color: #c72c32; } .ds-delta span { font-weight: 400; color: #6d6962; }"
+      "refersTo": "tile-accent",
+      "description": "The single red glass tile per view for the most telling figure.",
+      "html": "<section class=\"ds-accent\"><span>Найчастіший прийом</span><strong>46,1%</strong><em>Делегітимізація</em></section>",
+      "css": ".ds-accent{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter Variable',system-ui,sans-serif;display:flex;flex-direction:column;justify-content:space-between;min-height:220px;width:260px;padding:28px;border-radius:28px;color:#fff;background:rgb(201 38 31/.9);box-shadow:inset 0 1px 1px rgb(255 255 255/.55),inset 0 -1px 1px rgb(255 255 255/.18),inset 0 -40px 60px -40px rgb(255 140 130/.55),0 26px 50px -24px rgb(200 20 27/.5)}.ds-accent span{font-size:13px;font-weight:500;color:rgb(255 255 255/.92)}.ds-accent strong{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter Variable',system-ui,sans-serif;font-size:72px;font-weight:700;line-height:.9;letter-spacing:-.05em;font-variant-numeric:tabular-nums}.ds-accent em{font-style:normal;font-size:20px;font-weight:600}"
+    },
+    {
+      "name": "Wordmark",
+      "kind": "custom",
+      "refersTo": "wordmark",
+      "description": "«кривда» closed by a round red dot; gathers into a glass bubble on scroll.",
+      "html": "<a class=\"ds-brand is-raised\" href=\"#\">кривда<span></span></a>",
+      "css": ".ds-brand{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter Variable',system-ui,sans-serif;display:inline-flex;align-items:baseline;padding:8px 16px;border-radius:999px;font-size:22px;font-weight:700;letter-spacing:-.045em;color:#0e0f12;text-decoration:none;transition:background-color .35s,box-shadow .35s}.ds-brand span{display:inline-block;width:.3em;height:.3em;margin-left:.06em;border-radius:50%;background:#f0352f}.ds-brand.is-raised{background:rgb(255 255 255/.55);-webkit-backdrop-filter:blur(14px) saturate(185%);backdrop-filter:blur(14px) saturate(185%);box-shadow:inset 0 1px 1px rgb(255 255 255/.95),0 22px 44px -22px rgb(14 15 18/.24)}.ds-brand:hover{background:rgb(255 255 255/.7)}.ds-brand:focus-visible{outline:3px solid rgb(37 89 217/.55);outline-offset:2px}"
     }
   ],
   "narrative": {
-    "northStar": "Шпальта розслідування (The Investigative Broadsheet)",
-    "overview": "Кривда looks and behaves like the front page of an investigative newspaper that has just found\nsomething. Every screen is a printed page: warm newsprint ground, heavy black serif theses set\nlike headlines, hairline column rules instead of boxes, and one exposing red that marks what is\nbeing attacked. The tone is sharp and accusatory in its presentation, never in its numbers: a\nheadline states the finding bluntly, while the graphic beneath it shows its sample size, its\ndenominator, and the period it covers.\n\nDensity is that of a broadsheet, not a SaaS dashboard. Wide screens set chart cards in a\nthree-column grid under a 1480 px masthead; each card is a self-contained story with a thesis\nheadline, a dateline (section, subject, period with year, active filters), a dek, the graphic, and\na signed footer, so it can be torn out and posted publicly as a PNG without losing meaning.\nOrnament is absent; emphasis comes from weight, rules, and red.\n\nThe identity is a newspaper nameplate: КРИВДА in Kyiv Type Serif Black closed by a red square\nfull stop. Where a square mark is needed (favicon, app icon) it becomes a press-ink plate with a\npaper К outlined from the same face and the red square at its baseline\n(`apps/frontend/public/kryvda-mark.svg`).\n\nThe system is light-only: newsprint is the identity, and no dark theme is defined.",
+    "northStar": "The Glass Instrument",
+    "overview": "**Creative North Star: \"The Glass Instrument\"**\n\nКривда is an Apple-grade instrument made of light and glass, not paper. A cool grey ground sits under a slowly breathing field of ASCII characters; on top of it float white liquid-glass tiles with a specular rim and a fixed top-left highlight. One dark glass hero carries the period's attack pulse, one red glass tile carries the single most important figure, and everything else is calm white glass arranged as a bento. The field is the system's pulse: when an analyst hovers a daily bar, a «сплеск» ripples outward from that bar across the background, sized by the day's negative count and red on spike days.\n\nDensity is analytical but airy: large numbers set in the display face with tight negative tracking, quiet 13px labels in sentence case, and grey bars that let red spikes speak. The broadsheet world (beige newsprint, slab serif, hairline boxes, a signature on every card) is retired, and the generic grey admin template is refused. Motion is a calm glide with no overshoot; nothing follows the pointer (pointer-following effects were rejected as laggy).\n\nThe working screen and the exported card are two states of one object. On export a tile drops its glass and renders on solid white with the wordmark, section label and source line, so a public PNG explains itself.",
     "keyCharacteristics": [
-      "Newsprint paper and press ink, with red reserved for exposure and blue for its opposite.",
-      "Black-weight Kyiv Type Serif theses; every number and label in Fixel Text.",
-      "Rules, not shadows: hairline column rules and a 2 px ink rule that opens every story.",
-      "Square, nearly cornerless forms (0–4 px).",
-      "Every chart card is export-ready, carries its own context, and is signed with the mark."
+      "Light only: cool ground (#e8eaef) under a calm ASCII field at 20 fps that holds still while scrolling.",
+      "White liquid-glass tiles (radius 28), one dark glass hero, at most one red accent tile per view.",
+      "SF Pro on Apple devices, self-hosted Inter Variable with optical sizes elsewhere; display 700 with negative tracking.",
+      "Red exposes negative, blue is its colour-blind-safe counterweight, grey carries ordinary days.",
+      "Glossy white thumbs on segmented controls and the nav capsule; hover brightens and lifts 1px, press scales to .97.",
+      "Wordmark «кривда» closed by a round red dot; it gathers into a glass bubble once the page scrolls."
     ],
     "rules": [
       {
-        "name": "The Proofmark Rule",
-        "body": "Red means negative evaluation, the brand mark, or a data error. It is never decorative; if red appears, a reader must be able to say what is being exposed.",
+        "name": "The Two Inks Rule",
+        "body": "Red means negative and blue means positive, everywhere, including charts and deltas. Neither ever decorates.",
         "section": "colors"
       },
       {
-        "name": "The Two Inks of Judgment Rule",
-        "body": "Negative is red, positive is blue, unrated is grey, and each always carries a text label. Green never encodes evaluation.",
+        "name": "The Quiet Day Rule",
+        "body": "Ordinary days are grey bars; only spike days turn red. If everything is red, nothing is a spike.",
         "section": "colors"
       },
       {
-        "name": "The Thesis Rule",
-        "body": "Serif is for statements: page and card headlines that say what was found. Numbers, labels, and controls are never set in the serif. A headline names a finding only when its guardrail passes (`apps/frontend/src/lib/theses.ts`: at least 10 evaluations, 5 classifications, or a 20-evaluation, 60%-negative leader for \"main target\"); otherwise it describes the graphic.",
+        "name": "The One Accent Tile Rule",
+        "body": "A view carries at most one red glass tile, reserved for its single most telling figure.",
+        "section": "colors"
+      },
+      {
+        "name": "The Sentence-Case Label Rule",
+        "body": "Small labels are quiet sentence case in muted ink. Never tracked capitals.",
         "section": "typography"
       },
       {
-        "name": "The Dateline Rule",
-        "body": "Context goes under the headline, not above it. No kicker or eyebrow sits over a heading; the dateline carries section, subject, period with year, and active filters.",
+        "name": "The Ukrainian-Only Rule",
+        "body": "Every interface word is Ukrainian; Latin appears only for Telegram, Lapathoniia and data (channel names, quotes).",
         "section": "typography"
       },
       {
-        "name": "The Tabular Figures Rule",
-        "body": "Every count, share, rank, and delta uses tabular numerals so columns of evidence align.",
-        "section": "typography"
-      },
-      {
-        "name": "The Hairline Rule",
-        "body": "Stories are separated by rules, never by shadows. A card that needs a shadow to stand out needs a stronger top rule or a brighter stock instead.",
+        "name": "The Light Not Paper Rule",
+        "body": "Surfaces are separated by blur, rim light and soft shadow, never by hairline boxes or offset shadows.",
         "section": "elevation"
       }
     ],
     "dos": [
-      "Do open every story with a 2 px Press Ink rule and a thesis headline, with the dateline under it.",
-      "Do write card headlines as theses that state the finding, guarded by the sample thresholds; put method and caveats in the dek.",
-      "Do show absolute values beside percentage changes, and absolute changes alone below a base of 10.",
-      "Do flag stale sources in red where freshness matters (last post or claim more than 3 days old).",
-      "Do show the evaluative sample size and the denominator next to every share.",
-      "Do set every number in Fixel Text with tabular figures.",
-      "Do keep every chart card export-ready: self-explanatory headline, period, source line, and the КРИВДА nameplate; mark controls `data-export-ignore`.",
-      "Do take all visible text from the Ukrainian glossary and attach its definition as a tooltip."
+      "Do keep the ground at #e8eaef under the ASCII field and build every surface from white glass with radius 28.",
+      "Do use one dark glass hero and at most one red accent tile per view.",
+      "Do colour negative text #c8241e, vivid fills #f0352f, positive #2559d9, ordinary bars grey.",
+      "Do set display and numbers in 700 with negative tracking, numbers tabular.",
+      "Do use cubic-bezier(.32,.72,0,1) for thumbs and indicators and an exponential ease-out for reveals; hover brightens and lifts 1px, press scales to .97.",
+      "Do turn all motion off under reduced motion and make glass solid under reduced transparency.",
+      "Do render exports on solid white with section label, wordmark and source line."
     ],
     "donts": [
-      "Don't use Proofmark Red for decoration, generic emphasis, or positive data.",
-      "Don't encode evaluation with green, or with colour alone without a text label.",
-      "Don't put drop shadows on cards or rows; shadows belong only to floating layers.",
-      "Don't round corners beyond 4 px; badges and selects are square.",
-      "Don't draw interpolated area or smoothed line charts for daily counts.",
-      "Don't set numbers, labels, or controls in the serif.",
-      "Don't show Latin-script interface text; only «Telegram» and data such as channel names.",
-      "Don't set a kicker or eyebrow label above any heading.",
-      "Don't use Unicode glyphs (▲ ◀ ▶) as icons; use the Lucide set."
+      "Don't add a dark theme.",
+      "Don't add pointer-following effects or cursor-tracking light; they were rejected as laggy.",
+      "Don't use overshoot or spring bounce in motion.",
+      "Don't return to beige newsprint, slab serifs, hairline-boxed cards or a signature on every card.",
+      "Don't show section labels above tile titles on the working screen; they belong to the exported card.",
+      "Don't use tracked uppercase labels or English words in the interface.",
+      "Don't use red or blue decoratively; they carry evaluation only."
     ]
   }
 }

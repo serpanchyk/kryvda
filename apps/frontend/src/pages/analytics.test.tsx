@@ -53,7 +53,7 @@ beforeAll(() => {
 const pipeline = { pending_live: 0, pending_backfill: 0, leased: 0, retry_scheduled: 0, next_retry_at: null, retry_by_error_kind: {}, failed: 0, completed_last_hour: 0, failed_last_hour: 0, last_completed_at: null };
 
 /** Fail when visible text or accessible names contain Latin words (apart from allowed brand names). */
-function expectNoLatin(root: HTMLElement = document.body, allow: string[] = ["Telegram"]) {
+function expectNoLatin(root: HTMLElement = document.body, allow: string[] = ["Telegram", "Lapathoniia"]) {
   const names = [...root.querySelectorAll("[aria-label], [title]")].flatMap((node) => [node.getAttribute("aria-label") ?? "", node.getAttribute("title") ?? ""]);
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const visible: string[] = [];
@@ -195,7 +195,7 @@ describe("editorial analytics pages", () => {
     expect(node.tagName).toBe("SECTION");
     expect(within(node).getByText(title)).toBeInTheDocument();
     expect(within(node).getByText(/Увесь час/)).toBeInTheDocument();
-    expect(within(node).getByText(/класифікація мовною моделлю/)).toBeInTheDocument();
+    expect(within(node).getByText(/українських великих мовних моделей/)).toBeInTheDocument();
     expect(options).toEqual(expect.objectContaining({ pixelRatio: 2 }));
     expect(options?.filter?.(within(node).getByRole("button", { name: "Зберегти зображення", hidden: true }).parentElement as HTMLElement)).toBe(false);
     expect(options?.filter?.(within(node).getByText(title))).toBe(true);
@@ -280,7 +280,8 @@ describe("editorial analytics pages", () => {
   test("shows glossary definitions next to analytical terms", async () => {
     vi.mocked(apiClient.dashboard).mockResolvedValue(dashboardData([]));
     renderRoute("/?period=all", "/", <DashboardPage />);
-    await userEvent.hover(await screen.findByText("Делегітимізація"));
+    const [term] = (await screen.findAllByText("Делегітимізація")).filter((node) => node.closest("button"));
+    await userEvent.hover(term);
     expect(await screen.findByText(/Атака на легітимність/, {}, { timeout: 2000 })).toBeInTheDocument();
   });
 

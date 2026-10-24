@@ -194,8 +194,15 @@ Product context for UI work is recorded in `../PRODUCT.md`; the incumbent visual
 type, components, and rules) is recorded in `../DESIGN.md` with extensions in
 `../.impeccable/design.json`.
 
-The Kryvda investigation UI uses an editorial newsroom layout with a responsive top masthead,
-self-contained visualization sections, Kyiv Type Serif headlines, and Fixel Text data typography.
+The Kryvda investigation UI uses a light liquid-glass system: frosted glass tiles over a calm,
+slowly animated ASCII field whose ripples echo attack spikes (hovering a daily bar sends one), a
+floating capsule navigation, and SF Pro on Apple devices with self-hosted Inter elsewhere. The
+overview is a bento: a dark glass hero with the negative count and daily chart, the period's main
+target, summary tiles, the most frequent rhetoric technique, rankings, the target map with its
+always-open list, movers and the rhetoric distribution. Edge refraction (an SVG displacement map
+in `backdrop-filter`) renders on Chromium for pills and the dark and accent tiles; other engines
+keep the frosted blur. Motion and refraction stop under `prefers-reduced-motion`, and glass turns
+solid under `prefers-reduced-transparency`.
 The overview leads with negative classifications, temporal activity, attacked-entity rankings,
 channel comparisons, and auditable claims. Entity profiles add stance-over-time, epistemic-status,
 and attribution distributions. Their URL-backed global filters distinguish publication channel from
@@ -224,9 +231,12 @@ filter their evidence or claims. Entity analytics excludes the technical `від
 from its evaluative totals. Rhetoric shares count assigned labels, while epistemic and attribution
 shares count distinct claims; the interface labels these denominators explicitly.
 
-Every chart section is a shareable card: a data-driven thesis headline, a dateline under it
-(section, subject, period with year, active filters), and a footer with the КРИВДА nameplate and a
-source line naming the agreed channel pool and language-model classification. Headlines state a
+Every chart section is a shareable card: a data-driven thesis headline and a dateline under it
+(section, subject, period with year, active filters). The exported PNG alone adds a footer with the
+«кривда.» wordmark, the source line and the partner credit; on screen these appear once, in the site
+footer («Досліджуємо український інформаційний простір…» and «Спільний проєкт ЦПК, катедри СШІ
+Львівської політехніки та платформи інференсу мовних моделей Lapathoniia»). Exports render the card
+on solid white without glass effects. Headlines state a
 finding only above sample guardrails (`apps/frontend/src/lib/theses.ts`) and otherwise describe the
 graphic; the overview title names the period's main target under the same guardrail. A
 `Зберегти зображення` control renders the card at 2x pixel ratio through `html-to-image` and opens a
@@ -236,9 +246,11 @@ table that offers the same drill-down, and on phones the target map becomes a ra
 Channel profiles add their own target map of the entities that channel evaluated; its points open
 entity profiles filtered to the channel.
 
-The identity is the КРИВДА nameplate with a red square full stop (`BrandLockup`); favicons and the
-app icon use a press-ink plate with a paper К (`apps/frontend/public/kryvda-mark.svg`,
-`favicon.ico`, `apple-touch-icon.png`). Entity and channel profiles flag sources whose last claim or post is more
+The identity is the lowercase «кривда» wordmark closed by a round red full stop (`BrandLockup`),
+which gathers into a glass bubble once the page scrolls; favicons and the app icon are a dark
+rounded plate with a white Inter Bold «к» and the red dot (`apps/frontend/public/kryvda-mark.svg`,
+`favicon.ico`, `apple-touch-icon.png`). When collection has stopped inside the chosen window, the
+overview hero says since which day there are no new posts. Entity and channel profiles flag sources whose last claim or post is more
 than three days old. Failed requests show a retry action that keeps URL-backed filters. `/system`
 is a non-exportable operational page with the queue, retry reasons, last runs, and per-channel
 collection freshness from `/channels/collection-health`.
