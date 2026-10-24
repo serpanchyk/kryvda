@@ -44,7 +44,9 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   requests, and the frontend nginx re-resolves the API container through Docker DNS.
 - PostgreSQL migration state is stored in `schema_migrations`; fresh initialization records the
   v3.5.2 baseline and the v3 pass-attempt uniqueness repair, while a legacy schema is upgraded
-  through the v3 transition automatically.
+  through the v3 transition automatically. Fresh volumes used to record that repair without
+  creating its unique index, so every analysis failed on the attempt upsert; migration 017
+  creates the index wherever it is missing.
 - PostgreSQL is the lightweight queue through a leased-job table. New live collection jobs take
   priority over throttled historical backfill and due scheduled retries. Every analysis error and
   expired lease becomes a durable retry: after the rapid 5- and 10-second retries, the worker uses

@@ -93,3 +93,14 @@ def test_affiliations_pass_migration_is_registered() -> None:
     assert "SET DEFAULT 'inference_v4_8'" in migration
     assert "\\i /database/migrations/016_inference_v4_8.sql" in runner
     assert "'016_inference_v4_8.sql'" in fresh_init
+
+
+def test_fresh_install_attempts_index_migration_is_registered() -> None:
+    migration = (POSTGRES_ROOT / "migrations" / "017_fresh_install_attempts_unique.sql").read_text()
+    runner = (POSTGRES_ROOT / "migrate.sql").read_text()
+    fresh_init = (POSTGRES_ROOT / "init" / "017_fresh_install_attempts_unique.sql").read_text()
+
+    assert "IF NOT EXISTS" in migration
+    assert "(run_id, pass_name, attempt_kind)" in fresh_init
+    assert "\\i /database/migrations/017_fresh_install_attempts_unique.sql" in runner
+    assert "'017_fresh_install_attempts_unique.sql'" in fresh_init
