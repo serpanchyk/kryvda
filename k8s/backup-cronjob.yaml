@@ -28,7 +28,7 @@ spec:
           - name: ghcr-secret
           containers:
           - name: backup
-            image: ghcr.io/serpanchyk/kryvda-database:sha-88c606aad7fcc18d490771b2117a59d104960e5d
+            image: ghcr.io/serpanchyk/kryvda-database:sha-28be9241d13df40c9c31974b54e71743c488dc66
             command:
             - sh
             - /backup-once.sh
