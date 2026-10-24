@@ -79,6 +79,19 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   batch concurrency stays 1. A 2026-10-09 benchmark ran 8 concurrent requests per process without
   provider errors at about five times the single-request throughput. API `/analysis/health`
   exposes queue and recent-run operational state.
+- API `GET /system/activity?days=30` (`days` 1..90, otherwise 422) is the read-only source for
+  the «Система» page. For a window of `Europe/Kyiv` days ending today it returns zero-filled
+  `days` (collected posts by `raw_posts.created_at`, published posts by `published_at`, run
+  outcomes by `completed_at`: completed, partial, fallback, failed, filtered out), `hours` (the
+  last 48 UTC hours of successful and failed runs), `passes` (attempts, repairs, invalid,
+  failed, median/p95 duration and median completion tokens per inference pass), `models` (runs
+  per model and pipeline version, most runs first), `channels` (collected posts per monitored
+  channel per day) and `totals` (finished runs, mean `completed_at - created_at`, the median of
+  that duration over plain `completed` runs, claims of runs finished in the window). A
+  `superseded` run counts as completed work; any non-first attempt (`repair`, `retry`,
+  `batch_retry`, `individual_retry`) counts as a repair. A run row is reused across job retries,
+  so its duration includes retry waits and the mean is outlier-sensitive; read the median for
+  typical run time.
 - Inference v3.6 rewrites the three prompts after a manual review of 200 production posts: Pass 2
   no longer makes a speaker the target of claims that are not about it, extracts evaluative
   editorial claims (labels, sarcasm, ironic quotes, rhetorical questions, headlines) and reads

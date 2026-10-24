@@ -15,6 +15,12 @@ export type RhetoricLabel =
 export type DateRange = { start?: string; end?: string };
 export type RankingSort = "negative_volume" | "negative_balance" | "positive_volume" | "evaluative_volume";
 export interface Distribution<K extends string = string> { key: K; count: number; share: number; }
+export interface ActivityDay { date: string; collected_posts: number; published_posts: number; completed: number; partial: number; fallback: number; failed: number; filtered_out: number; }
+export interface ActivityHour { hour: string; completed: number; failed: number; }
+export interface PassHealth { pass_name: "entities" | "claims" | "classification"; attempts: number; repairs: number; invalid: number; failed: number; median_ms: number | null; p95_ms: number | null; median_completion_tokens: number | null; }
+export interface ModelUsage { model_name: string; pipeline_version: string; runs: number; last_used_at: string | null; }
+export interface ChannelActivity { id: number; title: string | null; days: Array<{ date: string; posts: number }>; }
+export interface SystemActivity { days: ActivityDay[]; hours: ActivityHour[]; passes: PassHealth[]; models: ModelUsage[]; channels: ChannelActivity[]; totals: { runs: number; avg_run_seconds: number | null; median_run_seconds?: number | null; claims: number }; }
 export interface Entity {
   id: number;
   canonical_name: string;
@@ -265,4 +271,5 @@ export const apiClient = {
   analysisHealth: (): Promise<{ jobs: Dashboard["pipeline"]; runs: Record<string, number | string | null> }> => get("/analysis/health"),
   post: (id: string): Promise<PostDetail> => get(`/posts/${id}`),
   collectionHealth: (): Promise<ChannelHealth[]> => get("/channels/collection-health"),
+  systemActivity: (days: number): Promise<SystemActivity> => get(`/system/activity?days=${days}`),
 };

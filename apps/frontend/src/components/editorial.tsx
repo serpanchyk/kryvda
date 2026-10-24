@@ -1,16 +1,12 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { toPng } from "html-to-image";
+import { Suspense, lazy, useEffect, useId, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { ArrowDown, ArrowUp, CalendarDays, ChevronLeft, ChevronRight, Clock3, Download, Menu, RotateCw, X } from "lucide-react";
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceArea, ReferenceLine, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
-import { uk } from "date-fns/locale";
-import type { DateRange as PickerRange } from "react-day-picker";
 
 import type { Daily, Distribution, Page, Summary } from "@/api/client";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -32,6 +28,8 @@ import {
   lastActiveDay,
   periodLabel,
 } from "@/lib/editorial";
+
+const RangeCalendar = lazy(() => import("@/components/range-calendar"));
 
 const navigation = [
   { to: "/", label: "Огляд" },
@@ -192,7 +190,7 @@ export function DateRangeControl() {
         {[7, 30, 90].map((days) => <button key={days} type="button" className="rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors hover:bg-white" onClick={() => preset(days)}>{days} днів</button>)}
         <button type="button" className="rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors hover:bg-white" onClick={() => preset()}>Увесь час</button>
       </div>
-      <Calendar mode="range" selected={selected as PickerRange} onSelect={(range) => apply(range?.from, range?.to)} locale={uk} numberOfMonths={1} />
+      <Suspense fallback={<div className="h-72 w-64 animate-pulse rounded-2xl bg-foreground/[0.04]" />}><RangeCalendar selected={selected} onSelect={(range) => apply(range?.from, range?.to)} /></Suspense>
     </PopoverContent>
   </Popover>;
 }
@@ -298,7 +296,7 @@ export function StaleNotice({ daily, params }: { daily: Daily[]; params: URLSear
   const last = lastActiveDay(daily);
   const { end } = datesFromParams(params);
   if (!last || (end && isStale(end, 2)) || !isStale(last, 2)) return null;
-  return <div role="status" className="flex items-start gap-2.5 rounded-2xl bg-amber-400/10 px-3.5 py-3 text-[13px] leading-5 text-amber-200 shadow-[inset_0_1px_0_rgb(255_220_140/0.12)]">
+  return <div role="status" className="flex items-start gap-2.5 rounded-2xl bg-[var(--warning-bg)] px-3.5 py-3 text-[13px] leading-5 text-[var(--warning-fg)] shadow-[inset_0_1px_0_rgb(255_220_140/0.12)]">
     <Clock3 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
     <span>Нових дописів немає з {formatDate(last).replace(/\.$/, "")}.</span>
   </div>;
@@ -357,6 +355,7 @@ export function Graphic({ section, term, title, dek, subject, scope, period, chi
     if (!node) return;
     node.classList.add("is-exporting");
     try {
+      const { toPng } = await import("html-to-image");
       setPreview(await toPng(node, { pixelRatio: 2, backgroundColor: "#ffffff", filter: (item) => !isExportIgnored(item) }));
     } catch {
       toast.error("Не вдалося зберегти зображення.");
@@ -373,7 +372,7 @@ export function Graphic({ section, term, title, dek, subject, scope, period, chi
       </div>
       {action || exportable ? <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2" data-export-ignore="true">
         {action}
-        {exportable ? <button type="button" onClick={capture} aria-label="Зберегти зображення" title="Зберегти зображення" className="grid size-9 place-items-center rounded-full bg-foreground/[0.06] text-muted-foreground transition-[background-color,color,transform] duration-200 hover:scale-[1.08] hover:bg-foreground/[0.12] hover:text-foreground active:scale-90"><Download className="size-4" aria-hidden="true" /></button> : null}
+        {exportable ? <button type="button" onClick={capture} aria-label="Зберегти зображення" title="Зберегти зображення" className="hit grid size-9 place-items-center rounded-full bg-foreground/[0.06] text-muted-foreground transition-[background-color,color,transform] duration-200 hover:scale-[1.08] hover:bg-foreground/[0.12] hover:text-foreground active:scale-90"><Download className="size-4" aria-hidden="true" /></button> : null}
       </div> : null}
     </div>
     <div className="mt-5 min-w-0 flex-1">{children}</div>

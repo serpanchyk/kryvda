@@ -81,7 +81,7 @@ function MetadataBadge({
     return (
       <Link
         to={action.href}
-        className="rounded-full"
+        className="hit rounded-full"
       >
         {badge}
       </Link>
@@ -91,7 +91,7 @@ function MetadataBadge({
       <button
         type="button"
         onClick={action.onClick}
-        className="rounded-full"
+        className="hit rounded-full"
       >
         {badge}
       </button>
@@ -114,7 +114,7 @@ export function StanceBadge({
         : "bg-foreground/[0.06] text-muted-foreground";
   return (
     <MetadataBadge action={action} className={className}>
-      <TermLabel term={termOf("stance", stance)} />
+      <TermLabel plain={Boolean(action)} term={termOf("stance", stance)} />
     </MetadataBadge>
   );
 }
@@ -128,7 +128,7 @@ export function EpistemicBadge({
 }) {
   return (
     <MetadataBadge action={action} className="bg-foreground/[0.06] text-foreground hover:bg-foreground/10">
-      <TermLabel term={termOf("epistemic", status)} />
+      <TermLabel plain={Boolean(action)} term={termOf("epistemic", status)} />
     </MetadataBadge>
   );
 }
@@ -150,7 +150,7 @@ export function RhetoricBadges({
           action={action?.(label)}
           className="bg-white/60 text-muted-foreground shadow-[inset_0_0_0_1px_rgb(14_15_18/0.08)] hover:bg-white"
         >
-          <TermLabel term={termOf("rhetoric", label)} />
+          <TermLabel plain={Boolean(action?.(label))} term={termOf("rhetoric", label)} />
         </MetadataBadge>
       ))}
     </div>

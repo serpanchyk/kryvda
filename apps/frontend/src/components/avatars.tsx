@@ -22,5 +22,5 @@ export function ChannelAvatar({ channel, size = "md" }: { channel: Pick<Summary,
   const src = apiClient.imageUrl(channel.avatar_url);
   const box = size === "xl" ? "size-24 text-3xl" : size === "sm" ? "size-8 text-sm" : "size-11 text-xl lg:size-12";
   if (src) return <img src={src} alt="" loading="lazy" className={`${box} shrink-0 rounded-full object-cover shadow-[0_0_0_1px_rgb(14_15_18/0.08),0_6px_16px_-8px_rgb(14_15_18/0.35)]`} />;
-  return <span aria-hidden="true" className={`${box} grid shrink-0 place-items-center rounded-full bg-[linear-gradient(180deg,#2b2e35,#0e0f12)] font-heading font-semibold text-white`}>{channel.title?.slice(0, 1) ?? "К"}</span>;
+  return <span aria-hidden="true" className={`${box} grid shrink-0 place-items-center rounded-full bg-[image:var(--ink-gloss)] font-heading font-semibold text-white`}>{channel.title?.slice(0, 1) ?? "К"}</span>;
 }

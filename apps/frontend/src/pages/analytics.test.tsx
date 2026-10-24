@@ -19,7 +19,7 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 vi.mock("@/api/client", async () => {
   const actual = await vi.importActual<typeof import("@/api/client")>("@/api/client");
-  return { ...actual, apiClient: { ...actual.apiClient, dashboard: vi.fn(), claims: vi.fn(), entity: vi.fn(), evidence: vi.fn(), sourceActors: vi.fn(), entities: vi.fn(), post: vi.fn(), claimChannels: vi.fn(), claimSourceActors: vi.fn(), analysisHealth: vi.fn(), collectionHealth: vi.fn(), channel: vi.fn() } };
+  return { ...actual, apiClient: { ...actual.apiClient, dashboard: vi.fn(), claims: vi.fn(), entity: vi.fn(), evidence: vi.fn(), sourceActors: vi.fn(), entities: vi.fn(), post: vi.fn(), claimChannels: vi.fn(), claimSourceActors: vi.fn(), analysisHealth: vi.fn(), collectionHealth: vi.fn(), systemActivity: vi.fn(), channel: vi.fn() } };
 });
 
 afterEach(() => cleanup());
@@ -288,8 +288,19 @@ describe("editorial analytics pages", () => {
   test("keeps the analysis system page in Ukrainian", async () => {
     vi.mocked(apiClient.analysisHealth).mockResolvedValue({ jobs: { ...pipeline, pending_live: 3, pending_backfill: 4, failed: 2, retry_by_error_kind: { schema_failure: 2, something_new: 1 } }, runs: {} });
     vi.mocked(apiClient.collectionHealth).mockResolvedValue([{ id: 1, title: "Канал", username: "kanal", status: "active", last_collected_at: "2026-01-01T00:00:00Z", last_error: "Timeout", last_error_at: null }]);
+    vi.mocked(apiClient.systemActivity).mockResolvedValue({
+      days: [{ date: "2026-09-01", collected_posts: 12, published_posts: 10, completed: 8, partial: 1, fallback: 0, failed: 1, filtered_out: 2 }, { date: "2026-09-02", collected_posts: 0, published_posts: 0, completed: 3, partial: 0, fallback: 1, failed: 0, filtered_out: 0 }],
+      hours: [{ hour: "2026-09-02T10:00:00Z", completed: 2, failed: 0 }],
+      passes: [{ pass_name: "entities", attempts: 20, repairs: 2, invalid: 1, failed: 0, median_ms: 3100, p95_ms: 9600, median_completion_tokens: 110 }],
+      models: [],
+      channels: [{ id: 1, title: "Канал", days: [{ date: "2026-09-01", posts: 12 }, { date: "2026-09-02", posts: 0 }] }],
+      totals: { runs: 14, avg_run_seconds: 40, median_run_seconds: 21, claims: 30 },
+    });
     renderRoute("/system", "/system", <SystemPage />);
     expect(await screen.findByText("Нові дописи")).toBeInTheDocument();
+    expect(await screen.findByText("За 30 днів завершено 13 аналізів")).toBeInTheDocument();
+    expect(screen.getByText("Пошук сутностей")).toBeInTheDocument();
+    expect(screen.getByText("21 с")).toBeInTheDocument();
     expect(screen.getByText("Архівні дописи")).toBeInTheDocument();
     expect(screen.getByText("Відповідь поза схемою")).toBeInTheDocument();
     expect(screen.getByText("Невідома помилка")).toBeInTheDocument();

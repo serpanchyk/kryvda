@@ -45,7 +45,11 @@ batch concurrency stays 1. Advisory slots apply across Compose-scaled worker con
 introducing another runtime dependency. A revision may be analyzed again after an inference
 change; the newer completed run marks the earlier completed run `superseded`, and analytics read
 only completed statuses. The API exposes queue and recent-run state at `/analysis/health`, including scheduled-retry count,
-the nearest retry time, and retry counts by error kind. Terminal `failed` records are retained
+the nearest retry time, and retry counts by error kind. `/system/activity?days=N` (1..90,
+default 30) returns read-only, zero-filled Kyiv-day collection and run-outcome series, the last 48
+UTC hours of run outcomes, per-pass reliability and latency percentiles, model and pipeline-version
+usage, per-channel collection series, and window totals (including the median duration of plain
+`completed` runs) for the «Система» page. Terminal `failed` records are retained
 only as historical audit records or superseded work.
 
 To retry a corrected terminal v3 job, reset only the selected rows:

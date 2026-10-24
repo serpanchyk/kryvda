@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ArrowRight, ArrowUp, ExternalLink, Search } from "lucide-react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 
@@ -47,6 +47,7 @@ import { glossary, termOf } from "@/lib/glossary";
 import { ClaimMetadata, type ClaimMetadataActions } from "@/components/claim-metadata";
 import { Segmented } from "@/components/liquid";
 import { ChannelAvatar, EntityAvatar } from "@/components/avatars";
+import { ActivityChart, ChannelPulse, HourlyChart, PassTable, finishedRuns } from "@/components/system-charts";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -81,12 +82,12 @@ import {
 
 function useFilters() {
   const [params, setParams] = useSearchParams();
-  const set = (key: string, value?: string, offset = "offset") => {
+  const set = (key: string, value?: string, offset = "offset", replace = false) => {
     const next = new URLSearchParams(params);
     if (!value || value === "all") next.delete(key);
     else next.set(key, value);
     next.delete(offset);
-    setParams(next);
+    setParams(next, { replace });
   };
   return { params, set };
 }
@@ -130,6 +131,19 @@ function orderedThesis(items: Summary[], label: (item: Summary) => string, sort:
   return rankingThesis(items, label, sort === "negative_balance", fallback);
 }
 
+/** Search box that updates the URL once typing pauses, replacing history instead of adding an entry per letter. */
+function SearchField({ value, onCommit, label, placeholder }: { value: string; onCommit: (value: string) => void; label: string; placeholder: string }) {
+  const [text, setText] = useState(value);
+  useEffect(() => { setText(value); }, [value]);
+  useEffect(() => {
+    if (text === value) return;
+    const timer = window.setTimeout(() => onCommit(text), 300);
+    return () => window.clearTimeout(timer);
+  }, [text]);
+  return <div className="relative min-w-0"><Search className="absolute left-3.5 top-3.5 size-4 text-muted-foreground" aria-hidden="true" /><Input type="search" aria-label={label} className="pl-10" value={text} placeholder={placeholder} onChange={(event) => setText(event.target.value)} /></div>;
+}
+
+/** Entity picker as a combobox: arrow keys move, Enter picks, Escape closes. */
 function ClaimEntityFilter({ selected, selectedName, onSelect }: { selected?: string; selectedName?: string; onSelect: (entity?: Entity) => void }) {
   const [text, setText] = useState("");
   const results = useQuery({
@@ -138,12 +152,24 @@ function ClaimEntityFilter({ selected, selectedName, onSelect }: { selected?: st
     enabled: text.trim().length >= 2,
   });
   const [open, setOpen] = useState(false);
-  const show = open && Boolean(selected || results.data?.items.length);
+  const [active, setActive] = useState(0);
+  const listId = useId();
+  const options: Array<{ key: string; label: ReactNode; pick: () => void }> = [
+    ...(selected ? [{ key: "clear", label: <>Прибрати фільтр: {selectedName ?? "обрана сутність"}</>, pick: () => onSelect() }] : []),
+    ...(results.data?.items ?? []).map((entity) => ({ key: String(entity.id), label: <span className="flex items-center gap-2.5"><EntityAvatar id={entity.id} name={entity.canonical_name} size="sm" />{entity.canonical_name}</span>, pick: () => onSelect(entity) })),
+  ];
+  const show = open && options.length > 0;
+  const choose = (index: number) => { const option = options[index]; if (!option) return; setText(""); setOpen(false); option.pick(); };
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown") { event.preventDefault(); setOpen(true); setActive((value) => Math.min(options.length - 1, value + 1)); }
+    else if (event.key === "ArrowUp") { event.preventDefault(); setActive((value) => Math.max(0, value - 1)); }
+    else if (event.key === "Enter" && show) { event.preventDefault(); choose(active); }
+    else if (event.key === "Escape") setOpen(false);
+  };
   return <div className="relative min-w-0 flex-1" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setOpen(false); }}>
-    <Input aria-label="Ціль твердження" value={text} placeholder={selected ? selectedName ?? "Обрана сутність" : "Знайти сутність"} onFocus={() => setOpen(true)} onChange={(event) => { setText(event.target.value); setOpen(true); }} />
-    {show && <div className="absolute z-30 mt-1.5 max-h-72 w-full overflow-y-auto rounded-2xl bg-white/90 p-1.5 shadow-[0_0_0_0.5px_rgb(14_15_18/0.1),0_24px_48px_-16px_rgb(14_15_18/0.35)] backdrop-blur-2xl">
-      {selected && <button type="button" className="block w-full rounded-xl px-3 py-2.5 text-left text-sm hover:bg-foreground/[0.06]" onClick={() => { setText(""); setOpen(false); onSelect(); }}>Прибрати фільтр: {selectedName ?? "обрана сутність"}</button>}
-      {results.data?.items.map((entity) => <button type="button" key={entity.id} className="block w-full rounded-xl px-3 py-2.5 text-left text-sm hover:bg-foreground/[0.06]" onClick={() => { setText(""); setOpen(false); onSelect(entity); }}>{entity.canonical_name}</button>)}
+    <Input role="combobox" aria-label="Ціль твердження" aria-expanded={show} aria-controls={listId} aria-autocomplete="list" aria-activedescendant={show ? `${listId}-${active}` : undefined} value={text} placeholder={selected ? selectedName ?? "Обрана сутність" : "Знайти сутність"} onFocus={() => setOpen(true)} onKeyDown={onKeyDown} onChange={(event) => { setText(event.target.value); setActive(0); setOpen(true); }} />
+    {show && <div id={listId} role="listbox" aria-label="Знайдені сутності" className="absolute z-30 mt-1.5 max-h-72 w-full overflow-y-auto rounded-2xl bg-white/90 p-1.5 shadow-[0_0_0_0.5px_rgb(14_15_18/0.1),0_24px_48px_-16px_rgb(14_15_18/0.35)] backdrop-blur-2xl">
+      {options.map((option, index) => <div key={option.key} id={`${listId}-${index}`} role="option" aria-selected={index === active} className={`block w-full cursor-pointer rounded-xl px-3 py-2.5 text-left text-sm ${index === active ? "bg-foreground/[0.06]" : "hover:bg-foreground/[0.04]"}`} onMouseDown={(event) => event.preventDefault()} onMouseEnter={() => setActive(index)} onClick={() => choose(index)}>{option.label}</div>)}
     </div>}
   </div>;
 }
@@ -156,7 +182,7 @@ function ClaimsFeed({ dates, channelId, compact = false }: { dates: DateRange; c
   const selectEntity = (entity?: Entity) => set("claim_entity", entity ? String(entity.id) : undefined, "claim_offset");
   const channelQuery = dateParams(params).toString();
   return <Graphic section="Доказова база" title="Твердження та першоджерела" dek="Кожен рядок веде до повного допису та структурованого аналізу." scope={query.data ? claimsCount(query.data.total) : undefined} exportable={false}>
-    {!compact && <div className="mb-5 grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]"><div className="relative min-w-0"><Search className="absolute left-3.5 top-3.5 size-4 text-muted-foreground" aria-hidden="true" /><Input aria-label="Пошук у твердженнях" className="pl-10" value={filters.search} placeholder="Пошук у твердженнях" onChange={(event) => set("claim_q", event.target.value, "claim_offset")} /></div><ClaimEntityFilter selected={filters.entity_id} selectedName={query.data?.items.find((item) => String(item.entity_id) === filters.entity_id)?.entity_name} onSelect={selectEntity} /><Select value={filters.stance ?? "all"} onValueChange={(value) => set("claim_stance", value, "claim_offset")}><SelectTrigger aria-label="Позиція"><SelectValue>{filters.stance ? stanceLabels[filters.stance] : "Усі оцінки"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі оцінки</SelectItem>{Object.entries(stanceLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></div>}
+    {!compact && <div className="mb-5 grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]"><SearchField label="Пошук у твердженнях" placeholder="Пошук у твердженнях" value={filters.search} onCommit={(value) => set("claim_q", value, "claim_offset", true)} /><ClaimEntityFilter selected={filters.entity_id} selectedName={query.data?.items.find((item) => String(item.entity_id) === filters.entity_id)?.entity_name} onSelect={selectEntity} /><Select value={filters.stance ?? "all"} onValueChange={(value) => set("claim_stance", value, "claim_offset")}><SelectTrigger aria-label="Позиція"><SelectValue>{filters.stance ? stanceLabels[filters.stance] : "Усі оцінки"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі оцінки</SelectItem>{Object.entries(stanceLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></div>}
     <QueryBoundary loading={query.isLoading} error={query.isError} onRetry={() => void query.refetch()}>{!query.data?.items.length ? <EmptyState /> : <div>{query.data.items.map((claim) => <ClaimRow key={claim.claim_id + "-" + claim.entity_id} claim={claim} from={location.pathname + location.search} channelHref={"/channels/" + claim.channel_id + (channelQuery ? "?" + channelQuery : "")} setFilter={(key, value) => set(key, value, "claim_offset")} />)}<Pager page={query.data} param="claim_offset" /></div>}</QueryBoundary>
   </Graphic>;
 }
@@ -209,7 +235,7 @@ export function ClaimsPage() {
   return <PageLayout><PageHeader title={glossary.section.claimsSearch.label} dateline={[<strong key="s">Дослідження тверджень</strong>, periodLabel(params)]} dek="Пошук витягнутих тверджень, їхніх цілей, атрибуції та першоджерел." />
     <section aria-label="Фільтри тверджень" data-lens="" className="glass tile">
       <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1fr)]">
-        <FilterField label="Пошук"><div className="relative"><Search className="absolute left-3.5 top-3.5 size-4 text-muted-foreground" aria-hidden="true" /><Input aria-label="Пошук у твердженнях" className="pl-10" value={filters.search} placeholder="Слово чи фраза з твердження" onChange={(event) => update("search", event.target.value)} /></div></FilterField>
+        <FilterField label="Пошук"><SearchField label="Пошук у твердженнях" placeholder="Слово чи фраза з твердження" value={filters.search} onCommit={(value) => set("search", value, "offset", true)} /></FilterField>
         <FilterField label="Ціль"><ClaimEntityFilter selected={filters.entity_id} selectedName={filters.entity_id ? chipValue("entity_id", filters.entity_id) : undefined} onSelect={(entity) => { setEntityName(entity?.canonical_name); update("entity_id", entity ? String(entity.id) : undefined); }} /></FilterField>
         <FilterField label="Позиція"><Select value={filters.stance ?? "all"} onValueChange={(value) => update("stance", value)}><SelectTrigger aria-label="Позиція"><SelectValue>{filters.stance ? stanceLabels[filters.stance] : "Усі"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі</SelectItem>{Object.entries(stanceLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>
       </div>
@@ -231,16 +257,30 @@ export function ClaimsPage() {
 
 const relative = (value: string | null | undefined): string => (value ? formatDateTime(value) : "ще не було");
 
+const ACTIVITY_WINDOWS = ["7", "30", "90"] as const;
+const runDuration = (value: number | null | undefined): string => value == null ? "—" : value < 120 ? `${Math.round(value)} с` : `${Math.round(value / 60)} хв`;
+
+/** Operations at a glance: whether the pipeline is healthy now, and how it has worked over time. */
 export function SystemPage() {
+  const [params, setParams] = useSearchParams();
+  const windowParam = params.get("activity") ?? "30";
+  const windowDays = Number((ACTIVITY_WINDOWS as readonly string[]).includes(windowParam) ? windowParam : "30");
   const query = useQuery({ queryKey: ["analysis-health"], queryFn: apiClient.analysisHealth });
   const collection = useQuery({ queryKey: ["collection-health"], queryFn: apiClient.collectionHealth });
+  const activity = useQuery({ queryKey: ["system-activity", windowDays], queryFn: () => apiClient.systemActivity(windowDays) });
   const jobs = query.data?.jobs;
   const runs = query.data?.runs;
   const errors = Object.entries(jobs?.retry_by_error_kind ?? {}).sort((a, b) => b[1] - a[1]);
   const lastRun = typeof runs?.last_completed_at === "string" ? runs.last_completed_at : null;
   const staleChannels = (collection.data ?? []).filter((channel) => isStale(channel.last_collected_at, 1));
+  const attention = Boolean(jobs?.failed) || isStale(lastRun, 1) || staleChannels.length > 0;
+  const setWindow = (value: string) => { const next = new URLSearchParams(params); if (value === "30") next.delete("activity"); else next.set("activity", value); setParams(next, { replace: true }); };
+  const pulses = new Map((activity.data?.channels ?? []).map((channel) => [channel.id, channel]));
   return <PageLayout>
-    <PageHeader title="Система аналізу" period={false} dateline={[<strong key="s">Операційний стан</strong>, "поточний знімок, не залежить від періоду"]} dek="Черга, повторні спроби, останні запуски аналітичного модуля та свіжість збору каналів." />
+    <PageHeader title="Система аналізу" period={false} dateline={["поточний стан і динаміка роботи"]} dek="Черга, пропускна здатність, якість відповідей моделі та збір каналів." aside={<div className="flex flex-wrap items-center gap-3 lg:justify-end">
+      <span role="status" className={`glass inline-flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold ${attention ? "text-[var(--negative-strong)]" : ""}`}><span aria-hidden="true" className={`size-2.5 rounded-full ${attention ? "bg-[#f5a524] shadow-[0_0_0_4px_rgb(245_165_36/0.18)]" : "bg-[var(--switch-on)] shadow-[0_0_0_4px_rgb(52_199_89/0.18)]"}`} />{attention ? "Потрібна увага" : "Працює"}</span>
+      <Segmented label="Період динаміки" value={String(windowDays) as (typeof ACTIVITY_WINDOWS)[number]} onChange={setWindow} options={ACTIVITY_WINDOWS.map((value) => ({ value, label: `${value} днів` }))} className="glass" />
+    </div>} />
     <QueryBoundary loading={query.isLoading} error={query.isError} onRetry={() => void query.refetch()}>
       {jobs && <>
         {jobs.failed || isStale(lastRun, 1) ? <div className="glass rounded-[22px] px-5 py-3.5 text-sm" role="status">
@@ -248,31 +288,63 @@ export function SystemPage() {
           {jobs.failed ? `${formatNumber(jobs.failed)} ${pluralUk(jobs.failed, "допис не вдалося", "дописи не вдалося", "дописів не вдалося")} проаналізувати після всіх спроб. ` : ""}
           {isStale(lastRun, 1) ? `Останній завершений аналіз — ${relative(lastRun)}.` : ""}
         </div> : null}
-        <Graphic section={glossary.pipeline.worker.label} term={glossary.pipeline.worker} title="Черга аналізу" exportable={false}>
-          <MetricStrip flat items={(["pending_live", "pending_backfill", "leased", "retry_scheduled", "failed"] as const).map((key) => ({ label: glossary.pipeline[key].label, term: glossary.pipeline[key], value: jobs[key], accent: key === "failed" }))} />
-          <dl className="mt-4 grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
-            <div className="flex justify-between gap-4 border-b border-rule pb-2"><dt className="text-muted-foreground">Останній завершений аналіз</dt><dd className="font-semibold tabular-nums">{relative(lastRun)}</dd></div>
-            <div className="flex justify-between gap-4 border-b border-rule pb-2"><dt className="text-muted-foreground">Наступна повторна спроба</dt><dd className="font-semibold tabular-nums">{relative(jobs.next_retry_at)}</dd></div>
-            <div className="flex justify-between gap-4 border-b border-rule pb-2"><dt className="text-muted-foreground">Завершено за останню годину</dt><dd className="font-semibold tabular-nums">{formatNumber(Number(runs?.completed_last_hour ?? 0))}</dd></div>
-            <div className="flex justify-between gap-4 border-b border-rule pb-2"><dt className="text-muted-foreground">Збоїв за останню годину</dt><dd className={`font-semibold tabular-nums ${Number(runs?.failed_last_hour ?? 0) ? "text-negative" : ""}`}>{formatNumber(Number(runs?.failed_last_hour ?? 0))}</dd></div>
-          </dl>
+        {activity.isLoading ? <LoadState /> : activity.data ? (() => {
+          const data = activity.data;
+          const finished = data.days.reduce((sum, day) => sum + finishedRuns(day), 0);
+          const collected = data.days.reduce((sum, day) => sum + day.collected_posts, 0);
+          const failedRuns = data.days.reduce((sum, day) => sum + day.failed, 0);
+          const today = data.days[data.days.length - 1];
+          return <Graphic variant="dark" section="Пропускна здатність" title={`За ${windowDays} ${pluralUk(windowDays, "день", "дні", "днів")} завершено ${formatNumber(finished)} ${pluralUk(finished, "аналіз", "аналізи", "аналізів")}`} dek="Завершені запуски аналізу за днями й результатом; лінія — дописи, які система зібрала з каналів." exportable={false}>
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:gap-10">
+              <dl className="grid content-start gap-5">
+                <div><dt className="eyebrow">Завершено аналізів</dt><dd className="mt-1 font-heading text-[56px] font-bold leading-none tracking-[-0.05em] tabular-nums md:text-[72px]">{formatNumber(finished)}</dd>{today ? <dd className="mt-2 text-sm text-muted-foreground">сьогодні {formatNumber(finishedRuns(today))}</dd> : null}</div>
+                <div className="grid grid-cols-2 gap-4 border-t border-rule pt-4 text-sm">
+                  <div><dt className="text-muted-foreground">Зібрано дописів</dt><dd className="mt-0.5 text-lg font-semibold tabular-nums">{formatNumber(collected)}</dd></div>
+                  <div><dt className="text-muted-foreground">Тверджень</dt><dd className="mt-0.5 text-lg font-semibold tabular-nums">{formatNumber(data.totals.claims)}</dd></div>
+                  <div><dt className="text-muted-foreground">Типовий запуск</dt><dd className="mt-0.5 text-lg font-semibold tabular-nums">{runDuration(data.totals.median_run_seconds)}</dd></div>
+                  <div><dt className="text-muted-foreground">Збоїв</dt><dd className={`mt-0.5 text-lg font-semibold tabular-nums ${failedRuns ? "text-negative" : ""}`}>{formatNumber(failedRuns)}</dd></div>
+                </div>
+              </dl>
+              <ActivityChart days={data.days} />
+            </div>
+          </Graphic>;
+        })() : activity.isError ? <ErrorState message="Не вдалося завантажити динаміку системи." onRetry={() => void activity.refetch()} /> : null}
+        <MetricStrip className="lg:grid-cols-5" items={(["pending_live", "pending_backfill", "leased", "retry_scheduled", "failed"] as const).map((key) => ({ label: glossary.pipeline[key].label, term: glossary.pipeline[key], value: jobs[key], accent: key === "failed" }))} />
+        <div className="grid grid-cols-1 items-start gap-4 md:gap-5 lg:grid-cols-12">
+          {activity.data ? <Graphic className="lg:col-span-7" section="Якість відповідей" title="Як працюють проходи моделі" dek={`Спроби за ${windowDays} днів: частка повторних запитів, невалідних відповідей і тривалість кожного проходу.`} exportable={false}><PassTable passes={activity.data.passes} /></Graphic> : null}
+          <Graphic className={activity.data ? "lg:col-span-5" : "lg:col-span-12"} section={glossary.pipeline.worker.label} term={glossary.pipeline.worker} title="Останні 48 годин" dek="Завершені й збійні запуски щогодини, за київським часом." exportable={false}>
+            {activity.data ? <HourlyChart hours={activity.data.hours} /> : null}
+            <dl className="mt-4 grid gap-y-2 text-sm">
+              <div className="flex justify-between gap-4 border-b border-rule pb-2"><dt className="text-muted-foreground">Останній аналіз</dt><dd className="font-semibold tabular-nums">{relative(lastRun)}</dd></div>
+              <div className="flex justify-between gap-4 border-b border-rule pb-2"><dt className="text-muted-foreground">Наступний повтор</dt><dd className="font-semibold tabular-nums">{relative(jobs.next_retry_at)}</dd></div>
+              <div className="flex justify-between gap-4 border-b border-rule pb-2"><dt className="text-muted-foreground">За останню годину</dt><dd className="font-semibold tabular-nums">{formatNumber(Number(runs?.completed_last_hour ?? 0))}</dd></div>
+              <div className="flex justify-between gap-4 border-b border-rule pb-2"><dt className="text-muted-foreground">Збоїв за годину</dt><dd className={`font-semibold tabular-nums ${Number(runs?.failed_last_hour ?? 0) ? "text-negative" : ""}`}>{formatNumber(Number(runs?.failed_last_hour ?? 0))}</dd></div>
+            </dl>
+          </Graphic>
+        </div>
+        <Graphic section="Збір каналів" title={staleChannels.length ? `${formatNumber(staleChannels.length)} ${pluralUk(staleChannels.length, "канал не оновлювався", "канали не оновлювалися", "каналів не оновлювалися")} понад добу` : "Усі канали зібрано протягом доби"} dek={`Коли система востаннє отримала нові дописи кожного каналу і скільки дописів збирала щодня за ${windowDays} днів.`} exportable={false}>
+          <QueryBoundary loading={collection.isLoading} error={collection.isError} onRetry={() => void collection.refetch()}>
+            <ul>{collection.data?.map((channel) => {
+              const stale = isStale(channel.last_collected_at, 1);
+              const pulse = pulses.get(channel.id);
+              return <li key={channel.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 gap-y-2 border-b border-rule py-3.5 text-sm last:border-0 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_auto]">
+                <div className="flex min-w-0 items-center gap-3"><ChannelAvatar channel={channel} size="sm" /><div className="min-w-0"><Link to={`/channels/${channel.id}`} className="block truncate font-semibold hover:text-negative">{channel.title ?? "Канал"}</Link><span className="text-xs text-muted-foreground"><TermLabel term={termOf("channelStatus", channel.status in glossary.channelStatus ? channel.status : "unavailable")} />{channel.last_error_at ? ` · помилка збору ${formatDateTime(channel.last_error_at)}` : ""}</span></div></div>
+                {pulse ? <div className="col-span-2 row-start-2 min-w-0 lg:col-span-1 lg:row-start-auto"><ChannelPulse channel={pulse} /></div> : <span className="hidden lg:block" />}
+                <span className={`col-start-2 row-start-1 text-right tabular-nums lg:col-start-auto lg:row-start-auto ${stale ? "font-semibold text-negative" : "text-muted-foreground"}`}>{relative(channel.last_collected_at)}</span>
+              </li>;
+            })}</ul>
+          </QueryBoundary>
         </Graphic>
         <div className="grid grid-cols-1 items-start gap-4 md:gap-5 lg:grid-cols-2">
           <Graphic section="Повторні спроби" title={errors.length ? "Чому аналіз повторюється" : "Повторних спроб немає"} dek="Дописи в черзі повторів за типом останньої помилки. Повтори відбуваються автоматично." exportable={false}>
             {errors.length ? <ul>{errors.map(([kind, count]) => <li key={kind} className="flex items-baseline justify-between gap-4 border-b border-rule py-3 text-sm last:border-0"><span className="font-semibold"><TermLabel term={termOf("errorKind", kind in glossary.errorKind ? kind : "unknown")} /></span><strong className="tabular-nums">{formatNumber(count)}</strong></li>)}</ul> : <EmptyState>Усі дописи проаналізовано з першої спроби або чекають у звичайній черзі.</EmptyState>}
           </Graphic>
-          <Graphic section="Збір каналів" title={staleChannels.length ? `${formatNumber(staleChannels.length)} ${pluralUk(staleChannels.length, "канал не оновлювався", "канали не оновлювалися", "каналів не оновлювалися")} понад добу` : "Усі канали зібрано протягом доби"} dek="Коли система востаннє отримала нові дописи кожного каналу." exportable={false}>
-            <QueryBoundary loading={collection.isLoading} error={collection.isError} onRetry={() => void collection.refetch()}>
-              <ul>{collection.data?.map((channel) => {
-                const stale = isStale(channel.last_collected_at, 1);
-                return <li key={channel.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 border-b border-rule py-3 text-sm last:border-0">
-                  <Link to={`/channels/${channel.id}`} className="min-w-0 truncate font-semibold hover:text-negative">{channel.title ?? "Канал"}</Link>
-                  <span className={`tabular-nums ${stale ? "font-semibold text-negative" : "text-muted-foreground"}`}>{relative(channel.last_collected_at)}</span>
-                  <span className="text-xs text-muted-foreground"><TermLabel term={termOf("channelStatus", channel.status in glossary.channelStatus ? channel.status : "unavailable")} />{channel.last_error_at ? ` · помилка збору ${formatDateTime(channel.last_error_at)}` : ""}</span>
-                </li>;
-              })}</ul>
-            </QueryBoundary>
-          </Graphic>
+          {activity.data?.models.length ? <Graphic section="Моделі" title="Моделі та версії конвеєра" dek={`Скільки запусків виконала кожна модель і версія за ${windowDays} днів.`} exportable={false}>
+            <ul>{activity.data.models.map((model) => <li key={`${model.model_name}-${model.pipeline_version}`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 border-b border-rule py-3 text-sm last:border-0">
+              <span className="min-w-0 truncate font-semibold">{model.model_name}</span><strong className="font-semibold tabular-nums">{formatNumber(model.runs)}</strong>
+              <span className="text-xs text-muted-foreground">версія {model.pipeline_version.replace(/^inference_v/, "").replace(/_/g, ".")}{model.last_used_at ? ` · востаннє ${formatDateTime(model.last_used_at)}` : ""}</span>
+            </li>)}</ul>
+          </Graphic> : null}
         </div>
       </>}
     </QueryBoundary>
@@ -346,7 +418,7 @@ export function DashboardPage() {
               <p className="text-sm font-medium"><TermLabel term={glossary.section.rhetoric}>Найчастіший прийом</TermLabel></p>
               <p className="mt-auto pt-8 font-heading text-[64px] font-bold leading-[0.9] tracking-[-0.05em] tabular-nums md:text-[76px]">{formatPercent(rhetoric[0].share)}</p>
               <p className="mt-2 font-heading text-xl font-semibold leading-tight tracking-[-0.02em]">{rhetoricLabels[rhetoric[0].key]}</p>
-              <p className="mt-1 text-[13px] text-white/90">{formatNumber(rhetoric[0].count)} із {formatNumber(rhetoric.reduce((sum, item) => sum + item.count, 0))} риторичних міток</p>
+              <p className="mt-1 text-[13px] text-white">{formatNumber(rhetoric[0].count)} із {formatNumber(rhetoric.reduce((sum, item) => sum + item.count, 0))} риторичних міток</p>
             </section> : null}
           </div>
           <div className="grid grid-cols-1 items-start gap-4 md:gap-5 lg:grid-cols-2">
@@ -380,11 +452,11 @@ function LeadTarget({ item, before, total, href }: { item: Summary; before?: Sum
     </span>
     <span className="mt-auto flex items-end gap-3 pt-7">
       <span className="font-heading text-[64px] font-bold leading-[0.9] tracking-[-0.05em] tabular-nums text-negative md:text-[72px]">{formatNumber(item.negative_count)}</span>
-      {growth > 0 ? <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-negative/10 px-2.5 py-1 text-[13px] font-semibold tabular-nums text-negative"><ArrowUp className="size-3" aria-hidden="true" />{formatNumber(growth)}</span> : null}
+      {growth > 0 ? <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-negative/[0.08] px-2.5 py-1 text-[13px] font-semibold tabular-nums text-[var(--negative-strong)]"><ArrowUp className="size-3" aria-hidden="true" />{formatNumber(growth)}</span> : null}
     </span>
     <span className="mt-2 block text-[13px] text-muted-foreground">негативних класифікацій із {formatNumber(evaluativeOf(item))} оцінок{before ? ` · було ${formatNumber(before.negative_count)}` : ""}</span>
     <div className="mt-4"><EvaluativeBalanceStrip item={{ ...item, absent_count: 0 }} /></div>
-    <span className="mt-5 flex items-center justify-between border-t border-rule pt-4 text-sm font-semibold">Відкрити профіль<span className="grid size-8 place-items-center rounded-full bg-[linear-gradient(180deg,#2b2e35,#0e0f12)] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25)]"><ArrowRight className="size-4" aria-hidden="true" /></span></span>
+    <span className="mt-5 flex items-center justify-between border-t border-rule pt-4 text-sm font-semibold">Відкрити профіль<span className="grid size-8 place-items-center rounded-full bg-[image:var(--ink-gloss)] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25)]"><ArrowRight className="size-4" aria-hidden="true" /></span></span>
   </Link>;
 }
 
@@ -407,7 +479,7 @@ export function EntitiesPage() {
   return <PageLayout>
     <PageHeader title="Сутності в інформаційному полі" dateline={[<strong key="s">Реєстр спостереження</strong>, periodLabel(params), query.data ? `${formatNumber(query.data.total)} у вибірці` : undefined]} dek="Люди й організації, щодо яких система зберігає твердження, оцінки та доказові фрагменти." />
     <div data-lens="" className="glass tile grid gap-3 md:grid-cols-4">
-      <FilterField label="Пошук"><Input aria-label="Пошук сутності" value={filters.q} placeholder="Ім’я чи назва" onChange={(event) => set("q", event.target.value)} /></FilterField>
+      <FilterField label="Пошук"><SearchField label="Пошук сутності" placeholder="Ім’я чи назва" value={filters.q} onCommit={(value) => set("q", value, "offset", true)} /></FilterField>
       <FilterField label="Тип сутності"><Select value={filters.coarse_type ?? "all"} onValueChange={(value) => set("type", value)}><SelectTrigger aria-label="Тип сутності"><SelectValue>{filters.coarse_type ? entityTypes[filters.coarse_type] : "Усі типи"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі типи</SelectItem>{Object.entries(entityTypes).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>
       <FilterField label="Статус моніторингу"><Select value={filters.monitored ?? "all"} onValueChange={(value) => set("monitored", value)}><SelectTrigger aria-label="Статус моніторингу"><SelectValue>{filters.monitored === "true" ? "Відстежуються" : filters.monitored === "false" ? "Не відстежуються" : "Усі статуси"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">Усі статуси</SelectItem><SelectItem value="true">Відстежуються</SelectItem><SelectItem value="false">Не відстежуються</SelectItem></SelectContent></Select></FilterField>
       <FilterField label="Сортування"><Select value={filters.sort} onValueChange={(value) => set("sort", value)}><SelectTrigger aria-label="Сортування"><SelectValue>{entitySortLabels[filters.sort] ?? entitySortLabels.negative_volume}</SelectValue></SelectTrigger><SelectContent>{Object.entries(entitySortLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></FilterField>

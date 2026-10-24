@@ -84,6 +84,11 @@
   --positive: #2559d9;
   --neutral: #b7bcc6;
   --bar-muted: #c3c8d1;
+  --negative-strong: #a81e19;
+  --warning-bg: rgb(255 184 0 / 0.1);
+  --warning-fg: #ffd27a;
+  --ink-gloss: linear-gradient(180deg, #2b2e35, #0e0f12);
+  --switch-on: #34c759;
   --chart-1: #c8241e;
   --chart-2: #2559d9;
   --chart-3: #b7bcc6;
@@ -117,10 +122,9 @@
   body { @apply bg-background text-foreground antialiased; }
   ::selection { background: color-mix(in srgb, var(--negative) 20%, transparent); }
   html { scrollbar-color: color-mix(in srgb, var(--foreground) 22%, transparent) transparent; }
-  :where(a, button, summary, input, [tabindex], [role="button"]):focus-visible {
-    outline: 3px solid color-mix(in srgb, var(--positive) 55%, transparent);
+  :where(a, button, summary, input, textarea, [tabindex], [role="button"], [role="combobox"]):focus-visible {
+    outline: 2px solid var(--ring);
     outline-offset: 2px;
-    border-radius: 10px;
   }
   :where(input, textarea) { caret-color: var(--negative); }
   summary { list-style: none; }
@@ -169,8 +173,10 @@
     --rule: rgb(255 255 255 / 0.1);
     --popover: #1b1e25;
     --bar-muted: rgb(255 255 255 / 0.26);
-    --negative: #ff5a52;
-    --positive: #6f9bff;
+    --negative: #ff7a73;
+    --negative-strong: #ff8a84;
+    --positive: #8fb0ff;
+    --ring: #ffffff;
     --neutral: rgb(255 255 255 / 0.3);
     --spec: rgb(255 255 255 / 0.28);
     --rim: linear-gradient(140deg, rgb(255 255 255 / 0.4), rgb(255 255 255 / 0.06) 30%, rgb(255 255 255 / 0.02) 62%, rgb(255 255 255 / 0.22));
@@ -186,6 +192,7 @@
   }
   .glass-dark::before { mix-blend-mode: screen; opacity: 0.35; }
   .glass-accent {
+    --ring: #ffffff;
     --foreground: #ffffff;
     --muted-foreground: rgb(255 255 255 / 0.92);
     --spec: rgb(255 255 255 / 0.55);
@@ -226,6 +233,11 @@
   .glass-dark .segmented-thumb { background: linear-gradient(180deg, #fff, #e9ebef); }
   .glass-dark .segmented > button[aria-pressed="true"] { color: #0e0f12; }
 
+  /* Small controls keep their look but get a 44px hit area. */
+  .hit { position: relative; }
+  .hit::after { content: ""; position: absolute; inset: -6px; border-radius: inherit; }
+  .segmented > button::after, .chip::after, .disclosure > summary::after { content: ""; position: absolute; inset: -6px -2px; }
+  .chip, .disclosure > summary { position: relative; }
   .row-hover { @apply rounded-2xl transition-[background-color,box-shadow] duration-200; }
   .row-hover:hover { background: rgb(255 255 255 / 0.55); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 4px 14px -8px rgb(14 15 18 / 0.2); }
   .glass-dark .row-hover:hover { background: rgb(255 255 255 / 0.06); box-shadow: none; }
@@ -249,7 +261,8 @@
   .is-exporting::before, .is-exporting::after { display: none; }
   .is-exporting.glass-dark, .is-exporting.glass-accent {
     --foreground: #0e0f12; --muted-foreground: #5b6170; --border: #dcdfe5; --rule: #dcdfe5; --popover: #fbfbfc;
-    --bar-muted: #c3c8d1; --negative: #c8241e; --positive: #2559d9; --neutral: #b7bcc6; color: #0e0f12;
+    --bar-muted: #c3c8d1; --negative: #c8241e; --negative-strong: #a81e19; --positive: #2559d9; --neutral: #b7bcc6; color: #0e0f12;
+    --warning-bg: #fff4d9; --warning-fg: #7a4b00;
   }
   .is-exporting .term-label { text-decoration: none; }
 }
@@ -268,6 +281,12 @@
   .glass-accent { background: #c9261f; }
 }
 
+/* Reduced motion keeps state changes as quick fades and drops movement. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  .loading-bar, .bar-fill, .tile-in { animation: none; }
+  .loading-fade { animation: loading-fade-still 0.3s ease both; }
+  :is(a, button).glass:hover, :is(a, button).glass:active, a.tile:hover, .group:hover .group-hover\:-translate-x-0\.5 { transform: none; }
+  .segmented-thumb { transition: none; }
+  * { scroll-behavior: auto !important; }
 }
+@keyframes loading-fade-still { from { opacity: 0; } to { opacity: 1; } }

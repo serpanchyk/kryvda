@@ -9,7 +9,7 @@ from typing import Literal
 
 import asyncpg
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from monitoring_common.config import BaseServiceSettings
@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from telegram_monitor_api.analytics import AnalyticsRepository, EntityAnalyticsFilters
 from telegram_monitor_api.registry import RegistryRepository
+from telegram_monitor_api.system import SystemRepository
 
 CoarseType = Literal["person", "organization", "state_institution", "media"]
 EpistemicStatus = Literal["ствердження", "невпевнене", "питання"]
@@ -188,6 +189,12 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
             "jobs": jobs,
             "runs": dict(runs),
         }
+
+    @app.get("/system/activity")
+    async def system_activity(days: int = Query(default=30, ge=1, le=90)) -> dict[str, object]:
+        """Return zero-filled pipeline and collection dynamics for recent Kyiv days."""
+        pool = await database.get()
+        return await SystemRepository(pool).activity(days)
 
     @app.get("/channel-images/{channel_id}")
     async def channel_image(channel_id: int) -> FileResponse:

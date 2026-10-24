@@ -30,7 +30,7 @@ export function AmbientToggle({ withLabel = false }: { withLabel?: boolean }) {
   const label = on ? "Вимкнути анімований фон" : "Увімкнути анімований фон";
   if (withLabel) return <button type="button" aria-pressed={on} onClick={() => set(!on)} className="flex w-full items-center justify-between gap-4 rounded-2xl px-4 py-3 text-left text-[15px] font-medium transition-colors hover:bg-white/50">
     <span className="flex items-center gap-3"><Waves className="size-5 text-muted-foreground" aria-hidden="true" />Анімований фон</span>
-    <span aria-hidden="true" className={`relative h-7 w-12 rounded-full transition-colors duration-300 ${on ? "bg-[#34c759]" : "bg-foreground/15"}`}><span className={`gloss absolute top-0.5 size-6 rounded-full transition-transform duration-300 ${on ? "translate-x-[22px]" : "translate-x-0.5"}`} /></span>
+    <span aria-hidden="true" className={`relative h-7 w-12 rounded-full transition-colors duration-300 ${on ? "bg-[var(--switch-on)]" : "bg-foreground/15"}`}><span className={`gloss absolute top-0.5 size-6 rounded-full transition-transform duration-300 ${on ? "translate-x-[22px]" : "translate-x-0.5"}`} /></span>
   </button>;
   return <button type="button" data-lens="pill" aria-pressed={on} aria-label={label} title={label} onClick={() => set(!on)} className={`glass grid size-11 place-items-center rounded-full ${on ? "" : "text-muted-foreground"}`}>
     <Waves className="size-[18px]" aria-hidden="true" />
@@ -74,7 +74,7 @@ function AsciiCanvas() {
     let width = 0, height = 0, ratio = 1, cols = 0, rows = 0;
     let atlas: HTMLCanvasElement | null = null;
     const ripples: Array<Ripple & { born: number }> = [];
-    let now = 0, frame = 0, last = 0, next = 1200, scrollingUntil = 0;
+    let now = 0, frame = 0, last = 0, next = 1200, scrollingUntil = 0, activeUntil = performance.now() + 60_000;
 
     const buildAtlas = () => {
       atlas = document.createElement("canvas");
@@ -150,7 +150,8 @@ function AsciiCanvas() {
     }
     const loop = (time: number) => {
       frame = requestAnimationFrame(loop);
-      if (document.hidden || time < scrollingUntil || time - last < 50) return;
+      // Holds still while scrolling, and rests after a minute without any interaction.
+      if (document.hidden || time < scrollingUntil || time > activeUntil || time - last < 50) return;
       last = time;
       if (time > next) {
         spawn({ x: Math.random() * width, y: Math.random() * height, amplitude: 0.45 + Math.random() * 0.35, red: Math.random() < 0.6 });
@@ -159,7 +160,8 @@ function AsciiCanvas() {
       paint(time);
     };
     const onRipple = (event: Event) => spawn((event as CustomEvent<Ripple>).detail);
-    const onScroll = () => { scrollingUntil = performance.now() + 180; };
+    const wake = () => { activeUntil = performance.now() + 60_000; };
+    const onScroll = () => { scrollingUntil = performance.now() + 180; wake(); };
 
     resize();
     window.addEventListener("resize", resize);
@@ -169,6 +171,8 @@ function AsciiCanvas() {
     } else {
       window.addEventListener(RIPPLE_EVENT, onRipple);
       window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("pointermove", wake, { passive: true });
+      window.addEventListener("keydown", wake);
       frame = requestAnimationFrame(loop);
     }
     return () => {
@@ -176,6 +180,8 @@ function AsciiCanvas() {
       window.removeEventListener("resize", resize);
       window.removeEventListener(RIPPLE_EVENT, onRipple);
       window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("pointermove", wake);
+      window.removeEventListener("keydown", wake);
     };
   }, []);
   return <canvas ref={canvas} aria-hidden="true" className="pointer-events-none fixed inset-0 z-0" />;
@@ -263,7 +269,22 @@ export function LiquidLens() {
       element.style.setProperty("backdrop-filter", value);
       element.style.setProperty("-webkit-backdrop-filter", value);
     };
-    const resizer = new ResizeObserver((entries) => entries.forEach((entry) => apply(entry.target as HTMLElement)));
+    // Rebuild a map only once a surface has settled, and never for large surfaces: refracting a big
+    // area on every background frame costs more than it shows.
+    const pending = new Map<HTMLElement, number>();
+    const schedule = (element: HTMLElement) => {
+      window.clearTimeout(pending.get(element));
+      pending.set(element, window.setTimeout(() => {
+        pending.delete(element);
+        if (element.offsetWidth * element.offsetHeight > 420 * 420) {
+          element.style.removeProperty("backdrop-filter");
+          element.style.removeProperty("-webkit-backdrop-filter");
+          return;
+        }
+        apply(element);
+      }, 160));
+    };
+    const resizer = new ResizeObserver((entries) => entries.forEach((entry) => schedule(entry.target as HTMLElement)));
     const observed = new WeakSet<HTMLElement>();
     // Large light tiles keep the frosted blur only: refracting them every frame costs more than it shows.
     const scan = () => document.querySelectorAll<HTMLElement>('.glass[data-lens="pill"], .glass-dark[data-lens], .glass-accent[data-lens]').forEach((element) => {
@@ -275,7 +296,7 @@ export function LiquidLens() {
     const mutations = new MutationObserver(() => { window.clearTimeout(timer); timer = window.setTimeout(scan, 120); });
     mutations.observe(document.body, { childList: true, subtree: true });
     scan();
-    return () => { mutations.disconnect(); resizer.disconnect(); window.clearTimeout(timer); svg.remove(); };
+    return () => { mutations.disconnect(); resizer.disconnect(); window.clearTimeout(timer); pending.forEach((id) => window.clearTimeout(id)); svg.remove(); };
   }, []);
   return null;
 }
