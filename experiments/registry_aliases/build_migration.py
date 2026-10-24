@@ -18,6 +18,95 @@ SEED = Path("infra/postgres/init/003_registry_seed.sql")
 VERSION = "015_registry_aliases.sql"
 # Aliases whose case forms collide with common words (``Буда`` inflects to ``буде``).
 EXCLUDED = {("Кирило Буданов", "Буда")}
+# Generic words, titles, bare first names and very short abbreviations (2026-10-24): they admit
+# registry entities that posts mention only as background, which cost v4.8 precision 0.78 -> 0.70.
+GENERIC = {
+    "Рада",
+    "парламент",
+    "армія",
+    "армия",
+    "військові",
+    "военные",
+    "Сили оборони",
+    "поліція",
+    "полиция",
+    "поліцейські",
+    "полицейские",
+    "копи",
+    "копы",
+    "менти",
+    "менты",
+    "мусора",
+    "поліцаї",
+    "Уряд",
+    "Правительство",
+    "урядовці",
+    "Офіс",
+    "Офис",
+    "Бюро",
+    "Розвідка",
+    "Разведка",
+    "міністр оборони",
+    "министр обороны",
+    "нардепи",
+    "нардепы",
+    "Контора",
+    "ЄС",
+    "«ЄС»",
+    "ЕС",
+    "«ЕС»",
+    "Голос",
+    "«Голос»",
+    "Батьківщина",
+    "слуги",
+    "зелені",
+    "зеленые",
+    "Межа",
+    "«Межа»",
+    '"Межа"',
+    "ЗМІНА",
+    "«Зміна»",
+    "Свобода",
+    "Слідство",
+    "Дзеркало",
+    "Тексты",
+    "Общественное",
+    "ВС",
+    "КС",
+    "ГШ",
+    "АП",
+    "ДТ",
+    "CES",
+    "ИМИ",
+    "ИЗИ",
+    "SAP",
+    "СІЧ",
+    "Президент",
+    "Гарант",
+    "Зе",
+    "Вова",
+    "Зелений",
+    "Зелёный",
+    "Руслан",
+    "Семен",
+    "Семён",
+    "Рустем",
+    "Севгіль",
+    "Севгиль",
+    "Генпрокурор",
+    "Генеральний прокурор",
+    "Генеральный прокурор",
+    "спікер",
+    "спикер",
+    "Главком",
+    "Головком",
+    "прем'єрка",
+    "прем'єр-міністерка",
+    "Хмара",
+    "Боровик",
+    "Ткач",
+    "Матвиенко",
+}
 
 HEADER = """-- Registry aliases v2: Russian names, abbreviations, colloquial names, nicknames and
 -- insulting names for every registry entity, generated per entity and reviewed by ambiguity
@@ -71,7 +160,8 @@ def additions() -> list[tuple[str, str]]:
             for proposal in proposals:
                 alias = " ".join(str(proposal["alias"]).split())
                 key = normalize(alias)
-                if not alias or (name, alias) in EXCLUDED or key in existing[name]:
+                excluded = (name, alias) in EXCLUDED or alias in GENERIC
+                if not alias or excluded or key in existing[name]:
                     continue
                 if "\t" in alias or "\\" in alias:
                     raise ValueError(f"{name}: alias {alias!r} cannot be copied")
