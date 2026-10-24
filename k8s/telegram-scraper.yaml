@@ -27,7 +27,7 @@ spec:
       - name: ghcr-secret
       containers:
       - name: telegram-scraper
-        image: ghcr.io/serpanchyk/kryvda-telegram-scraper:sha-9b2c039423338cec6166d13f8d6af035a1790fb0
+        image: ghcr.io/serpanchyk/kryvda-telegram-scraper:sha-0ee1b93e6ece6f36518885b248e9f522aeeb0a1e
         env:
         - name: POSTGRES_DSN
           valueFrom:

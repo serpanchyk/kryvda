@@ -23,7 +23,7 @@ spec:
         fsGroup: 10001
       containers:
       - name: migrate
-        image: ghcr.io/serpanchyk/kryvda-database:sha-9b2c039423338cec6166d13f8d6af035a1790fb0
+        image: ghcr.io/serpanchyk/kryvda-database:sha-0ee1b93e6ece6f36518885b248e9f522aeeb0a1e
         command:
         - sh
         - /migrate.sh
