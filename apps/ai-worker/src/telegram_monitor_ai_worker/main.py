@@ -41,7 +41,6 @@ from telegram_monitor_ai_worker.models import (
 from telegram_monitor_ai_worker.pipeline import (
     PIPELINE_VERSION,
     admitted_entities,
-    affiliation_needed,
     affiliation_request,
     assign_claim_ids,
     candidate_request,
@@ -348,8 +347,8 @@ class AnalysisWorker:
         The call runs only when a person in a post with a monitored organization received a
         negative stance. A failed call keeps the classifications unchanged.
         """
-        request = affiliation_request(job.post_text, entities, aliases)
-        if request is None or not affiliation_needed(request, entities, classifications):
+        request = affiliation_request(job.post_text, entities, aliases, classifications)
+        if request is None:
             return claims, classifications, False
         try:
             decisions = await self._execute_pass(

@@ -13,7 +13,7 @@ from monitoring_common.contracts import (
 )
 from monitoring_common.contracts import matched_registry_entity_ids as matched_registry_ids
 
-PIPELINE_VERSION = "inference_v4_8"
+PIPELINE_VERSION = "inference_v4_9"
 
 
 def matched_monitored_entity_ids(post_text: str, aliases: Sequence[Mapping[str, Any]]) -> list[int]:
@@ -460,13 +460,18 @@ def split_by_targets(
 
 
 def affiliation_request(
-    post_text: str, entities: Sequence[Mapping[str, Any]], aliases: Sequence[Mapping[str, Any]]
+    post_text: str,
+    entities: Sequence[Mapping[str, Any]],
+    aliases: Sequence[Mapping[str, Any]],
+    classifications: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any] | None:
-    """Offer every non-organization actor and every monitored registry organization of a post.
+    """Offer the negatively evaluated non-organization actors and the monitored organizations.
 
-    Returns ``None`` when the post has no person or no monitored organization to link.
+    Only a person with a negative stance can pass it on, so other actors (countries, media,
+    bystanders) stay out of the request. Returns ``None`` when there is nothing to link.
     """
     kinds = {int(row["entity_id"]): row.get("coarse_type") for row in aliases}
+    negative = {row["entity_id"] for row in classifications if row["stance"] == "негативне"}
     organizations: list[str] = []
     people: list[str] = []
     for entity in entities:
@@ -475,27 +480,11 @@ def affiliation_request(
         label = _entity_label(entity)
         if is_org and entity.get("monitored"):
             organizations.append(label)
-        elif not is_org and label not in people:
+        elif not is_org and entity["id"] in negative and label not in people:
             people.append(label)
     if not organizations or not people:
         return None
     return {"post_text": post_text, "people": people, "organizations": organizations}
-
-
-def affiliation_needed(
-    request: Mapping[str, Any] | None,
-    entities: Sequence[Mapping[str, Any]],
-    classifications: Sequence[Mapping[str, Any]],
-) -> bool:
-    """Return whether any offered person received a negative stance worth propagating."""
-    if request is None:
-        return False
-    people = {
-        cast(str, entity["id"]) for entity in entities if _entity_label(entity) in request["people"]
-    }
-    return any(
-        row["stance"] == "негативне" and row["entity_id"] in people for row in classifications
-    )
 
 
 def propagate_affiliations(

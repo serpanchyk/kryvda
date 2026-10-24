@@ -1,7 +1,6 @@
 """Tests for backend-only inference-v3 transformations."""
 
 from telegram_monitor_ai_worker.pipeline import (
-    affiliation_needed,
     affiliation_request,
     assign_claim_ids,
     classification_batches,
@@ -288,20 +287,20 @@ AFFILIATION_ALIASES = [
 ]
 
 
-def test_affiliation_request_offers_people_and_monitored_organizations() -> None:
-    request = affiliation_request("текст", AFFILIATION_ENTITIES, AFFILIATION_ALIASES)
+def test_affiliation_request_offers_negatively_evaluated_people_only() -> None:
+    negative = [{"claim_id": "c1", "entity_id": "e3", "stance": "негативне", "rhetoric": []}]
+
+    request = affiliation_request("текст", AFFILIATION_ENTITIES, AFFILIATION_ALIASES, negative)
 
     assert request == {
         "post_text": "текст",
-        "people": ["Віталій Шабунін", "Тарас Лікунов"],
+        "people": ["Тарас Лікунов"],
         "organizations": ["ЦПК"],
     }
-    assert affiliation_request("т", AFFILIATION_ENTITIES[:1], AFFILIATION_ALIASES) is None
-    negative = [{"claim_id": "c1", "entity_id": "e3", "stance": "негативне", "rhetoric": []}]
-    assert affiliation_needed(request, AFFILIATION_ENTITIES, negative)
-    assert not affiliation_needed(
-        request, AFFILIATION_ENTITIES, [{**negative[0], "entity_id": "e2"}]
-    )
+    neutral = [{**negative[0], "stance": "відсутнє"}]
+    assert affiliation_request("т", AFFILIATION_ENTITIES, AFFILIATION_ALIASES, neutral) is None
+    on_org = [{**negative[0], "entity_id": "e2"}]
+    assert affiliation_request("т", AFFILIATION_ENTITIES, AFFILIATION_ALIASES, on_org) is None
 
 
 def test_propagate_affiliations_turns_the_organization_row_negative() -> None:

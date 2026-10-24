@@ -83,7 +83,7 @@ class LiteLlmInferenceClient:
         if pass_name == "affiliations":
             people = request.get("people", [])
             count = len(people) if isinstance(people, list) else 0
-            return min(128 + count * 128, self._claims_max_output_tokens)
+            return min(192 + count * 192, self._claims_max_output_tokens)
         if pass_name == "targets":
             claims = request.get("claims", [])
             count = len(claims) if isinstance(claims, list) else 0

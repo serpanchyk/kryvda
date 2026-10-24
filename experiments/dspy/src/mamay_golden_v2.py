@@ -32,7 +32,6 @@ from telegram_monitor_ai_worker.models import ModelOutputError, ModelResponse
 from telegram_monitor_ai_worker.pipeline import (
     PIPELINE_VERSION,
     admitted_entities,
-    affiliation_needed,
     affiliation_request,
     assign_claim_ids,
     candidate_request,
@@ -54,8 +53,8 @@ from telegram_monitor_ai_worker.pipeline import (
 
 DEFAULT_ANNOTATIONS = Path("experiments/datasets/golden_v0/data/annotations.jsonl")
 DEFAULT_ALIAS_ADDITIONS = Path("infra/postgres/init/015_registry_aliases.sql")
-DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v4_8/comparisons.jsonl")
-DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v4_4/comparisons.jsonl")
+DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_vs_golden_v4_9/comparisons.jsonl")
+DEFAULT_BASELINE = Path("experiments/dspy/data/mamay_vs_golden_v4_8/comparisons.jsonl")
 # The tuned old55 partition is defined by the preserved 55-example v3.5 run, not by the baseline.
 OLD55_REFERENCE = Path("experiments/dspy/data/mamay_vs_golden_v3_5/comparisons.jsonl")
 DEFAULT_SEED = Path("infra/postgres/init/003_registry_seed.sql")
@@ -695,8 +694,8 @@ async def analyze_annotation(
             classification_partial = False
         classifications = [*classifications, *absent]
         affiliation_failed = False
-        affiliation = affiliation_request(source_text, entities, aliases)
-        if affiliation is not None and affiliation_needed(affiliation, entities, classifications):
+        affiliation = affiliation_request(source_text, entities, aliases, classifications)
+        if affiliation is not None:
             try:
                 links = await _run_pass(
                     client,
