@@ -51,8 +51,8 @@ from telegram_monitor_ai_worker.pipeline import (
 )
 from telegram_monitor_ai_worker.prompt import COMMON
 
-PIPELINE_VERSION = "direct_v2"
-DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_direct_v2/comparisons.jsonl")
+PIPELINE_VERSION = "direct_v3"
+DEFAULT_OUTPUT = Path("experiments/dspy/data/mamay_direct_v3/comparisons.jsonl")
 RHETORIC = [
     "корупція_або_особиста_вигода",
     "злочинна_або_незаконна_поведінка",
@@ -130,30 +130,44 @@ DIRECT_SCHEMA: dict[str, Any] = {
 }
 
 
+LINKS = [
+    "сама сутність",
+    "очільник, член чи працівник сутності",
+    "колишній працівник чи член сутності",
+    "людина чи протеже сутності, подані проти неї",
+    "інший актор",
+    "нікого не оцінюють",
+]
+# Criticism reaches an organization through its people; praise counts only for the entity itself.
+COUNTS = {"атака": set(LINKS[:4]), "похвала": {LINKS[0]}}
+
 VERIFY_PROMPT = f"""{COMMON}
 
 Завдання: тобі дають пост, сутність TARGET (mentions — форми, якими пост її називає), вид
-оцінки (kind: "атака" чи "похвала") і цитати з поста, які нібито містять цю оцінку TARGET. Для
-кожної цитати перевір, чи джерело в ній справді оцінює САМЕ TARGET саме так.
-
-Відповідай false, якщо: у цитаті атакують чи хвалять іншого актора, а TARGET лише згаданий
-поруч чи не згаданий узагалі; TARGET — жертва, свідок, адресат звернення, нейтральне тло чи
-сторона, яку захищають; TARGET сам критикує чи хвалить когось іншого; це нейтральна новина
-про дії, рішення чи підозру щодо TARGET без оцінки джерела; оцінку спростовують. Критика
-очільника, члена чи працівника TARGET, якого пост пов'язує з TARGET, — це атака на TARGET;
-займенник, що однозначно відсилає до TARGET, — теж TARGET.
-
-Для кожного quote_id спершу в reason коротко назви, кого і як оцінює джерело в цитаті, потім
-verdict: true лише тоді, коли цитата оцінює саме TARGET."""
+оцінки kind ("атака" чи "похвала") і цитати з поста. Для кожної цитати:
+1. reason — коротко, хто в цитаті кого оцінює і як;
+2. actor — кого саме джерело в цитаті атакує (для kind "атака") чи хвалить (для "похвала");
+3. link — ким цей actor є для TARGET за текстом поста: "сама сутність"; "очільник, член чи
+   працівник сутності" («голова ЦПК Шабунін», «детектив НАБУ», «суддя ВАКС»); "колишній
+   працівник чи член сутності" («ексдетектив НАБУ», «ексміністр оборони» для Міноборони);
+   "людина чи протеже сутності, подані проти неї" («протеже Єрмака» як доказ проти Єрмака);
+   "інший актор" — якщо оцінюють когось, хто з TARGET за постом не пов'язаний; "нікого не
+   оцінюють" — якщо це нейтральна новина, TARGET — жертва, свідок, адресат звернення,
+   нейтральне тло чи сторона, яку захищають, або оцінку спростовують.
+Зв'язок бери лише з тексту поста, не з власних знань."""
 
 
 def verify_schema(quote_ids: Sequence[str]) -> dict[str, Any]:
-    """Require one verdict per offered quote."""
+    """Require one actor and one link per offered quote."""
     verdict = {
         "type": "object",
         "additionalProperties": False,
-        "required": ["reason", "verdict"],
-        "properties": {"reason": {"type": "string"}, "verdict": {"type": "boolean"}},
+        "required": ["reason", "actor", "link"],
+        "properties": {
+            "reason": {"type": "string"},
+            "actor": {"type": "string"},
+            "link": {"enum": LINKS},
+        },
     }
     return {
         "type": "object",
@@ -296,7 +310,7 @@ async def verify_answer(
         kept = [
             item
             for qid, item in zip(quote_ids, items, strict=True)
-            if verdicts.get(qid, {}).get("verdict") is True
+            if verdicts.get(qid, {}).get("link") in COUNTS[kind]
         ]
         verified[flag], verified[key] = bool(kept), kept
     return verified
