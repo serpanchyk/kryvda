@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telegram-scraper
+  namespace: kryvda
+  annotations:
+    argocd.argoproj.io/sync-wave: '2'
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: telegram-scraper
+  template:
+    metadata:
+      labels:
+        app: telegram-scraper
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      imagePullSecrets:
+      - name: ghcr-secret
+      containers:
+      - name: telegram-scraper
+        image: ghcr.io/serpanchyk/kryvda-telegram-scraper:sha-84df9fe1dd4951133f063703813e376bf252f5eb
+        env:
+        - name: POSTGRES_DSN
+          valueFrom:
+            secretKeyRef:
+              name: kryvda-secret
+              key: POSTGRES_DSN
+        - name: TELEGRAM_GATEWAY_URL
+          valueFrom:
+            secretKeyRef:
+              name: kryvda-secret
+              key: TELEGRAM_GATEWAY_URL
+        - name: TELEGRAM_GATEWAY_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: kryvda-secret
+              key: TELEGRAM_GATEWAY_TOKEN
+        - name: COLLECTION_POLL_INTERVAL_SECONDS
+          value: '3600'
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: images
+          mountPath: /var/lib/telegram-monitor/channel-images
+          readOnly: false
+      nodeSelector:
+        kubernetes.io/hostname: mac-node1
+      volumes:
+      - name: images
+        persistentVolumeClaim:
+          claimName: channel-images

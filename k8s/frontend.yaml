@@ -1,0 +1,114 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-nginx
+  namespace: kryvda
+  annotations:
+    argocd.argoproj.io/sync-wave: '-2'
+data:
+  nginx.conf: "pid /tmp/nginx.pid;\nevents {}\nhttp {\ninclude /etc/nginx/mime.types;\n\
+    access_log /dev/stdout;\nerror_log /dev/stderr;\nclient_body_temp_path /tmp/client_temp;\n\
+    proxy_temp_path /tmp/proxy_temp;\nfastcgi_temp_path /tmp/fastcgi_temp;\nuwsgi_temp_path\
+    \ /tmp/uwsgi_temp;\nscgi_temp_path /tmp/scgi_temp;\nserver {\n  listen 8080;\n\
+    \  listen [::]:8080;\n  server_name _;\n\n  root /usr/share/nginx/html;\n  index\
+    \ index.html;\n\n  # The browser reaches the API through this same origin, so\
+    \ no API address is baked into the\n  # build. Registry endpoints are unauthenticated:\
+    \ only reads are exposed publicly; changes are\n  # made from the server itself\
+    \ through the loopback-bound API port.\n  location /api/ {\n    limit_except GET\
+    \ { deny all; }\n    proxy_pass http://api:8000/;\n    proxy_set_header Host $host;\n\
+    \    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n    proxy_set_header\
+    \ X-Forwarded-Proto $scheme;\n    proxy_read_timeout 120s;\n  }\n\n  location\
+    \ / {\n    try_files $uri $uri/ /index.html;\n  }\n}\n\n}\n"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: kryvda
+  annotations:
+    argocd.argoproj.io/sync-wave: '2'
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      imagePullSecrets:
+      - name: ghcr-secret
+      containers:
+      - name: frontend
+        image: ghcr.io/serpanchyk/kryvda-frontend:sha-84df9fe1dd4951133f063703813e376bf252f5eb
+        env: []
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - containerPort: 8080
+        startupProbe:
+          httpGet:
+            path: /
+            port: 8080
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        command:
+        - nginx
+        - -c
+        - /etc/kryvda/nginx.conf
+        - -g
+        - daemon off;
+        volumeMounts:
+        - name: nginx
+          mountPath: /etc/kryvda
+          readOnly: true
+      volumes:
+      - name: nginx
+        configMap:
+          name: frontend-nginx
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: kryvda
+spec:
+  selector:
+    app: frontend
+  ports:
+  - port: 8080
+    targetPort: 8080

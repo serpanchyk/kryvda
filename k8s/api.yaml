@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: kryvda
+  annotations:
+    argocd.argoproj.io/sync-wave: '2'
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      imagePullSecrets:
+      - name: ghcr-secret
+      containers:
+      - name: api
+        image: ghcr.io/serpanchyk/kryvda-api:sha-84df9fe1dd4951133f063703813e376bf252f5eb
+        env:
+        - name: POSTGRES_DSN
+          valueFrom:
+            secretKeyRef:
+              name: kryvda-secret
+              key: POSTGRES_DSN
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - containerPort: 8000
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import asyncio,os,asyncpg\nasync def check():\n c=await asyncpg.connect(os.environ['POSTGRES_DSN'],timeout=3)\n\
+              \ await c.fetchval('SELECT 1 FROM monitored_channels LIMIT 1')\n await\
+              \ c.close()\nasyncio.run(check())"
+          periodSeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: images
+          mountPath: /var/lib/telegram-monitor/channel-images
+          readOnly: true
+      nodeSelector:
+        kubernetes.io/hostname: mac-node1
+      volumes:
+      - name: images
+        persistentVolumeClaim:
+          claimName: channel-images
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: kryvda
+spec:
+  selector:
+    app: api
+  ports:
+  - port: 8000
+    targetPort: 8000
