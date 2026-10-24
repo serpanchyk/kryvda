@@ -284,7 +284,6 @@ export function SystemPage() {
     <QueryBoundary loading={query.isLoading} error={query.isError} onRetry={() => void query.refetch()}>
       {jobs && <>
         {jobs.failed || isStale(lastRun, 1) ? <div className="glass rounded-[22px] px-5 py-3.5 text-sm" role="status">
-          <strong className="text-negative">Потрібна увага.</strong>{" "}
           {jobs.failed ? `${formatNumber(jobs.failed)} ${pluralUk(jobs.failed, "допис не вдалося", "дописи не вдалося", "дописів не вдалося")} проаналізувати після всіх спроб. ` : ""}
           {isStale(lastRun, 1) ? `Останній завершений аналіз — ${relative(lastRun)}.` : ""}
         </div> : null}

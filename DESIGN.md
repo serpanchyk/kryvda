@@ -289,3 +289,17 @@ Every exportable tile renders to PNG on solid white (#ffffff, 2x): glass, blur a
 - **Don't** show section labels above tile titles on the working screen; they belong to the exported card.
 - **Don't** use tracked uppercase labels or English words in the interface.
 - **Don't** use red or blue decoratively; they carry evaluation only.
+
+## Addenda after the audit
+
+- **Hit areas.** Visual controls may stay compact (36 px buttons, 28 px chips, 24 px small segments),
+  but every interactive element carries a 44 px hit area through the `.hit` pseudo-element pattern.
+- **Focus.** One focus ring for every control: 2 px solid `--ring` (blue on light glass, white inside
+  dark and accent glass), offset 2 px.
+- **Warning.** `--warning-bg` / `--warning-fg` carry stale-data notices and switch to dark-on-cream
+  in exported cards.
+- **Background toggle.** The ASCII field can be switched off from the header (remembered per
+  browser); it also rests after a minute without interaction.
+- **System page.** The admin overview reuses the bento grammar: dark throughput hero, metric tiles,
+  table tiles. Run outcomes keep fixed colours everywhere: completed = foreground at 55%, partial =
+  amber #f5a524, fallback = positive blue, failed = vivid red; collected posts = warm yellow line.

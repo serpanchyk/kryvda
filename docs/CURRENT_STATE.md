@@ -265,8 +265,15 @@ rounded plate with a white Inter Bold «к» and the red dot (`apps/frontend/pub
 `favicon.ico`, `apple-touch-icon.png`). When collection has stopped inside the chosen window, the
 overview hero says since which day there are no new posts. Entity and channel profiles flag sources whose last claim or post is more
 than three days old. Failed requests show a retry action that keeps URL-backed filters. `/system`
-is a non-exportable operational page with the queue, retry reasons, last runs, and per-channel
-collection freshness from `/channels/collection-health`.
+is a non-exportable admin overview: a status pill, a 7/30/90-day window, a dark throughput hero
+(finished runs per Kyiv day by outcome with the collected-post line on its own scale, typical run
+time from the median), queue tiles, a model-pass quality table (attempts, repair share, invalid
+share, median and 95th-percentile latency, completion tokens), the last 48 hours, per-channel
+collection pulses with freshness, retry reasons, and model/pipeline usage. It reads
+`/analysis/health`, `/channels/collection-health` and `/system/activity`. A header toggle switches
+the animated background off on slower machines; the choice is remembered per browser. nginx
+revalidates `index.html` on every visit and caches hashed assets for a year, so deploys reach
+browsers immediately.
 
 The overview opens with a metric strip whose counts carry a sparkline and the relative change
 against the equally long previous period (fetched as a second request; unavailable for «Увесь
