@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useId, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Dialog } from "@base-ui/react/dialog";
-import { ArrowDown, ArrowUp, CalendarDays, ChevronLeft, ChevronRight, Clock3, Download, Menu, RotateCw, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarDays, ChevronLeft, ChevronRight, Clock3, Download, ExternalLink, Menu, RotateCw, X } from "lucide-react";
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useIsFetching } from "@tanstack/react-query";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceArea, ReferenceLine, XAxis, YAxis } from "recharts";
@@ -141,7 +141,10 @@ function SiteFooter() {
   return <footer className="glass mx-auto mb-10 flex max-w-2xl flex-col items-center gap-2 rounded-[28px] px-6 py-5 text-center text-[13px] leading-5 text-muted-foreground max-md:mx-3">
     <BrandLockup size="sm" />
     <p className="max-w-2xl text-balance">{SOURCE_LINE}</p>
-    <p className="max-w-2xl text-balance">{CREDIT_LINE}</p>
+    <p className="max-w-2xl text-balance">Спільний проєкт <PartnerLink partner="antac">ЦПК</PartnerLink>, <PartnerLink partner="sshi">катедри СШІ Львівської політехніки</PartnerLink> та платформи інференсу мовних моделей <PartnerLink partner="lapathoniia">Lapathoniia</PartnerLink>.</p>
+    <nav aria-label="Партнери" className="mt-1 flex flex-wrap justify-center gap-2">
+      {Object.entries(PARTNERS).map(([key, partner]) => <a key={key} href={partner.href} target="_blank" rel="noreferrer" className="chip text-[13px] font-medium text-foreground">{partner.label}<ExternalLink className="size-3.5 text-muted-foreground" aria-hidden="true" /></a>)}
+    </nav>
     <div className="mt-1 w-full"><PhotoCredits /></div>
   </footer>;
 }
@@ -327,6 +330,15 @@ function isExportIgnored(node: HTMLElement): boolean {
 
 export const SOURCE_LINE = "Досліджуємо український інформаційний простір, аналізуючи Telegram-канали за допомогою українських великих мовних моделей.";
 export const CREDIT_LINE = "Спільний проєкт ЦПК, катедри СШІ Львівської політехніки та платформи інференсу мовних моделей Lapathoniia.";
+const PARTNERS = {
+  antac: { label: "ЦПК", href: "https://antac.org.ua/" },
+  sshi: { label: "Катедра СШІ Львівської політехніки", href: "https://aidept.com.ua/" },
+  lapathoniia: { label: "Lapathoniia", href: "https://lapathoniia.top/" },
+};
+
+function PartnerLink({ partner, children }: { partner: keyof typeof PARTNERS; children: ReactNode }) {
+  return <a href={PARTNERS[partner].href} target="_blank" rel="noreferrer" className="font-medium text-foreground underline decoration-foreground/25 underline-offset-[3px] transition-colors hover:decoration-foreground">{children}</a>;
+}
 
 function ExportPreview({ image, fileName, title, dateline, onClose }: { image: string | null; fileName: string; title: string; dateline: string; onClose: () => void }) {
   const save = () => {

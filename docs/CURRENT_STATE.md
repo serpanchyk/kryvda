@@ -248,7 +248,7 @@ Every chart section is a shareable card: a data-driven thesis headline and a dat
 (section, subject, period with year, active filters). The exported PNG alone adds a footer with the
 «кривда.» wordmark, the source line and the partner credit; on screen these appear once, in the site
 footer («Досліджуємо український інформаційний простір…» and «Спільний проєкт ЦПК, катедри СШІ
-Львівської політехніки та платформи інференсу мовних моделей Lapathoniia»). Exports render the card
+Львівської політехніки та платформи інференсу мовних моделей Lapathoniia»). The footer links each partner: antac.org.ua, aidept.com.ua and lapathoniia.top. Exports render the card
 on solid white without glass effects. Headlines state a
 finding only above sample guardrails (`apps/frontend/src/lib/theses.ts`) and otherwise describe the
 graphic; the overview title names the period's main target under the same guardrail. A
