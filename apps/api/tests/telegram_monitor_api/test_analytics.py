@@ -22,6 +22,7 @@ from telegram_monitor_api.analytics import (
     _DASHBOARD_RHETORIC_SQL,
     _DASHBOARD_SUMMARY_SQL,
     _ENTITY_CHANNEL_PAGE_SQL,
+    _ENTITY_NEGATIVE_DAYS_SQL,
     _ENTITY_TOTAL_SQL,
     _EVIDENCE_SQL,
     _SOURCE_ACTOR_COUNT_SQL,
@@ -383,3 +384,8 @@ def test_targeted_attacks_flag_bursts_against_the_entity_norm() -> None:
     assert event["baseline"] == 0
     assert event["ratio"] == 24
     assert event["probability"] < 1e-9
+
+
+def test_targeted_attacks_count_only_the_channels_own_voice() -> None:
+    """Relayed attacks (a named politician criticising the entity) are not the channel's attack."""
+    assert "claim.source_kind = 'channel_editorial'" in _ENTITY_NEGATIVE_DAYS_SQL

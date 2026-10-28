@@ -230,8 +230,9 @@ the entity list also count posts that mention the entity only without an evaluat
 оцінки»); balance strips always list negative, mixed, positive and unevaluated posts with counts,
 the shares taken over evaluated posts, and entity profiles show mixed and unevaluated tiles. Rhetoric
 distributions count negative or mixed posts that use each label. The overview's «Спрямовані атаки» tile lists entity-days
-whose negative posts far exceed the entity's own norm: at least 5 negative posts in at least 2
-channels on one Kyiv day, with P(X >= count) < 0.001 for X ~ Poisson(norm), where the norm is the
+whose negative posts far exceed the entity's own norm, counting only the channels' own voice
+(`channel_editorial` claims; a channel relaying someone else's attack is not attacking): at least
+5 negative posts in at least 2 channels on one Kyiv day, with P(X >= count) < 0.001 for X ~ Poisson(norm), where the norm is the
 entity's mean daily negative posts over the preceding 28 days (floored at 0.5). Events are ranked
 by that probability; each opens the entity profile narrowed to the day, because a burst can also
 be a reaction to a real event. Entity profiles end with the registry forms (canonical name and

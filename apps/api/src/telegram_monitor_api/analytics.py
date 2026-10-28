@@ -105,8 +105,8 @@ def _fill_daily(
     ]
 
 
-# A targeted attack: one entity receives far more negative posts on one Kyiv day than its own
-# norm, from more than one channel. The norm is the entity's mean daily negative posts over the
+# A targeted attack: one entity receives far more posts that the channels themselves write
+# against it on one Kyiv day than its own norm, from more than one channel. The norm is the entity's mean daily negative posts over the
 # preceding 28 days (at least half a post a day, so a quiet entity needs a real burst), and the
 # day must be improbable under it: P(X >= count) < 0.001 for X ~ Poisson(norm).
 TARGETED_BASELINE_DAYS = 28
@@ -714,9 +714,11 @@ WHERE post.deleted_at IS NULL AND post.inaccessible_at IS NULL
 
 _DASHBOARD_RHETORIC_SQL = _pair_rhetoric(_DASHBOARD_PAIRS)
 
-# Negative posts per registry entity and Kyiv day, the input of targeted-attack detection.
+# Negative posts per registry entity and Kyiv day, the input of targeted-attack detection. Only
+# the channel's own voice counts: a channel relaying someone else's attack (Trump criticising
+# Zelensky) is not attacking, so named and unnamed sources are left out before the collapse.
 _ENTITY_NEGATIVE_DAYS_SQL = (
-    _DASHBOARD_PAIRS
+    _pairs(_base("$1", "$2") + " AND claim.source_kind = 'channel_editorial'")
     + "\nSELECT judged.entity_id, entity.canonical_name, "
     + _DAY_KEY
     + """ AS date,
