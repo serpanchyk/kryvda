@@ -573,14 +573,17 @@ export function DistributionBars<K extends string>({ items, labels, group, selec
   </div>;
 }
 
-export function EvaluativeBalanceStrip({ item }: { item: Pick<Summary, "positive_count" | "negative_count" | "absent_count" | "evaluative_count" | "negative_share"> }) {
-  const evaluative = item.evaluative_count ?? item.positive_count + item.negative_count;
+export function EvaluativeBalanceStrip({ item }: { item: Pick<Summary, "positive_count" | "negative_count" | "mixed_count" | "absent_count" | "evaluative_count" | "negative_share"> }) {
+  const mixed = item.mixed_count ?? 0;
+  const evaluative = item.evaluative_count ?? item.positive_count + item.negative_count + mixed;
   const negativeShare = item.negative_share ?? (evaluative ? item.negative_count / evaluative : 0);
   const positiveShare = evaluative ? item.positive_count / evaluative : 0;
+  const mixedShare = evaluative ? mixed / evaluative : 0;
   return <div>
-    <div className="flex h-2 gap-[3px] overflow-hidden rounded-full" role="img" aria-label={evaluative ? `Негативні ${formatPercent(negativeShare)}, позитивні ${formatPercent(positiveShare)} з ${formatNumber(evaluative)} оцінок` : "Оцінок немає"}>
+    <div className="flex h-2 gap-[3px] overflow-hidden rounded-full" role="img" aria-label={evaluative ? `Негативні ${formatPercent(negativeShare)}, позитивні ${formatPercent(positiveShare)}${mixed ? `, змішані ${formatPercent(mixedShare)}` : ""} з ${formatNumber(evaluative)} дописів з оцінкою` : "Оцінок немає"}>
       {evaluative ? <>
         {item.negative_count ? <span className="bar-fill bg-negative" style={{ width: `${negativeShare * 100}%` }} /> : null}
+        {mixed ? <span className="bar-fill bg-foreground/35" style={{ width: `${mixedShare * 100}%`, animationDelay: "60ms" }} /> : null}
         {item.positive_count ? <span className="bar-fill bg-positive" style={{ width: `${positiveShare * 100}%`, animationDelay: "120ms" }} /> : null}
       </> : <span className="bar-track h-full w-full" />}
     </div>
@@ -588,8 +591,9 @@ export function EvaluativeBalanceStrip({ item }: { item: Pick<Summary, "positive
       {evaluative ? <>
         <span className="inline-flex items-center gap-1.5"><i className="size-1.5 rounded-full bg-negative" />Негативні <strong className="font-semibold text-foreground">{formatPercent(negativeShare)}</strong></span>
         <span className="inline-flex items-center gap-1.5"><i className="size-1.5 rounded-full bg-positive" />Позитивні <strong className="font-semibold text-foreground">{formatPercent(positiveShare)}</strong></span>
+        {mixed ? <span className="inline-flex items-center gap-1.5"><i className="size-1.5 rounded-full bg-foreground/35" />Змішані <strong className="font-semibold text-foreground">{formatNumber(mixed)}</strong></span> : null}
       </> : null}
-      <span>{`${glossary.metric.sample.label} ${formatNumber(evaluative)}`}</span>
+      <span>{`${formatNumber(evaluative)} ${glossary.metric.sample.label}`}</span>
       {item.absent_count ? <span>{formatNumber(item.absent_count)} без оцінки</span> : null}
     </div>
   </div>;
@@ -619,7 +623,7 @@ export function Pager({ page, param = "offset" }: { page: Page<unknown>; param?:
 }
 
 const LOAD_STEPS = [
-  "Рахуємо негативні класифікації за днями",
+  "Рахуємо негативні дописи за днями",
   "Звіряємо згадки із реєстром сутностей",
   "Групуємо твердження за каналами",
   "Перевіряємо розміри вибірок",

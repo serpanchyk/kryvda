@@ -1,7 +1,8 @@
 """Focused tests for editorial analytics response assembly."""
 
+import math
 import re
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -17,14 +18,21 @@ from telegram_monitor_api.analytics import (
     _CHANNEL_SQL,
     _CHANNEL_TOTAL_SQL,
     _CLAIMS_COUNT_SQL,
+    _DAILY_SQL,
+    _DASHBOARD_RHETORIC_SQL,
+    _DASHBOARD_SUMMARY_SQL,
     _ENTITY_CHANNEL_PAGE_SQL,
+    _ENTITY_TOTAL_SQL,
     _EVIDENCE_SQL,
     _SOURCE_ACTOR_COUNT_SQL,
     _SOURCE_ACTOR_PAGE_SQL,
+    PAIR_STANCE_SQL,
     AnalyticsRepository,
     EntityAnalyticsFilters,
     _fill_daily,
     negative_balance_metrics,
+    poisson_tail,
+    targeted_attacks,
 )
 
 
@@ -287,6 +295,7 @@ def test_fill_daily_inserts_zero_days_between_sparse_rows() -> None:
         "claim_count": 0,
         "positive_count": 0,
         "negative_count": 0,
+        "mixed_count": 0,
         **negative_balance_metrics(0, 0),
         "absent_count": 0,
     }
@@ -320,3 +329,57 @@ def test_fill_daily_uses_kyiv_report_days(start: datetime, expected_first: date)
 
     assert days[0]["date"] == expected_first
     assert days[-1]["date"] == date(2026, 9, 3)
+
+
+def test_aggregates_count_post_entity_evaluations_not_claims() -> None:
+    """Every aggregate collapses claims into one majority evaluation per post and entity."""
+    for query in (_DASHBOARD_SUMMARY_SQL, _DAILY_SQL, _CHANNEL_TOTAL_SQL, _ENTITY_TOTAL_SQL):
+        assert "WINDOW pair AS (PARTITION BY post.id, entity.id)" in query
+        assert "count(*) FILTER (WHERE judged.first AND judged.stance = 'негативне')" in query
+    assert "WHEN negative_claims > 0 THEN 'змішане'" in PAIR_STANCE_SQL
+    # The entity stance filter keeps whole posts in aggregates but single claims as evidence.
+    assert "$3::text IS NULL OR stance = $3" in _ENTITY_TOTAL_SQL
+    assert "classification.stance = $3" in _EVIDENCE_SQL
+    assert "count(DISTINCT (judged.post_id, judged.entity_id))" in _DASHBOARD_RHETORIC_SQL
+
+
+def test_poisson_tail_matches_known_values() -> None:
+    assert poisson_tail(0, 2.0) == 1.0
+    assert poisson_tail(1, 2.0) == pytest.approx(1 - math.exp(-2.0))
+    assert poisson_tail(5, 0.5) == pytest.approx(0.000172, rel=1e-2)
+
+
+def _entity_day(entity: int, day: date, negative: int, channels: int = 3) -> dict[str, object]:
+    return {
+        "entity_id": entity,
+        "canonical_name": f"Сутність {entity}",
+        "date": day,
+        "negative_count": negative,
+        "channel_count": channels,
+    }
+
+
+def test_targeted_attacks_flag_bursts_against_the_entity_norm() -> None:
+    start = datetime(2026, 9, 30, 21, tzinfo=UTC)  # Kyiv 1 October
+    end = datetime(2026, 10, 9, 21, tzinfo=UTC)  # exclusive Kyiv 10 October
+    burst = date(2026, 10, 5)
+    rows = [
+        # A usually quiet entity: twelve negative posts in four channels is a burst.
+        _entity_day(1, burst, 12, 4),
+        # A busy entity with three negative posts a day: eight is not unusual enough.
+        *(_entity_day(2, burst - timedelta(days=offset), 3) for offset in range(1, 29)),
+        _entity_day(2, burst, 8),
+        # A single channel, however loud, is not a targeted attack.
+        _entity_day(3, burst, 15, 1),
+        # Outside the period.
+        _entity_day(4, date(2026, 9, 20), 20),
+    ]
+
+    result = targeted_attacks(rows, start, end)
+
+    assert result["total"] == 1
+    event = result["items"][0]
+    assert (event["entity_id"], event["date"], event["negative_count"]) == (1, burst, 12)
+    assert event["baseline"] == 0
+    assert event["ratio"] == 24
+    assert event["probability"] < 1e-9

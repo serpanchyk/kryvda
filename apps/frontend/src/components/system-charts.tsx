@@ -88,8 +88,7 @@ const seconds = (ms: number | null): string => (ms == null ? "—" : `${(ms / 10
 
 /** Each model pass: how often it needed a repair or came back invalid, and how long it takes. */
 export function PassTable({ passes }: { passes: PassHealth[] }) {
-  const order = ["entities", "claims", "classification"] as const;
-  const rows = order.map((name) => passes.find((pass) => pass.pass_name === name)).filter((pass): pass is PassHealth => Boolean(pass));
+  const rows = passes.filter((pass) => pass.pass_name in glossary.pass);
   return <div className="-mx-1 overflow-x-auto">
     <table className="w-full min-w-[34rem] text-left text-sm tabular-nums">
       <thead className="text-xs text-muted-foreground"><tr>

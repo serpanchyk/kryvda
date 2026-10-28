@@ -7,6 +7,8 @@ from typing import Any
 import asyncpg
 from monitoring_common.contracts import matched_registry_entity_ids, normalize_match_text
 
+from telegram_monitor_api.analytics import PAIR_STANCE_SQL
+
 
 class RegistryRepository:
     """Own registry mutations and their historical analysis handoff."""
@@ -297,9 +299,14 @@ WHERE ($1::text IS NULL OR entity.canonical_name ILIKE '%' || $1 || '%'
 
 
 def _entity_metrics_sql() -> str:
-    positive = "count(*) FILTER (WHERE post.id IS NOT NULL AND classification.stance = 'позитивне')"
-    negative = "count(*) FILTER (WHERE post.id IS NOT NULL AND classification.stance = 'негативне')"
-    total = f"({positive} + {negative})"
+    """Post x entity evaluation counts; the classification names stay for older clients."""
+
+    def pairs(condition: str) -> str:
+        return f"count(*) FILTER (WHERE judged.first AND {condition})"
+
+    positive = pairs("judged.stance = 'позитивне'")
+    negative = pairs("judged.stance = 'негативне'")
+    total = pairs("judged.stance <> 'відсутнє'")
     share = (
         f"CASE WHEN {total} = 0 THEN 0::double precision "
         f"ELSE {negative}::double precision / {total} END"
@@ -313,15 +320,61 @@ def _entity_metrics_sql() -> str:
         f"{positive} AS positive_classification_count, "
         f"{negative} AS negative_classification_count, "
         f"{positive} AS positive_count, {negative} AS negative_count, "
-        f"{total} AS evaluative_count, "
-        f"{share} AS negative_share, {score} AS negative_balance_score"
+        f"{pairs(MIXED)} AS mixed_count, {total} AS evaluative_count, "
+        f"{share} AS negative_share, {score} AS negative_balance_score, "
+        "count(DISTINCT judged.claim_id) AS evaluative_claim_count"
     )
 
 
+MIXED = "judged.stance = 'змішане'"
 _ENTITY_METRICS_SQL = _entity_metrics_sql()
+_ENTITY_TOTAL_COLUMNS = (
+    "positive_classification_count",
+    "negative_classification_count",
+    "positive_count",
+    "negative_count",
+    "mixed_count",
+    "evaluative_count",
+    "negative_share",
+    "negative_balance_score",
+    "evaluative_claim_count",
+)
 
 _ENTITY_PAGE_SQL = (
     """
+WITH counted AS (
+    SELECT post_entity.registry_entity_id AS entity_id, post.id AS post_id, claim.id AS claim_id,
+        count(*) FILTER (WHERE classification.stance = 'негативне') OVER pair AS negative_claims,
+        count(*) FILTER (WHERE classification.stance = 'позитивне') OVER pair AS positive_claims,
+        row_number() OVER pair = 1 AS first
+    FROM post_entities AS post_entity
+    JOIN analysis_runs AS run ON run.id = post_entity.run_id
+        AND run.status IN ('completed', 'completed_with_partial_classification',
+                           'completed_with_entity_fallback')
+    JOIN claims AS claim ON claim.run_id = run.id
+    JOIN claim_target_classifications AS classification
+        ON classification.claim_id = claim.id AND classification.post_entity_id = post_entity.id
+    JOIN post_revisions AS revision ON revision.id = run.post_revision_id
+    JOIN raw_posts AS post ON post.id = revision.raw_post_id
+    WHERE post_entity.registry_entity_id IS NOT NULL
+      AND classification.stance IN ('позитивне', 'негативне')
+      AND post.deleted_at IS NULL AND post.inaccessible_at IS NULL
+      AND revision.id = (SELECT latest.id FROM post_revisions AS latest
+                         WHERE latest.raw_post_id = post.id
+                         ORDER BY latest.revision_number DESC LIMIT 1)
+      AND ($4::timestamptz IS NULL OR post.published_at >= $4)
+      AND ($5::timestamptz IS NULL OR post.published_at < $5)
+    WINDOW pair AS (PARTITION BY post.id, post_entity.registry_entity_id)
+), judged AS (
+    SELECT counted.*, """
+    + PAIR_STANCE_SQL
+    + """ AS stance FROM counted
+), totals AS (
+    SELECT judged.entity_id, """
+    + _ENTITY_METRICS_SQL
+    + """
+    FROM judged GROUP BY judged.entity_id
+)
 SELECT entity.id, entity.canonical_name, entity.coarse_type, entity.monitored,
        COALESCE((SELECT sum(jsonb_array_length(observed.mentions))
            FROM post_entities AS observed
@@ -336,35 +389,14 @@ SELECT entity.id, entity.canonical_name, entity.coarse_type, entity.monitored,
              AND ($4::timestamptz IS NULL OR observed_post.published_at >= $4)
              AND ($5::timestamptz IS NULL OR observed_post.published_at < $5)), 0)
            AS entity_mention_count,
-       count(DISTINCT claim.id) FILTER (
-           WHERE post.id IS NOT NULL
-             AND classification.stance IN ('позитивне', 'негативне')
-       ) AS evaluative_claim_count,
-       count(DISTINCT claim.id) FILTER (
-           WHERE post.id IS NOT NULL AND classification.stance IN ('позитивне', 'негативне')
-       ) AS mention_count,
-       """
-    + _ENTITY_METRICS_SQL
-    + """
-"""
+       COALESCE(totals.evaluative_claim_count, 0) AS mention_count, """
+    + ", ".join(f"COALESCE(totals.{column}, 0) AS {column}" for column in _ENTITY_TOTAL_COLUMNS)
     + """
 FROM registry_entities AS entity
-LEFT JOIN post_entities AS post_entity ON post_entity.registry_entity_id = entity.id
-LEFT JOIN analysis_runs AS run ON run.id = post_entity.run_id
-    AND run.status IN ('completed', 'completed_with_partial_classification',
-                       'completed_with_entity_fallback')
-LEFT JOIN claims AS claim ON claim.run_id = run.id
-LEFT JOIN claim_target_classifications AS classification
-    ON classification.claim_id = claim.id AND classification.post_entity_id = post_entity.id
-LEFT JOIN post_revisions AS revision ON revision.id = run.post_revision_id
-LEFT JOIN raw_posts AS post ON post.id = revision.raw_post_id
-    AND post.deleted_at IS NULL AND post.inaccessible_at IS NULL
-    AND ($4::timestamptz IS NULL OR post.published_at >= $4)
-    AND ($5::timestamptz IS NULL OR post.published_at < $5)
+LEFT JOIN totals ON totals.entity_id = entity.id
 """
     + _ENTITY_PAGE_FILTER
     + """
-GROUP BY entity.id
 ORDER BY {order}
 LIMIT $6 OFFSET $7
 """

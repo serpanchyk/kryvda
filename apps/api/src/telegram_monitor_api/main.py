@@ -196,6 +196,12 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         pool = await database.get()
         return await SystemRepository(pool).activity(days)
 
+    @app.get("/system/funnel")
+    async def system_funnel() -> dict[str, int]:
+        """Return how many posts reached each analysis stage since collection began."""
+        pool = await database.get()
+        return await SystemRepository(pool).funnel()
+
     @app.get("/channel-images/{channel_id}")
     async def channel_image(channel_id: int) -> FileResponse:
         """Serve a monitored channel's current locally stored Telegram avatar.

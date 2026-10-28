@@ -8,8 +8,8 @@ const entity = (id: number, name: string, negative: number, positive: number) =>
 
 describe("thesis headlines", () => {
   test("state a peak only when it clears the minimum count", () => {
-    expect(attackPeakThesis([day("2026-09-14", 115), day("2026-09-15", 3)], false)).toMatch(/^Пік атак — 14 .*: 115 негативних класифікацій$/);
-    expect(attackPeakThesis([day("2026-09-14", 4)], false)).toBe("Негативні класифікації за днями");
+    expect(attackPeakThesis([day("2026-09-14", 115), day("2026-09-15", 3)], false)).toMatch(/^Пік атак — 14 .*: 115 негативних дописів$/);
+    expect(attackPeakThesis([day("2026-09-14", 4)], false)).toBe("Негативні дописи за днями");
   });
 
   test("report a change against the previous period before a share", () => {
@@ -25,7 +25,7 @@ describe("thesis headlines", () => {
 
   test("balance leaders need an evaluative sample", () => {
     expect(rankingThesis([entity(1, "А", 3, 0)], (item) => item.canonical_name ?? "", true, "Запасний")).toBe("Запасний");
-    expect(rankingThesis([entity(1, "А", 12, 3)], (item) => item.canonical_name ?? "", false, "Запасний")).toBe("Найбільше негативу — А: 12 негативних класифікацій");
+    expect(rankingThesis([entity(1, "А", 12, 3)], (item) => item.canonical_name ?? "", false, "Запасний")).toBe("Найбільше негативу — А: 12 негативних дописів");
   });
 
   test("attribution findings use shares of unique claims", () => {

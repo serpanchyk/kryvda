@@ -17,15 +17,19 @@ export type RankingSort = "negative_volume" | "negative_balance" | "positive_vol
 export interface Distribution<K extends string = string> { key: K; count: number; share: number; }
 export interface ActivityDay { date: string; collected_posts: number; published_posts: number; completed: number; partial: number; fallback: number; failed: number; filtered_out: number; }
 export interface ActivityHour { hour: string; completed: number; failed: number; }
-export interface PassHealth { pass_name: "entities" | "claims" | "classification"; attempts: number; repairs: number; invalid: number; failed: number; median_ms: number | null; p95_ms: number | null; median_completion_tokens: number | null; }
+export type PassName = "candidates" | "entities" | "claims" | "targets" | "classification" | "affiliations";
+export interface PassHealth { pass_name: PassName; attempts: number; repairs: number; invalid: number; failed: number; median_ms: number | null; p95_ms: number | null; median_completion_tokens: number | null; }
 export interface ModelUsage { model_name: string; pipeline_version: string; runs: number; last_used_at: string | null; }
 export interface ChannelActivity { id: number; title: string | null; days: Array<{ date: string; posts: number }>; }
+export interface AnalysisFunnel { collected: number; analysed: number; matched: number; with_claims: number; evaluative: number; negative: number; }
 export interface SystemActivity { days: ActivityDay[]; hours: ActivityHour[]; passes: PassHealth[]; models: ModelUsage[]; channels: ChannelActivity[]; totals: { runs: number; avg_run_seconds: number | null; median_run_seconds?: number | null; claims: number }; }
 export interface Entity {
   id: number;
   canonical_name: string;
   coarse_type: string;
   monitored: boolean;
+  /** Approved registry forms the prefilter matches; returned with an entity profile. */
+  aliases?: string[];
   /** @deprecated: use evaluative_claim_count. */
   mention_count: number;
   evaluative_claim_count?: number;
@@ -34,6 +38,7 @@ export interface Entity {
   negative_classification_count?: number;
   positive_count: number;
   negative_count: number;
+  mixed_count?: number;
   evaluative_count?: number;
   negative_share?: number;
   negative_balance_score?: number;
@@ -52,6 +57,8 @@ export interface Summary {
   post_count: number;
   positive_count: number;
   negative_count: number;
+  /** Posts with as many negative as positive claims about the entity. */
+  mixed_count?: number;
   evaluative_count?: number;
   negative_share?: number;
   negative_balance_score?: number;
@@ -66,6 +73,7 @@ export interface Daily {
   claim_count: number;
   positive_count: number;
   negative_count: number;
+  mixed_count?: number;
   absent_count: number;
 }
 export interface Evidence {
@@ -112,6 +120,8 @@ export interface PostDetail {
   username: string | null;
   claims: PostClaim[];
 }
+/** One entity-day with far more negative posts than the entity's own 28-day norm. */
+export interface TargetedAttack { entity_id: number; canonical_name: string; date: string; negative_count: number; channel_count: number; baseline: number; ratio: number; probability: number; }
 export interface Dashboard {
   summary: {
     post_count: number;
@@ -126,6 +136,7 @@ export interface Dashboard {
   };
   rhetoric?: Distribution<RhetoricLabel>[];
   source_actors?: SourceActorOption[];
+  targeted_attacks?: { items: TargetedAttack[]; total: number };
   completeness?: Completeness;
   daily: Daily[];
   entities: Summary[];
@@ -168,7 +179,7 @@ export interface SourceActorOption {
 }
 export interface EntityProfile {
   entity: Entity;
-  summary: { mention_count: number; evaluative_claim_count?: number; positive_count: number; negative_count: number };
+  summary: { mention_count: number; evaluative_claim_count?: number; claim_count?: number; evaluative_count?: number; mixed_count?: number; positive_count: number; negative_count: number };
   channels: Page<Summary>;
   channel_options: Array<Pick<Summary, "id" | "title">>;
   source_entity: Pick<Entity, "id" | "canonical_name"> | null;
@@ -272,4 +283,5 @@ export const apiClient = {
   post: (id: string): Promise<PostDetail> => get(`/posts/${id}`),
   collectionHealth: (): Promise<ChannelHealth[]> => get("/channels/collection-health"),
   systemActivity: (days: number): Promise<SystemActivity> => get(`/system/activity?days=${days}`),
+  systemFunnel: (): Promise<AnalysisFunnel> => get("/system/funnel"),
 };

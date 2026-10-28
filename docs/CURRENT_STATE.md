@@ -87,7 +87,10 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   failed, median/p95 duration and median completion tokens per inference pass), `models` (runs
   per model and pipeline version, most runs first), `channels` (collected posts per monitored
   channel per day) and `totals` (finished runs, mean `completed_at - created_at`, the median of
-  that duration over plain `completed` runs, claims of runs finished in the window). A
+  that duration over plain `completed` runs, claims of runs finished in the window).
+  `GET /system/funnel` counts the whole history: collected posts, then distinct analysed post
+  revisions, those past the candidate check, with claims, with an evaluation of a monitored
+  entity, and with a negative one. A
   `superseded` run counts as completed work; any non-first attempt (`repair`, `retry`,
   `batch_retry`, `individual_retry`) counts as a repair. A run row is reused across job retries,
   so its duration includes retry waits and the mean is outlier-sensitive; read the median for
@@ -216,7 +219,21 @@ always-open list, movers and the rhetoric distribution. Edge refraction (an SVG 
 in `backdrop-filter`) renders on Chromium for pills and the dark and accent tiles; other engines
 keep the frosted blur. Motion and refraction stop under `prefers-reduced-motion`, and glass turns
 solid under `prefers-reduced-transparency`.
-The overview leads with negative classifications, temporal activity, attacked-entity rankings,
+Every analytical count is a count of post evaluations: the claims of one post about one registry
+entity are collapsed by majority (more negative than positive claims is a negative post, more
+positive a positive one, an equal non-zero number «змішане», none «без оцінки»), in one window pass
+over the filtered classifications, so a long post weighs no more than a short one. Claim filters
+(attribution, source, epistemic status, rhetoric) select claims before the collapse; the Entity
+stance filter selects whole posts in aggregates and single claims in the evidence feed. Mixed posts
+enter the evaluative denominator but neither the negative nor the positive count. Rhetoric
+distributions count negative or mixed posts that use each label. The overview's «Спрямовані атаки» tile lists entity-days
+whose negative posts far exceed the entity's own norm: at least 5 negative posts in at least 2
+channels on one Kyiv day, with P(X >= count) < 0.001 for X ~ Poisson(norm), where the norm is the
+entity's mean daily negative posts over the preceding 28 days (floored at 0.5). Events are ranked
+by that probability; each opens the entity profile narrowed to the day, because a burst can also
+be a reaction to a real event. Entity profiles end with the registry forms (canonical name and
+approved aliases) that admit posts about the entity. The overview leads with negative
+posts, temporal activity, attacked-entity rankings,
 channel comparisons, and auditable claims. Entity profiles add stance-over-time, epistemic-status,
 and attribution distributions. Their URL-backed global filters distinguish publication channel from
 claim attribution: a single `Джерело твердження` control offers all claims, channel position, or quoted
@@ -232,9 +249,9 @@ attribution for every extracted claim.
 
 Analytical lists use server-side offset pagination (25 records by default). Entity and channel
 rankings distinguish absolute negative volume from negative evaluative balance: the latter ranks the
-Wilson lower bound (z = 1.96) of negative classifications among positive and negative evaluations.
+Wilson lower bound (z = 1.96) of negative posts among all evaluated (negative, positive, mixed) posts.
 Rows show positive and negative shares, their evaluative sample size, and separately report the
-technical `відсутнє` classification, which never enters that denominator. Full analytical lists offer
+posts that mention the entity without evaluating it, which never enter that denominator. Full analytical lists offer
 negative volume, negative balance, positive volume, and total evaluative-volume ordering; the
 dashboard exposes volume and balance as separate quick views. Registry aliases remain search-only
 internal data and are never included in analytical responses. The shared 7, 30, and
@@ -275,7 +292,17 @@ is a non-exportable admin overview: a status pill, a 7/30/90-day window, a dark 
 time from the median), queue tiles, a model-pass quality table (attempts, repair share, invalid
 share, median and 95th-percentile latency, completion tokens), the last 48 hours, per-channel
 collection pulses with freshness, retry reasons, and model/pipeline usage. It reads
-`/analysis/health`, `/channels/collection-health` and `/system/activity`. A header toggle switches
+`/analysis/health`, `/channels/collection-health` and `/system/activity`. Its «Як працює» tab
+(`/system?view=method`, loaded on demand) explains the methodology: an interactive pipeline
+diagram with all-time funnel counts, a worked dev example traced pass by pass, the measure-only test
+comparison of v3.6 and v4.9 with bootstrap intervals, the dev history of every version, where
+reviewed evaluations get lost, the stance conventions, registry aliases, limitations and every
+pass prompt and response schema word for word. Its static content lives in
+`apps/frontend/src/content`: `method-prompts.json` is regenerated with
+`uv run python -m telegram_monitor_ai_worker.prompt_catalog` (a test fails when it drifts from
+the running prompts), and `method-quality.json` / `method-example.json` with
+`uv run python experiments/dspy/src/method_content_export.py` from the DVC-tracked runs (test
+results are aggregates only). A header toggle switches
 the animated background off on slower machines; the choice is remembered per browser. nginx
 revalidates `index.html` on every visit and caches hashed assets for a year, so deploys reach
 browsers immediately.
@@ -285,10 +312,10 @@ against the equally long previous period (fetched as a second request; unavailab
 час»). Daily charts render bars, never interpolated areas, with a day/week toggle (weeks by default
 beyond 120 days), spikes highlighted when a bin exceeds the period mean + 2σ and at least 5, and a
 dashed mean line; clicking a bar narrows the page to that day or week. Stance-over-time stacks
-negative and positive classifications with a trailing 7-day negative-share line (hidden below 5
+negative and positive posts with a trailing 7-day negative-share line (hidden below 5
 evaluations). A target map plots entities by evaluative volume (log scale) against negative share,
 split at the median volume and 50% into four named quadrants, and «Кого атакували більше, ніж
-раніше» lists the largest growth in negative classifications against the previous period. Entity
+раніше» lists the largest growth in negative posts against the previous period. Entity
 and channel rankings are diverging bars: negative extends left and positive right from one shared
 axis and scale, with the evaluative sample size per row. Negative is red (`--negative`) and positive
 is blue (`--positive: #2d5d9f`) for colour-vision-deficiency safety.
@@ -319,7 +346,7 @@ services remain unchanged.
 work belongs in `tasks/backlog/`; operational records belong in `problems/backlog/`.
 ## Claims Explorer and analytical completeness
 
-`/claims` is the primary investigation workspace for URL-backed claim filtering. Analytical aggregates include valid persisted records from `completed_with_partial_classification` and `completed_with_entity_fallback` runs; the Dashboard exposes completeness counts so degraded and unfinished coverage is visible. Operational AI queue details live on `/system`, not the main Dashboard. Entity-facing evaluative-claim totals are labelled as claims/classifications rather than mentions.
+`/claims` is the primary investigation workspace for URL-backed claim filtering. Analytical aggregates include valid persisted records from `completed_with_partial_classification` and `completed_with_entity_fallback` runs; the Dashboard exposes completeness counts so degraded and unfinished coverage is visible. Operational AI queue details live on `/system`, not the main Dashboard. Entity-facing totals count posts with an evaluation («Дописи з оцінкою»); claim counts remain as evidence volume.
 
 ## Kubernetes deployment
 

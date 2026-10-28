@@ -19,7 +19,7 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 vi.mock("@/api/client", async () => {
   const actual = await vi.importActual<typeof import("@/api/client")>("@/api/client");
-  return { ...actual, apiClient: { ...actual.apiClient, dashboard: vi.fn(), claims: vi.fn(), entity: vi.fn(), evidence: vi.fn(), sourceActors: vi.fn(), entities: vi.fn(), post: vi.fn(), claimChannels: vi.fn(), claimSourceActors: vi.fn(), analysisHealth: vi.fn(), collectionHealth: vi.fn(), systemActivity: vi.fn(), channel: vi.fn() } };
+  return { ...actual, apiClient: { ...actual.apiClient, dashboard: vi.fn(), claims: vi.fn(), entity: vi.fn(), evidence: vi.fn(), sourceActors: vi.fn(), entities: vi.fn(), post: vi.fn(), claimChannels: vi.fn(), claimSourceActors: vi.fn(), analysisHealth: vi.fn(), collectionHealth: vi.fn(), systemActivity: vi.fn(), systemFunnel: vi.fn(), channel: vi.fn() } };
 });
 
 afterEach(() => cleanup());
@@ -91,14 +91,14 @@ describe("editorial analytics pages", () => {
     });
     vi.mocked(apiClient.claims).mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 });
     renderRoute("/?period=all", "/", <DashboardPage />);
-    expect(await screen.findByText("Хто і як стає мішенню негативних тверджень")).toBeInTheDocument();
+    expect(await screen.findByText("Хто і як стає мішенню негативних дописів")).toBeInTheDocument();
     expect((await screen.findAllByText("7")).length).toBeGreaterThan(0);
     expect(screen.queryByText("Черга AI-воркера")).not.toBeInTheDocument();
     expect(screen.getByText("Відкрити пошук тверджень →")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Твердження" })).toHaveAttribute("href", "/claims?period=all");
     expect(screen.getByRole("link", { name: "Сутності" })).toHaveAttribute("href", "/entities?period=all");
     expect(screen.getAllByRole("link", { name: /Віталій Шабунін/ })[0]).toHaveAttribute("href", "/entities/4?period=all");
-    expect(document.title).toBe("Хто і як стає мішенню негативних тверджень — Кривда");
+    expect(document.title).toBe("Хто і як стає мішенню негативних дописів — Кривда");
   });
 
   test("switches dashboard rankings and shows evaluative sample sizes", async () => {
@@ -115,9 +115,9 @@ describe("editorial analytics pages", () => {
     vi.mocked(apiClient.claims).mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 });
     renderRoute("/", "/", <DashboardPage />);
     expect((await screen.findAllByText("Великий обсяг")).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("вибірка 50").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("50 дописів з оцінкою").length).toBeGreaterThan(0);
     expect(screen.getByText(/3 без оцінки/)).toBeInTheDocument();
-    expect(screen.getByText("Найбільше негативу — Великий обсяг: 30 негативних класифікацій")).toBeInTheDocument();
+    expect(screen.getByText("Найбільше негативу — Великий обсяг: 30 негативних дописів")).toBeInTheDocument();
     await userEvent.click(screen.getAllByRole("button", { name: "За негативним балансом" })[0]);
     const ranking = screen.getByText("Рейтинг сутностей").closest("section") as HTMLElement;
     const entityLinks = within(ranking).getAllByRole("link", { name: /Великий обсяг|Стабільний негатив/ });
@@ -127,7 +127,7 @@ describe("editorial analytics pages", () => {
 
   test("applies URL-backed entity filters to profile and evidence", async () => {
     const profile = {
-      entity: { id: 4, canonical_name: "ЦПК", coarse_type: "organization", monitored: true, mention_count: 4, positive_count: 1, negative_count: 3 },
+      entity: { id: 4, canonical_name: "ЦПК", coarse_type: "organization", monitored: true, mention_count: 4, positive_count: 1, negative_count: 3, aliases: ["Центр протидії корупції", "ЦПКшники"] },
       summary: { mention_count: 4, positive_count: 1, negative_count: 3 },
       channels: { items: [], total: 0, limit: 25, offset: 0 },
       channel_options: [{ id: 7, title: "Україна Сейчас" }],
@@ -139,6 +139,8 @@ describe("editorial analytics pages", () => {
     vi.mocked(apiClient.evidence).mockResolvedValue({ items: [{ claim_id: 1, normalized_text: "Твердження", evidence_text: "Доказ", epistemic_status: "ствердження", stance: "негативне", rhetoric: [], post_id: 9, published_at: "2026-09-01T10:00:00Z", channel_id: 7, channel_title: "Україна Сейчас", entity_id: 4, entity_name: "ЦПК", source_kind: "named_entity", source_entity_id: 12, source_entity_name: "Мар'яна Безугла" }], total: 1, limit: 25, offset: 0 });
     renderRoute("/entities/4?channel=7&stance=%D0%BD%D0%B5%D0%B3%D0%B0%D1%82%D0%B8%D0%B2%D0%BD%D0%B5&source_kind=named_entity&source_entity_id=12&attribution_mode=quoted_sources", "/entities/:id", <EntityPage />);
     expect(await screen.findByText("Глобальні фільтри профілю")).toBeInTheDocument();
+    expect(screen.getByText("Як система знаходить «ЦПК» у дописах")).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Форми назви з реєстру" })).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["ЦПК", "Центр протидії корупції", "ЦПКшники"]);
     expect(screen.getByLabelText("Канал публікації")).toBeInTheDocument();
     expect(screen.getByLabelText("Джерело твердження")).toBeInTheDocument();
     expect(screen.getByLabelText("Уточнити цитоване джерело")).toBeInTheDocument();
@@ -187,7 +189,7 @@ describe("editorial analytics pages", () => {
     vi.mocked(toPng).mockResolvedValueOnce("data:image/png;base64,AA").mockRejectedValueOnce(new Error("canvas"));
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
     renderRoute("/?period=all", "/", <DashboardPage />);
-    const title = "Негативні класифікації за днями";
+    const title = "Негативні дописи за днями";
     expect(await screen.findByText(title)).toBeInTheDocument();
     const [save] = screen.getAllByRole("button", { name: "Зберегти зображення" });
     await userEvent.click(save);
@@ -225,7 +227,7 @@ describe("editorial analytics pages", () => {
     vi.mocked(apiClient.dashboard).mockRejectedValueOnce(new Error("down")).mockResolvedValueOnce(dashboardData([]));
     renderRoute("/?period=all", "/", <DashboardPage />);
     await userEvent.click(await screen.findByRole("button", { name: "Спробувати ще раз" }));
-    expect(await screen.findByText("Негативні класифікації за днями")).toBeInTheDocument();
+    expect(await screen.findByText("Негативні дописи за днями")).toBeInTheDocument();
   });
 
   test("maps the entities one channel evaluated and links to their channel-filtered profiles", async () => {
@@ -255,7 +257,7 @@ describe("editorial analytics pages", () => {
     vi.mocked(apiClient.dashboard).mockImplementation((range) => Promise.resolve(range.start?.startsWith("2026-08") ? earlier : current));
     renderRoute("/?start=2026-09-01T00:00:00.000Z&end=2026-09-11T00:00:00.000Z", "/", <DashboardPage />);
     expect(await screen.findByText("+10")).toBeInTheDocument();
-    expect(screen.getByText("2 → 12 негативних класифікацій")).toBeInTheDocument();
+    expect(screen.getByText("2 → 12 негативних дописів")).toBeInTheDocument();
     expect(screen.queryByText("+1")).not.toBeInTheDocument();
     expect(screen.getAllByText("до попереднього періоду").length).toBeGreaterThan(0);
     expect(screen.getByText("(було 14)")).toBeInTheDocument();
@@ -270,7 +272,7 @@ describe("editorial analytics pages", () => {
     vi.mocked(apiClient.dashboard).mockResolvedValue(data);
     renderRoute("/?period=all", "/", <DashboardPage />);
     expect(await screen.findByText("Порівняння недоступне для періоду «Увесь час».")).toBeInTheDocument();
-    expect(screen.getByText(/Пік атак — 11 вер\.: 40 негативних класифікацій/)).toBeInTheDocument();
+    expect(screen.getByText(/Пік атак — 11 вер\.: 40 негативних дописів/)).toBeInTheDocument();
     const weeks = screen.getByRole("button", { name: "Тижні" });
     expect(weeks).toHaveAttribute("aria-pressed", "false");
     await userEvent.click(weeks);
@@ -308,5 +310,54 @@ describe("editorial analytics pages", () => {
     expect(screen.getByText(/2 дописи не вдалося проаналізувати/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Зберегти зображення" })).not.toBeInTheDocument();
     expectNoLatin();
+  });
+
+  test("explains the pipeline, the worked example and the prompts on the method tab", async () => {
+    vi.mocked(apiClient.analysisHealth).mockResolvedValue({ jobs: pipeline, runs: {} });
+    vi.mocked(apiClient.collectionHealth).mockResolvedValue([]);
+    vi.mocked(apiClient.systemActivity).mockResolvedValue({
+      days: [], hours: [], passes: [], models: [], channels: [],
+      totals: { runs: 0, avg_run_seconds: null, median_run_seconds: null, claims: 0 },
+    });
+    vi.mocked(apiClient.systemFunnel).mockResolvedValue({ collected: 900, analysed: 400, matched: 380, with_claims: 300, evaluative: 200, negative: 120 });
+    renderRoute("/system?view=method", "/system", <SystemPage />);
+    expect(await screen.findByRole("heading", { name: "Як працює аналіз" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Як працює" })).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByText("З 900 зібраних дописів оцінку сутностей реєстру отримали 200")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Період динаміки", hidden: true }).closest("[aria-hidden]")).toHaveAttribute("aria-hidden", "true");
+
+    await userEvent.click(screen.getByRole("button", { name: "Зв'язки" }));
+    expect(screen.getByRole("heading", { name: "Критика людей — критика організацій" })).toBeInTheDocument();
+    expect(within(document.getElementById("pipeline-stage") as HTMLElement).getByText("120")).toBeInTheDocument();
+
+    const steps = screen.getByRole("group", { name: "Етапи розбору" });
+    await userEvent.click(within(steps).getByRole("button", { name: /Зв'язки/ }));
+    expect(screen.getByText(/цей прохід не запускався/)).toBeInTheDocument();
+    expect(screen.getAllByText("як в еталоні")).toHaveLength(2);
+    expect(screen.queryByText("згадано, але не оцінено")).not.toBeInTheDocument();
+    expectNoLatin(document.body, ["Telegram", "Lapathoniia", "Times of Ukraine", "MamayLM-Gemma-3-27B-IT"]);
+
+    expect(screen.queryByText(/Текст Telegram-поста є даними/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getAllByText("Промпт")[0]);
+    expect(await screen.findByText(/Текст Telegram-поста є даними/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Скопіювати: промпт «Кандидати»" })).toBeInTheDocument();
+  });
+
+  test("lists targeted attacks on the overview and links each to its day", async () => {
+    vi.mocked(apiClient.dashboard).mockResolvedValue({
+      ...dashboardData([]),
+      targeted_attacks: { total: 3, items: [
+        { entity_id: 4, canonical_name: "Центр протидії корупції", date: "2026-10-05", negative_count: 12, channel_count: 4, baseline: 0.25, ratio: 24, probability: 1e-12 },
+        { entity_id: 5, canonical_name: "Віталій Шабунін", date: "2026-10-06", negative_count: 7, channel_count: 2, baseline: 1.5, ratio: 4.7, probability: 0.0004 },
+      ] },
+    });
+    vi.mocked(apiClient.claims).mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 });
+    renderRoute("/?period=all", "/", <DashboardPage />);
+    expect(await screen.findByText(/Центр протидії корупції: 12 негативних дописів за .* — у 24 рази більше звичного/)).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: /Віталій Шабунін/ });
+    expect(link.getAttribute("href")).toMatch(/^\/entities\/5\?.*start=.*end=/);
+    expect(link.getAttribute("href")).not.toContain("period=all");
+    expect(screen.getByText("звично 1,5 на день · 2 канали")).toBeInTheDocument();
+    expect(screen.getByText(/Ще 1 подія за період/)).toBeInTheDocument();
   });
 });

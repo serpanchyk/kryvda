@@ -11,6 +11,7 @@ from telegram_monitor_api.system import (
     report_days,
     report_hours,
     shape_days,
+    shape_funnel,
     shape_hours,
     shape_models,
     shape_passes,
@@ -19,6 +20,7 @@ from telegram_monitor_api.system import (
 
 # 2026-10-24 21:30 UTC is already 2026-10-25 00:30 in Kyiv (UTC+3, summer time).
 NOW = datetime(2026, 10, 24, 21, 30, tzinfo=UTC)
+FUNNEL = ("analysed", "matched", "with_claims", "evaluative", "negative")
 
 
 class SystemPool:
@@ -90,6 +92,10 @@ class SystemPool:
 
     async def fetchrow(self, query: str, *args: object) -> dict[str, object]:
         self.calls.append((query, args))
+        if "AS with_claims" in query:
+            if self.empty:
+                return dict.fromkeys(FUNNEL, 0)
+            return dict(zip(FUNNEL, (40, 30, 25, 12, 9), strict=True))
         if self.empty:
             return {"runs": 0, "avg_run_seconds": None, "median_run_seconds": None}
         assert "FILTER (WHERE status = 'completed') AS median_run_seconds" in query
@@ -97,6 +103,8 @@ class SystemPool:
 
     async def fetchval(self, query: str, *args: object) -> int:
         self.calls.append((query, args))
+        if query == system.COLLECTED_TOTAL_SQL:
+            return 0 if self.empty else 900
         assert "FROM claims" in query
         return 0 if self.empty else 321
 
@@ -230,6 +238,34 @@ def test_shape_models_and_totals_handle_nulls() -> None:
         "median_run_seconds": None,
         "claims": 4,
     }
+
+
+def test_shape_funnel_zero_fills_missing_counts() -> None:
+    assert shape_funnel(None, None) == {"collected": 0, **dict.fromkeys(FUNNEL, 0)}
+    assert shape_funnel({**dict.fromkeys(FUNNEL, 1), "negative": None}, 7) == {
+        "collected": 7,
+        **dict.fromkeys(FUNNEL, 1),
+        "negative": 0,
+    }
+
+
+@pytest.mark.parametrize("empty", [False, True])
+async def test_system_funnel_covers_the_whole_history(
+    monkeypatch: pytest.MonkeyPatch, empty: bool
+) -> None:
+    pool = SystemPool(empty=empty)
+
+    async def fake_pool(_: str, **__: object) -> SystemPool:
+        return pool
+
+    monkeypatch.setattr(main.asyncpg, "create_pool", fake_pool)
+    transport = ASGITransport(app=create_app())
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/system/funnel")
+    assert response.status_code == 200
+    expected = (0, 0, 0, 0, 0, 0) if empty else (900, 40, 30, 25, 12, 9)
+    assert response.json() == dict(zip(("collected", *FUNNEL), expected, strict=True))
+    assert all(not args for query, args in pool.calls)
 
 
 async def test_repository_queries_from_kyiv_midnight() -> None:

@@ -90,7 +90,41 @@ FROM claims AS claim
 JOIN analysis_runs AS run ON run.id = claim.run_id
 WHERE run.completed_at >= $1 AND run.{_FINISHED_FILTER}"""
 
+_MONITORED_STANCE = """EXISTS (
+        SELECT 1 FROM claims AS claim
+        JOIN claim_target_classifications AS target ON target.claim_id = claim.id
+        JOIN post_entities AS entity ON entity.id = target.post_entity_id
+        WHERE claim.run_id = run.id AND entity.monitored AND target.stance {condition})"""
+
+# A post is negative about an entity when most of its evaluative claims about it are negative.
+_NEGATIVE_POST = """EXISTS (
+        SELECT 1 FROM claims AS claim
+        JOIN claim_target_classifications AS target ON target.claim_id = claim.id
+        JOIN post_entities AS entity ON entity.id = target.post_entity_id
+        WHERE claim.run_id = run.id AND entity.monitored
+        GROUP BY entity.registry_entity_id
+        HAVING count(*) FILTER (WHERE target.stance = 'негативне')
+             > count(*) FILTER (WHERE target.stance = 'позитивне'))"""
+
+# Over the whole history: each analysed post revision once, however often it was re-analysed.
+FUNNEL_SQL = f"""SELECT count(DISTINCT run.post_revision_id) AS analysed,
+    count(DISTINCT run.post_revision_id) FILTER (WHERE run.status <> 'filtered_out') AS matched,
+    count(DISTINCT run.post_revision_id) FILTER (
+        WHERE EXISTS (SELECT 1 FROM claims AS claim WHERE claim.run_id = run.id)
+    ) AS with_claims,
+    count(DISTINCT run.post_revision_id) FILTER (
+        WHERE {_MONITORED_STANCE.format(condition="<> 'відсутнє'")}
+    ) AS evaluative,
+    count(DISTINCT run.post_revision_id) FILTER (
+        WHERE {_NEGATIVE_POST}
+    ) AS negative
+FROM analysis_runs AS run
+WHERE run.status IN ({_SUCCESS_STATUSES}, 'filtered_out')"""
+
+COLLECTED_TOTAL_SQL = "SELECT count(*) FROM raw_posts"
+
 _RUN_DAY_KEYS = ("completed", "partial", "fallback", "failed", "filtered_out")
+_FUNNEL_KEYS = ("analysed", "matched", "with_claims", "evaluative", "negative")
 _PASS_COUNT_KEYS = ("attempts", "repairs", "invalid", "failed")
 _PASS_METRIC_KEYS = ("median_ms", "p95_ms", "median_completion_tokens")
 
@@ -240,6 +274,14 @@ def shape_totals(run_row: Mapping[str, Any] | None, claims: object) -> dict[str,
     }
 
 
+def shape_funnel(row: Mapping[str, Any] | None, collected: object) -> dict[str, int]:
+    """Return how many posts reached each analysis stage, after the collected-post total."""
+    return {
+        "collected": int(collected) if isinstance(collected, int) else 0,
+        **{key: _count(row, key) for key in _FUNNEL_KEYS},
+    }
+
+
 class SystemRepository:
     """Read pipeline throughput, reliability and collection dynamics without writes."""
 
@@ -278,3 +320,9 @@ class SystemRepository:
             "channels": shape_channels(calendar, channel_rows, channel_post_rows),
             "totals": shape_totals(totals, claims),
         }
+
+    async def funnel(self) -> dict[str, int]:
+        """Return how many posts reached each analysis stage over the whole history."""
+        row = await self._pool.fetchrow(FUNNEL_SQL)
+        collected = await self._pool.fetchval(COLLECTED_TOTAL_SQL)
+        return shape_funnel(row, collected)

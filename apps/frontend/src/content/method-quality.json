@@ -1,0 +1,456 @@
+{
+  "unit": "допис × сутність реєстру",
+  "dataset": {
+    "posts": 749,
+    "dev": {
+      "posts": 500,
+      "negative_pairs": 355,
+      "positive_pairs": 304,
+      "posts_without_stance": 167
+    },
+    "test": {
+      "posts": 249,
+      "negative_pairs": 105,
+      "positive_pairs": 164,
+      "posts_without_stance": 98
+    }
+  },
+  "dev": {
+    "shared_posts": 498,
+    "versions": [
+      {
+        "version": "3.6",
+        "negative": {
+          "precision": 0.7327,
+          "recall": 0.6601,
+          "f1": 0.6945,
+          "f1_interval": [
+            0.6486,
+            0.7341
+          ],
+          "tp": 233,
+          "fp": 85,
+          "fn": 120
+        },
+        "positive": {
+          "precision": 0.8478,
+          "recall": 0.2574,
+          "f1": 0.3949,
+          "f1_interval": [
+            0.3315,
+            0.456
+          ],
+          "tp": 78,
+          "fp": 14,
+          "fn": 225
+        },
+        "status": "previous",
+        "note": "Три проходи: сутності, твердження, оцінка."
+      },
+      {
+        "version": "3.7",
+        "negative": {
+          "precision": 0.7563,
+          "recall": 0.6771,
+          "f1": 0.7145,
+          "f1_interval": [
+            0.674,
+            0.7556
+          ],
+          "tp": 239,
+          "fp": 77,
+          "fn": 114
+        },
+        "positive": {
+          "precision": 0.809,
+          "recall": 0.2376,
+          "f1": 0.3673,
+          "f1_interval": [
+            0.3021,
+            0.4348
+          ],
+          "tp": 72,
+          "fp": 17,
+          "fn": 231
+        },
+        "status": "step",
+        "note": "Окремий прохід перевіряє, чи збіг із реєстром справді означає цю сутність."
+      },
+      {
+        "version": "4.2",
+        "negative": {
+          "precision": 0.8249,
+          "recall": 0.6006,
+          "f1": 0.6951,
+          "f1_interval": [
+            0.6457,
+            0.7394
+          ],
+          "tp": 212,
+          "fp": 45,
+          "fn": 141
+        },
+        "positive": {
+          "precision": 0.8919,
+          "recall": 0.2178,
+          "f1": 0.3501,
+          "f1_interval": [
+            0.2865,
+            0.4134
+          ],
+          "tp": 66,
+          "fp": 8,
+          "fn": 237
+        },
+        "status": "step",
+        "note": "Окремий прохід визначає, кого саме оцінює кожне твердження."
+      },
+      {
+        "version": "4.3",
+        "negative": {
+          "precision": 0.8214,
+          "recall": 0.6516,
+          "f1": 0.7267,
+          "f1_interval": [
+            0.6785,
+            0.7697
+          ],
+          "tp": 230,
+          "fp": 50,
+          "fn": 123
+        },
+        "positive": {
+          "precision": 0.875,
+          "recall": 0.231,
+          "f1": 0.3655,
+          "f1_interval": [
+            0.2961,
+            0.4367
+          ],
+          "tp": 70,
+          "fp": 10,
+          "fn": 233
+        },
+        "status": "step",
+        "note": "Твердження шукаються окремим запитом для кожної сутності реєстру."
+      },
+      {
+        "version": "4.4",
+        "negative": {
+          "precision": 0.816,
+          "recall": 0.6657,
+          "f1": 0.7332,
+          "f1_interval": [
+            0.6872,
+            0.7758
+          ],
+          "tp": 235,
+          "fp": 53,
+          "fn": 118
+        },
+        "positive": {
+          "precision": 0.8462,
+          "recall": 0.4719,
+          "f1": 0.6059,
+          "f1_interval": [
+            0.55,
+            0.6565
+          ],
+          "tp": 143,
+          "fp": 26,
+          "fn": 160
+        },
+        "status": "step",
+        "note": "Оцінка враховує позитивний контекст без прямої похвали."
+      },
+      {
+        "version": "4.5",
+        "negative": {
+          "precision": 0.8275,
+          "recall": 0.6657,
+          "f1": 0.7378,
+          "f1_interval": [
+            0.6898,
+            0.7784
+          ],
+          "tp": 235,
+          "fp": 49,
+          "fn": 118
+        },
+        "positive": {
+          "precision": 0.635,
+          "recall": 0.5512,
+          "f1": 0.5901,
+          "f1_interval": [
+            0.5367,
+            0.6417
+          ],
+          "tp": 167,
+          "fp": 96,
+          "fn": 136
+        },
+        "status": "rejected",
+        "note": "Прохід цілей розділено на два запити."
+      },
+      {
+        "version": "4.6",
+        "negative": {
+          "precision": 0.7641,
+          "recall": 0.6516,
+          "f1": 0.7034,
+          "f1_interval": [
+            0.6599,
+            0.7449
+          ],
+          "tp": 230,
+          "fp": 71,
+          "fn": 123
+        },
+        "positive": {
+          "precision": 0.7622,
+          "recall": 0.4653,
+          "f1": 0.5779,
+          "f1_interval": [
+            0.5215,
+            0.6365
+          ],
+          "tp": 141,
+          "fp": 44,
+          "fn": 162
+        },
+        "status": "rejected",
+        "note": "Прохід цілей без підказки про напрям оцінки."
+      },
+      {
+        "version": "4.7",
+        "negative": {
+          "precision": 0.7979,
+          "recall": 0.6601,
+          "f1": 0.7225,
+          "f1_interval": [
+            0.6773,
+            0.7633
+          ],
+          "tp": 233,
+          "fp": 59,
+          "fn": 120
+        },
+        "positive": {
+          "precision": 0.6767,
+          "recall": 0.5182,
+          "f1": 0.5869,
+          "f1_interval": [
+            0.5333,
+            0.6388
+          ],
+          "tp": 157,
+          "fp": 75,
+          "fn": 146
+        },
+        "status": "rejected",
+        "note": "Підказку повернено зі строгим правилом для прихильників."
+      },
+      {
+        "version": "4.8",
+        "negative": {
+          "precision": 0.7287,
+          "recall": 0.7762,
+          "f1": 0.7517,
+          "f1_interval": [
+            0.7093,
+            0.7893
+          ],
+          "tp": 274,
+          "fp": 102,
+          "fn": 79
+        },
+        "positive": {
+          "precision": 0.8263,
+          "recall": 0.5182,
+          "f1": 0.6369,
+          "f1_interval": [
+            0.5795,
+            0.689
+          ],
+          "tp": 157,
+          "fp": 33,
+          "fn": 146
+        },
+        "status": "step",
+        "note": "Критика людей переноситься на їхні організації; 812 нових аліасів."
+      },
+      {
+        "version": "4.9",
+        "negative": {
+          "precision": 0.7791,
+          "recall": 0.7592,
+          "f1": 0.769,
+          "f1_interval": [
+            0.7265,
+            0.807
+          ],
+          "tp": 268,
+          "fp": 76,
+          "fn": 85
+        },
+        "positive": {
+          "precision": 0.8315,
+          "recall": 0.4884,
+          "f1": 0.6154,
+          "f1_interval": [
+            0.5561,
+            0.6744
+          ],
+          "tp": 148,
+          "fp": 30,
+          "fn": 155
+        },
+        "status": "current",
+        "note": "Зв'язки з організаціями шукаються лише для негативно оцінених людей."
+      }
+    ]
+  },
+  "test": {
+    "shared_posts": 249,
+    "versions": [
+      {
+        "version": "3.6",
+        "negative": {
+          "precision": 0.6842,
+          "recall": 0.619,
+          "f1": 0.65,
+          "f1_interval": [
+            0.566,
+            0.721
+          ],
+          "tp": 65,
+          "fp": 30,
+          "fn": 40
+        },
+        "positive": {
+          "precision": 0.8298,
+          "recall": 0.2378,
+          "f1": 0.3697,
+          "f1_interval": [
+            0.2755,
+            0.4641
+          ],
+          "tp": 39,
+          "fp": 8,
+          "fn": 125
+        }
+      },
+      {
+        "version": "3.7",
+        "negative": {
+          "precision": 0.6364,
+          "recall": 0.6667,
+          "f1": 0.6512,
+          "f1_interval": [
+            0.5765,
+            0.7186
+          ],
+          "tp": 70,
+          "fp": 40,
+          "fn": 35
+        },
+        "positive": {
+          "precision": 0.8409,
+          "recall": 0.2256,
+          "f1": 0.3558,
+          "f1_interval": [
+            0.2584,
+            0.4597
+          ],
+          "tp": 37,
+          "fp": 7,
+          "fn": 127
+        }
+      },
+      {
+        "version": "4.2",
+        "negative": {
+          "precision": 0.7386,
+          "recall": 0.619,
+          "f1": 0.6736,
+          "f1_interval": [
+            0.5946,
+            0.7461
+          ],
+          "tp": 65,
+          "fp": 23,
+          "fn": 40
+        },
+        "positive": {
+          "precision": 0.9,
+          "recall": 0.2195,
+          "f1": 0.3529,
+          "f1_interval": [
+            0.2629,
+            0.449
+          ],
+          "tp": 36,
+          "fp": 4,
+          "fn": 128
+        }
+      },
+      {
+        "version": "4.9",
+        "negative": {
+          "precision": 0.7168,
+          "recall": 0.7714,
+          "f1": 0.7431,
+          "f1_interval": [
+            0.6667,
+            0.8051
+          ],
+          "tp": 81,
+          "fp": 32,
+          "fn": 24
+        },
+        "positive": {
+          "precision": 0.7477,
+          "recall": 0.5061,
+          "f1": 0.6036,
+          "f1_interval": [
+            0.5373,
+            0.6715
+          ],
+          "tp": 83,
+          "fp": 28,
+          "fn": 81
+        }
+      }
+    ],
+    "change": {
+      "negative": {
+        "f1": 0.0931,
+        "interval": [
+          0.0253,
+          0.1613
+        ]
+      },
+      "positive": {
+        "f1": 0.234,
+        "interval": [
+          0.1521,
+          0.3247
+        ]
+      }
+    },
+    "stages": {
+      "negative": {
+        "not_admitted": 8,
+        "no_claim": 1,
+        "other_stance": 15,
+        "correct": 81
+      },
+      "positive": {
+        "not_admitted": 20,
+        "no_claim": 1,
+        "other_stance": 60,
+        "correct": 83
+      }
+    }
+  }
+}

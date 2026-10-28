@@ -74,3 +74,10 @@ _Avoid_: Automatically expanded registry entity
 Inference-v3 stance and attack rhetoric for one atomic Claim and one Monitored Entity involved in
 that Claim.
 _Avoid_: Post-level attack label
+
+**Post Evaluation**:
+The stance of one Post Revision toward one Monitored Entity, collapsed from its Claim-Target
+Classifications by majority: more negative than positive claims is negative, more positive is
+positive, an equal non-zero number is mixed («змішане»), none is absent. Every analytical count
+in the interface counts Post Evaluations; Claims are their evidence.
+_Avoid_: Counting claims as attacks, post-level label without an entity
