@@ -1,7 +1,8 @@
 """Focused tests for editorial analytics response assembly."""
 
+import math
 import re
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -30,6 +31,8 @@ from telegram_monitor_api.analytics import (
     EntityAnalyticsFilters,
     _fill_daily,
     negative_balance_metrics,
+    poisson_tail,
+    targeted_attacks,
 )
 
 
@@ -338,3 +341,45 @@ def test_aggregates_count_post_entity_evaluations_not_claims() -> None:
     assert "$3::text IS NULL OR stance = $3" in _ENTITY_TOTAL_SQL
     assert "classification.stance = $3" in _EVIDENCE_SQL
     assert "count(DISTINCT (judged.post_id, judged.entity_id))" in _DASHBOARD_RHETORIC_SQL
+
+
+def test_poisson_tail_matches_known_values() -> None:
+    assert poisson_tail(0, 2.0) == 1.0
+    assert poisson_tail(1, 2.0) == pytest.approx(1 - math.exp(-2.0))
+    assert poisson_tail(5, 0.5) == pytest.approx(0.000172, rel=1e-2)
+
+
+def _entity_day(entity: int, day: date, negative: int, channels: int = 3) -> dict[str, object]:
+    return {
+        "entity_id": entity,
+        "canonical_name": f"Сутність {entity}",
+        "date": day,
+        "negative_count": negative,
+        "channel_count": channels,
+    }
+
+
+def test_targeted_attacks_flag_bursts_against_the_entity_norm() -> None:
+    start = datetime(2026, 9, 30, 21, tzinfo=UTC)  # Kyiv 1 October
+    end = datetime(2026, 10, 9, 21, tzinfo=UTC)  # exclusive Kyiv 10 October
+    burst = date(2026, 10, 5)
+    rows = [
+        # A usually quiet entity: twelve negative posts in four channels is a burst.
+        _entity_day(1, burst, 12, 4),
+        # A busy entity with three negative posts a day: eight is not unusual enough.
+        *(_entity_day(2, burst - timedelta(days=offset), 3) for offset in range(1, 29)),
+        _entity_day(2, burst, 8),
+        # A single channel, however loud, is not a targeted attack.
+        _entity_day(3, burst, 15, 1),
+        # Outside the period.
+        _entity_day(4, date(2026, 9, 20), 20),
+    ]
+
+    result = targeted_attacks(rows, start, end)
+
+    assert result["total"] == 1
+    event = result["items"][0]
+    assert (event["entity_id"], event["date"], event["negative_count"]) == (1, burst, 12)
+    assert event["baseline"] == 0
+    assert event["ratio"] == 24
+    assert event["probability"] < 1e-9

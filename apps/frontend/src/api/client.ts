@@ -28,6 +28,8 @@ export interface Entity {
   canonical_name: string;
   coarse_type: string;
   monitored: boolean;
+  /** Approved registry forms the prefilter matches; returned with an entity profile. */
+  aliases?: string[];
   /** @deprecated: use evaluative_claim_count. */
   mention_count: number;
   evaluative_claim_count?: number;
@@ -118,6 +120,8 @@ export interface PostDetail {
   username: string | null;
   claims: PostClaim[];
 }
+/** One entity-day with far more negative posts than the entity's own 28-day norm. */
+export interface TargetedAttack { entity_id: number; canonical_name: string; date: string; negative_count: number; channel_count: number; baseline: number; ratio: number; probability: number; }
 export interface Dashboard {
   summary: {
     post_count: number;
@@ -132,6 +136,7 @@ export interface Dashboard {
   };
   rhetoric?: Distribution<RhetoricLabel>[];
   source_actors?: SourceActorOption[];
+  targeted_attacks?: { items: TargetedAttack[]; total: number };
   completeness?: Completeness;
   daily: Daily[];
   entities: Summary[];

@@ -105,6 +105,76 @@ def _fill_daily(
     ]
 
 
+# A targeted attack: one entity receives far more negative posts on one Kyiv day than its own
+# norm, from more than one channel. The norm is the entity's mean daily negative posts over the
+# preceding 28 days (at least half a post a day, so a quiet entity needs a real burst), and the
+# day must be improbable under it: P(X >= count) < 0.001 for X ~ Poisson(norm).
+TARGETED_BASELINE_DAYS = 28
+TARGETED_MIN_NEGATIVE = 5
+TARGETED_MIN_CHANNELS = 2
+TARGETED_MAX_PROBABILITY = 0.001
+TARGETED_MIN_RATE = 0.5
+TARGETED_LIMIT = 6
+
+
+def poisson_tail(count: int, rate: float) -> float:
+    """Return P(X >= count) for X ~ Poisson(rate)."""
+    if count <= 0:
+        return 1.0
+    term = math.exp(-rate)
+    below = term
+    for value in range(1, count):
+        term *= rate / value
+        below += term
+    return max(0.0, 1.0 - below)
+
+
+def targeted_attacks(
+    rows: list[Any], start: datetime | None, end: datetime | None, limit: int = TARGETED_LIMIT
+) -> dict[str, Any]:
+    """Find entity-days whose negative posts far exceed the entity's own 28-day norm.
+
+    ``rows`` hold negative post counts per entity and Kyiv day, from 28 days before ``start``.
+    Returns the strongest events inside the period (most improbable first) and their total.
+    """
+    first = _report_day(start) if start is not None else None
+    last = _report_day(end - timedelta(microseconds=1)) if end is not None else None
+    daily: dict[int, dict[date, int]] = {}
+    for row in rows:
+        daily.setdefault(int(row["entity_id"]), {})[row["date"]] = int(row["negative_count"])
+    events = []
+    for row in rows:
+        day, count = row["date"], int(row["negative_count"])
+        if (first is not None and day < first) or (last is not None and day > last):
+            continue
+        if count < TARGETED_MIN_NEGATIVE or int(row["channel_count"]) < TARGETED_MIN_CHANNELS:
+            continue
+        history = daily[int(row["entity_id"])]
+        previous = sum(
+            history.get(day - timedelta(days=offset), 0)
+            for offset in range(1, TARGETED_BASELINE_DAYS + 1)
+        )
+        baseline = previous / TARGETED_BASELINE_DAYS
+        rate = max(baseline, TARGETED_MIN_RATE)
+        probability = poisson_tail(count, rate)
+        if probability >= TARGETED_MAX_PROBABILITY:
+            continue
+        events.append(
+            {
+                "entity_id": int(row["entity_id"]),
+                "canonical_name": str(row["canonical_name"]),
+                "date": day,
+                "negative_count": count,
+                "channel_count": int(row["channel_count"]),
+                "baseline": baseline,
+                "ratio": count / rate,
+                "probability": probability,
+            }
+        )
+    events.sort(key=lambda event: (event["probability"], -event["negative_count"]))
+    return {"items": events[:limit], "total": len(events)}
+
+
 def _ranking_order(sort: RankingSort, name: str) -> str:
     """Return safe, deterministic ordering for aggregate ranking rows."""
     primary = {
@@ -141,6 +211,8 @@ class AnalyticsRepository:
         }
         rhetoric = await self._pool.fetch(_DASHBOARD_RHETORIC_SQL, start, end)
         source_actors = await self._pool.fetch(_DASHBOARD_SOURCE_ACTORS_SQL, start, end)
+        history_start = start - timedelta(days=TARGETED_BASELINE_DAYS) if start else None
+        entity_days = await self._pool.fetch(_ENTITY_NEGATIVE_DAYS_SQL, history_start, end)
         return {
             "summary": dict(summary) if summary is not None else _empty_summary(),
             "daily": _fill_daily(daily, start, end),
@@ -148,6 +220,7 @@ class AnalyticsRepository:
             "channels": [dict(row) for row in channels],
             "rhetoric": [_distribution(row) for row in rhetoric],
             "source_actors": [dict(row) for row in source_actors],
+            "targeted_attacks": targeted_attacks(list(entity_days), start, end),
             "completeness": dict(completeness)
             if completeness is not None
             else _empty_completeness(),
@@ -168,6 +241,7 @@ class AnalyticsRepository:
         entity = await self._pool.fetchrow(_ENTITY_SQL, entity_id)
         if entity is None:
             return None
+        aliases = await self._pool.fetch(_ENTITY_ALIASES_SQL, entity_id)
         args = (entity_id, *filters.values(), start, end)
         channels = await self._pool.fetch(
             _ENTITY_CHANNEL_PAGE_SQL.format(order=_ranking_order(sort, "channel.title")),
@@ -192,7 +266,7 @@ class AnalyticsRepository:
         # Evaluative claims behind the profile, under the names older clients read.
         totals["evaluative_claim_count"] = totals["mention_count"] = totals["claim_count"]
         return {
-            "entity": dict(entity),
+            "entity": {**dict(entity), "aliases": [str(row["alias"]) for row in aliases]},
             "summary": totals,
             "channels": {
                 "items": [dict(row) for row in channels],
@@ -639,6 +713,19 @@ WHERE post.deleted_at IS NULL AND post.inaccessible_at IS NULL
 
 _DASHBOARD_RHETORIC_SQL = _pair_rhetoric(_DASHBOARD_PAIRS)
 
+# Negative posts per registry entity and Kyiv day, the input of targeted-attack detection.
+_ENTITY_NEGATIVE_DAYS_SQL = (
+    _DASHBOARD_PAIRS
+    + "\nSELECT judged.entity_id, entity.canonical_name, "
+    + _DAY_KEY
+    + """ AS date,
+    count(*) FILTER (WHERE judged.first AND judged.stance = 'негативне') AS negative_count,
+    count(DISTINCT judged.channel_id) FILTER (WHERE judged.stance = 'негативне') AS channel_count
+FROM judged JOIN registry_entities AS entity ON entity.id = judged.entity_id
+GROUP BY 1, 2, 3
+HAVING count(*) FILTER (WHERE judged.first AND judged.stance = 'негативне') > 0"""
+)
+
 _DASHBOARD_SOURCE_ACTORS_SQL = (
     """SELECT source_registry.id, source_registry.canonical_name,
     count(*) AS claim_count
@@ -666,6 +753,10 @@ GROUP BY last_error_kind ORDER BY count DESC, error_kind"""
 
 _ENTITY_SQL = """SELECT entity.id, entity.canonical_name, entity.coarse_type, entity.monitored
 FROM registry_entities AS entity WHERE entity.id = $1"""
+
+# Every approved form the prefilter matches; inflections are generated from them at match time.
+_ENTITY_ALIASES_SQL = """SELECT alias.alias FROM entity_aliases AS alias
+WHERE alias.entity_id = $1 ORDER BY lower(alias.alias), alias.alias"""
 
 _ENTITY_SCOPE = """ AND entity.id = $1
   AND classification.stance IN ('позитивне', 'негативне')

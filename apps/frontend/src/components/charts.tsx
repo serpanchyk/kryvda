@@ -3,11 +3,11 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { Cell, ReferenceLine, Scatter, ScatterChart, XAxis, YAxis, ZAxis, useChartWidth, usePlotArea, useXAxisScale, useYAxisScale } from "recharts";
 
-import type { Summary } from "@/api/client";
+import type { Summary, TargetedAttack } from "@/api/client";
 import { TermLabel } from "@/components/editorial";
 import { ChartTooltip } from "@/components/ui/chart";
-import { evaluativeOf, median, quadrantOf, type Mover, type Quadrant } from "@/lib/charts";
-import { formatNumber, formatPercent } from "@/lib/editorial";
+import { evaluativeOf, median, quadrantOf, rangeFrom, type Mover, type Quadrant } from "@/lib/charts";
+import { formatDate, formatNumber, formatPercent, pluralUk } from "@/lib/editorial";
 import { glossary } from "@/lib/glossary";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ADJACENT_RINGS, placeLabels, type Box } from "@/lib/label-layout";
@@ -264,5 +264,38 @@ export function MoversList({ movers, label, href }: { movers: Mover[]; label: (i
       <span className="bar-track mt-2 h-1.5"><span className="bar-fill bg-negative" style={{ width: `${(mover.change / max) * 100}%`, animationDelay: `${index * 60}ms` }} /></span>
       <span className="mt-1 block text-xs tabular-nums text-muted-foreground">{`${formatNumber(mover.previous)} → ${formatNumber(mover.current)} негативних дописів`}</span>
     </NavLink>)}
+  </div>;
+}
+
+const perDay = (value: number): string => value.toLocaleString("uk-UA", { maximumFractionDigits: value < 10 ? 1 : 0 });
+
+/**
+ * Entity-days with far more negative posts than usual. Each row opens the entity profile narrowed
+ * to that day, where the posts and claims behind the burst can be read.
+ */
+export function TargetedAttackList({ items, total, params }: { items: TargetedAttack[]; total: number; params: URLSearchParams }) {
+  const max = Math.max(...items.map((item) => item.negative_count), 1);
+  const href = (item: TargetedAttack) => {
+    const next = new URLSearchParams(params);
+    const range = rangeFrom(item.date, 1);
+    next.set("start", range.start);
+    next.set("end", range.end);
+    next.delete("period");
+    return `/entities/${item.entity_id}?${next.toString()}`;
+  };
+  return <div className="grid grid-cols-[minmax(0,1fr)] gap-0.5">
+    {items.map((item, index) => <NavLink key={`${item.entity_id}-${item.date}`} to={href(item)} className="row-hover -mx-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-1 px-3 py-3.5 sm:grid-cols-[7rem_minmax(0,1fr)_auto]">
+      <span className="text-sm font-semibold tabular-nums text-muted-foreground sm:row-span-2">{formatDate(item.date)}</span>
+      <span className="col-start-1 row-start-2 min-w-0 sm:col-start-2 sm:row-start-1">
+        <span className="block truncate font-semibold">{item.canonical_name}</span>
+        <span className="bar-track mt-2 h-1.5"><span className="bar-fill bg-negative" style={{ width: `${(item.negative_count / max) * 100}%`, animationDelay: `${index * 60}ms` }} /></span>
+      </span>
+      <span className="col-start-2 row-span-2 row-start-1 text-right sm:col-start-3">
+        <strong className="block font-heading text-2xl font-bold leading-none tracking-[-0.03em] tabular-nums text-negative">{formatNumber(item.negative_count)}</strong>
+        <span className="mt-1 block text-xs tabular-nums text-muted-foreground">у {formatNumber(Math.round(item.ratio))} {pluralUk(Math.round(item.ratio), "раз", "рази", "разів")} більше</span>
+      </span>
+      <span className="col-span-2 text-xs tabular-nums text-muted-foreground sm:col-span-1 sm:col-start-2">{`звично ${perDay(item.baseline)} на день · ${formatNumber(item.channel_count)} ${pluralUk(item.channel_count, "канал", "канали", "каналів")}`}</span>
+    </NavLink>)}
+    {total > items.length ? <p className="pt-3 text-xs text-muted-foreground">{`Ще ${formatNumber(total - items.length)} ${pluralUk(total - items.length, "подія", "події", "подій")} за період — звузьте період, щоб побачити їх.`}</p> : null}
   </div>;
 }

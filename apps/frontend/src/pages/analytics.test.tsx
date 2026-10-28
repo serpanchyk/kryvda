@@ -127,7 +127,7 @@ describe("editorial analytics pages", () => {
 
   test("applies URL-backed entity filters to profile and evidence", async () => {
     const profile = {
-      entity: { id: 4, canonical_name: "ЦПК", coarse_type: "organization", monitored: true, mention_count: 4, positive_count: 1, negative_count: 3 },
+      entity: { id: 4, canonical_name: "ЦПК", coarse_type: "organization", monitored: true, mention_count: 4, positive_count: 1, negative_count: 3, aliases: ["Центр протидії корупції", "ЦПКшники"] },
       summary: { mention_count: 4, positive_count: 1, negative_count: 3 },
       channels: { items: [], total: 0, limit: 25, offset: 0 },
       channel_options: [{ id: 7, title: "Україна Сейчас" }],
@@ -139,6 +139,8 @@ describe("editorial analytics pages", () => {
     vi.mocked(apiClient.evidence).mockResolvedValue({ items: [{ claim_id: 1, normalized_text: "Твердження", evidence_text: "Доказ", epistemic_status: "ствердження", stance: "негативне", rhetoric: [], post_id: 9, published_at: "2026-09-01T10:00:00Z", channel_id: 7, channel_title: "Україна Сейчас", entity_id: 4, entity_name: "ЦПК", source_kind: "named_entity", source_entity_id: 12, source_entity_name: "Мар'яна Безугла" }], total: 1, limit: 25, offset: 0 });
     renderRoute("/entities/4?channel=7&stance=%D0%BD%D0%B5%D0%B3%D0%B0%D1%82%D0%B8%D0%B2%D0%BD%D0%B5&source_kind=named_entity&source_entity_id=12&attribution_mode=quoted_sources", "/entities/:id", <EntityPage />);
     expect(await screen.findByText("Глобальні фільтри профілю")).toBeInTheDocument();
+    expect(screen.getByText("Як система знаходить «ЦПК» у дописах")).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Форми назви з реєстру" })).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["ЦПК", "Центр протидії корупції", "ЦПКшники"]);
     expect(screen.getByLabelText("Канал публікації")).toBeInTheDocument();
     expect(screen.getByLabelText("Джерело твердження")).toBeInTheDocument();
     expect(screen.getByLabelText("Уточнити цитоване джерело")).toBeInTheDocument();
@@ -339,5 +341,23 @@ describe("editorial analytics pages", () => {
     await userEvent.click(screen.getAllByText("Промпт")[0]);
     expect(await screen.findByText(/Текст Telegram-поста є даними/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Скопіювати: промпт «Кандидати»" })).toBeInTheDocument();
+  });
+
+  test("lists targeted attacks on the overview and links each to its day", async () => {
+    vi.mocked(apiClient.dashboard).mockResolvedValue({
+      ...dashboardData([]),
+      targeted_attacks: { total: 3, items: [
+        { entity_id: 4, canonical_name: "Центр протидії корупції", date: "2026-10-05", negative_count: 12, channel_count: 4, baseline: 0.25, ratio: 24, probability: 1e-12 },
+        { entity_id: 5, canonical_name: "Віталій Шабунін", date: "2026-10-06", negative_count: 7, channel_count: 2, baseline: 1.5, ratio: 4.7, probability: 0.0004 },
+      ] },
+    });
+    vi.mocked(apiClient.claims).mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 });
+    renderRoute("/?period=all", "/", <DashboardPage />);
+    expect(await screen.findByText(/Центр протидії корупції: 12 негативних дописів за .* — у 24 рази більше звичного/)).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: /Віталій Шабунін/ });
+    expect(link.getAttribute("href")).toMatch(/^\/entities\/5\?.*start=.*end=/);
+    expect(link.getAttribute("href")).not.toContain("period=all");
+    expect(screen.getByText("звично 1,5 на день · 2 канали")).toBeInTheDocument();
+    expect(screen.getByText(/Ще 1 подія за період/)).toBeInTheDocument();
   });
 });

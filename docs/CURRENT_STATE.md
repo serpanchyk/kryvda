@@ -226,7 +226,13 @@ over the filtered classifications, so a long post weighs no more than a short on
 (attribution, source, epistemic status, rhetoric) select claims before the collapse; the Entity
 stance filter selects whole posts in aggregates and single claims in the evidence feed. Mixed posts
 enter the evaluative denominator but neither the negative nor the positive count. Rhetoric
-distributions count negative or mixed posts that use each label. The overview leads with negative
+distributions count negative or mixed posts that use each label. The overview's «Спрямовані атаки» tile lists entity-days
+whose negative posts far exceed the entity's own norm: at least 5 negative posts in at least 2
+channels on one Kyiv day, with P(X >= count) < 0.001 for X ~ Poisson(norm), where the norm is the
+entity's mean daily negative posts over the preceding 28 days (floored at 0.5). Events are ranked
+by that probability; each opens the entity profile narrowed to the day, because a burst can also
+be a reaction to a real event. Entity profiles end with the registry forms (canonical name and
+approved aliases) that admit posts about the entity. The overview leads with negative
 posts, temporal activity, attacked-entity rankings,
 channel comparisons, and auditable claims. Entity profiles add stance-over-time, epistemic-status,
 and attribution distributions. Their URL-backed global filters distinguish publication channel from

@@ -41,7 +41,7 @@ import {
   useExactDate,
   useExactRange,
 } from "@/components/editorial";
-import { DivergingBars, MoversList, TargetMap } from "@/components/charts";
+import { DivergingBars, MoversList, TargetMap, TargetedAttackList } from "@/components/charts";
 import { aggregateWeekly, defaultGranularity, evaluativeOf, negativeRisers, previousRange, relativeChange } from "@/lib/charts";
 import { glossary, termOf } from "@/lib/glossary";
 import { ClaimMetadata, type ClaimMetadataActions } from "@/components/claim-metadata";
@@ -76,6 +76,7 @@ import {
   rankingThesis,
   rhetoricThesis,
   riserThesis,
+  targetedThesis,
   stanceThesis,
   topTargetThesis,
 } from "@/lib/theses";
@@ -432,6 +433,9 @@ export function DashboardPage() {
               <p className="mt-1 text-[13px] text-white">{formatNumber(rhetoric[0].count)} із {formatNumber(rhetoric.reduce((sum, item) => sum + item.count, 0))} позначок прийомів</p>
             </section> : null}
           </div>
+          {query.data.targeted_attacks ? <Graphic section="Спрямовані атаки" term={glossary.section.targetedAttack} scope={scope} title={targetedThesis(query.data.targeted_attacks.items)} dek="Дні, коли про одну сутність вийшло набагато більше негативних дописів, ніж зазвичай для неї за попередні 28 днів, і щонайменше у двох каналах. Це може бути скоординована атака або реакція на подію — відкрийте день і перегляньте дописи.">
+            {query.data.targeted_attacks.items.length ? <TargetedAttackList items={query.data.targeted_attacks.items} total={query.data.targeted_attacks.total} params={params} /> : <EmptyState>За цей період жодна сутність не отримала незвично сильного одноденного сплеску негативу.</EmptyState>}
+          </Graphic> : null}
           <div className="grid grid-cols-1 items-start gap-4 md:gap-5 lg:grid-cols-2">
             <Graphic section="Рейтинг сутностей" scope={`${scope} · ${rankingLabels[entityRanking].toLocaleLowerCase("uk-UA")}`} title={rankingThesis(rankedEntities, (item) => item.canonical_name ?? "—", balance(entityRanking), balance(entityRanking) ? "Кого оцінюють найнегативніше" : "Хто отримує найбільше негативу")} dek={balance(entityRanking) ? "Порядок за стабільно негативною оцінкою з поправкою на малу вибірку; сутності з вибіркою менше 10 оцінок не ранжуються." : "Порядок за кількістю негативних дописів."} action={<RankingToggle value={entityRanking} onChange={(value) => set("entity_rank", value === "negative_volume" ? undefined : value)} />}><DivergingBars items={rankedEntities} label={(item) => item.canonical_name ?? "—"} avatar={(item) => <EntityAvatar id={item.id} name={item.canonical_name ?? "—"} size="sm" />} href={entityHref} /></Graphic>
             <Graphic section="Порівняння джерел" scope={`${scope} · ${rankingLabels[channelRanking].toLocaleLowerCase("uk-UA")}`} title={rankingThesis(rankedChannels, (item) => `«${shortTitle(item.title)}»`, balance(channelRanking), balance(channelRanking) ? "Чий тон найнегативніший" : "Хто публікує найбільше негативу")} dek={balance(channelRanking) ? "Порядок за стабільно негативною оцінкою з поправкою на малу вибірку." : "Порядок за кількістю негативних дописів; рядок відкриває профіль джерела."} action={<RankingToggle value={channelRanking} onChange={(value) => set("channel_rank", value === "negative_volume" ? undefined : value)} />}><DivergingBars items={rankedChannels} label={(item) => item.title ?? "—"} avatar={(item) => <ChannelAvatar channel={item} size="sm" />} href={(item) => `/channels/${item.id}?${suffix}`} /></Graphic>
@@ -735,11 +739,23 @@ export function EntityPage() {
             </div>
             <Graphic section="Порівняння каналів" subject={name} scope={`${scope} · ${rankingLabels[sort].toLocaleLowerCase("uk-UA")}`} title={orderedThesis(data.channels.items, (item) => `«${shortTitle(item.title)}»`, sort, "Як канали оцінювали сутність")} dek={`Обраний порядок відокремлює обсяг оцінок від їхнього негативного балансу. Вибірка профілю — ${formatNumber(evaluative)} ${pluralUk(evaluative, "допис", "дописи", "дописів")} з оцінкою.`} action={<RankingSelect value={sort} onChange={(value) => setEntityFilter("channel_sort", value)} />}><DivergingBars items={data.channels.items} label={(item) => item.title ?? "—"} avatar={(item) => <ChannelAvatar channel={item} size="sm" />} href={(item) => `/channels/${item.id}?${new URLSearchParams(params).toString()}`} /><Pager page={data.channels} param="channel_offset" /></Graphic>
             <EvidenceFeed query={evidence} scope={scope} />
+            <AliasesTile name={name} aliases={data.entity.aliases ?? []} />
           </>}
         </>;
       })()}
     </QueryBoundary>
   </PageLayout>;
+}
+
+/** The registry forms that admit posts about this entity, so a reader can see what was matched. */
+function AliasesTile({ name, aliases }: { name: string; aliases: string[] }) {
+  const [all, setAll] = useState(false);
+  const forms = [name, ...aliases.filter((alias) => alias !== name)];
+  const shown = all ? forms : forms.slice(0, 18);
+  return <Graphic section="Реєстр" subject={name} title={`Як система знаходить «${name}» у дописах`} dek={`${formatNumber(forms.length)} ${pluralUk(forms.length, "форма", "форми", "форм")} з реєстру: назва, скорочення, російські варіанти й прізвиська. Відмінкові форми система будує сама, а кожен збіг ще перевіряє модель, перш ніж допис потрапить у профіль.`} exportable={false}>
+    <ul className="flex flex-wrap gap-1.5" aria-label="Форми назви з реєстру">{shown.map((form, index) => <li key={form} className={`chip !cursor-default !py-0.5 text-[13px] ${index === 0 ? "font-semibold" : ""}`}>{form}</li>)}</ul>
+    {forms.length > shown.length || all ? <button type="button" onClick={() => setAll(!all)} className="hit mt-3 rounded-full text-[13px] font-medium text-muted-foreground underline decoration-foreground/20 underline-offset-4 transition-colors hover:text-foreground">{all ? "Згорнути" : `Показати всі ${formatNumber(forms.length)}`}</button> : null}
+  </Graphic>;
 }
 
 function EvidenceFeed({ query, scope }: { query: ReturnType<typeof useQuery<ReturnType<typeof apiClient.evidence> extends Promise<infer T> ? T : never>>; scope: string }) {

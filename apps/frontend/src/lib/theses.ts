@@ -1,4 +1,4 @@
-import type { Daily, Distribution, EpistemicStatus, SourceKind, Summary } from "@/api/client";
+import type { Daily, Distribution, EpistemicStatus, SourceKind, Summary, TargetedAttack } from "@/api/client";
 import { evaluativeOf, type Mover } from "@/lib/charts";
 import { formatDate, formatNumber, formatPercent, pluralUk } from "@/lib/editorial";
 
@@ -47,6 +47,12 @@ export function topTargetThesis(entities: Summary[]): string {
   const eligible = entities.filter((item) => evaluativeOf(item) >= MIN_SAMPLE * 2 && item.negative_count / evaluativeOf(item) >= 0.6);
   const leader = top(eligible, (item) => item.negative_count);
   return leader?.canonical_name ? `${leader.canonical_name} — головна мішень періоду` : "Хто в полі атаки";
+}
+
+export function targetedThesis(items: TargetedAttack[]): string {
+  const leader = items[0];
+  if (!leader) return "Спрямованих сплесків негативу не виявлено";
+  return `${leader.canonical_name}: ${negatives(leader.negative_count)} за ${formatDate(leader.date)} — у ${formatNumber(Math.round(leader.ratio))} ${pluralUk(Math.round(leader.ratio), "раз", "рази", "разів")} більше звичного`;
 }
 
 export function riserThesis(movers: Mover[]): string {
