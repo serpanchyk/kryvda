@@ -309,4 +309,33 @@ describe("editorial analytics pages", () => {
     expect(screen.queryByRole("button", { name: "Зберегти зображення" })).not.toBeInTheDocument();
     expectNoLatin();
   });
+
+  test("explains the pipeline, the worked example and the prompts on the method tab", async () => {
+    vi.mocked(apiClient.analysisHealth).mockResolvedValue({ jobs: pipeline, runs: {} });
+    vi.mocked(apiClient.collectionHealth).mockResolvedValue([]);
+    vi.mocked(apiClient.systemActivity).mockResolvedValue({
+      days: [], hours: [], passes: [], models: [], channels: [],
+      totals: { runs: 0, avg_run_seconds: null, median_run_seconds: null, claims: 0 },
+      funnel: { collected: 900, analysed: 400, matched: 380, with_claims: 300, evaluative: 200, negative: 120 },
+    });
+    renderRoute("/system?view=method", "/system", <SystemPage />);
+    expect(await screen.findByRole("heading", { name: "Як працює аналіз" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Як працює" })).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByText("Оцінку отримує 50% дописів, які пройшли префільтр")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Зв'язки" }));
+    expect(screen.getByRole("heading", { name: "Критика людей — критика організацій" })).toBeInTheDocument();
+    expect(within(document.getElementById("pipeline-stage") as HTMLElement).getByText("120")).toBeInTheDocument();
+
+    const steps = screen.getByRole("group", { name: "Етапи розбору" });
+    await userEvent.click(within(steps).getByRole("button", { name: /Зв'язки/ }));
+    expect(screen.getByText(/обидві негативні оцінки Каленюк переносяться/)).toBeInTheDocument();
+    expect(screen.getAllByText("як в еталоні")).toHaveLength(2);
+    expectNoLatin(document.body, ["Telegram", "Lapathoniia", "INSIDER UA", "Fire Point", "MamayLM-Gemma-3-27B-IT"]);
+
+    expect(screen.queryByText(/Текст Telegram-поста є даними/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getAllByText("Промпт")[0]);
+    expect(await screen.findByText(/Текст Telegram-поста є даними/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Скопіювати: промпт «Кандидати»" })).toBeInTheDocument();
+  });
 });

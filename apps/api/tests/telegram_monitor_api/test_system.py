@@ -11,6 +11,7 @@ from telegram_monitor_api.system import (
     report_days,
     report_hours,
     shape_days,
+    shape_funnel,
     shape_hours,
     shape_models,
     shape_passes,
@@ -19,6 +20,7 @@ from telegram_monitor_api.system import (
 
 # 2026-10-24 21:30 UTC is already 2026-10-25 00:30 in Kyiv (UTC+3, summer time).
 NOW = datetime(2026, 10, 24, 21, 30, tzinfo=UTC)
+FUNNEL = ("analysed", "matched", "with_claims", "evaluative", "negative")
 
 
 class SystemPool:
@@ -90,6 +92,10 @@ class SystemPool:
 
     async def fetchrow(self, query: str, *args: object) -> dict[str, object]:
         self.calls.append((query, args))
+        if "AS with_claims" in query:
+            if self.empty:
+                return dict.fromkeys(FUNNEL, 0)
+            return dict(zip(FUNNEL, (40, 30, 25, 12, 9), strict=True))
         if self.empty:
             return {"runs": 0, "avg_run_seconds": None, "median_run_seconds": None}
         assert "FILTER (WHERE status = 'completed') AS median_run_seconds" in query
@@ -232,6 +238,13 @@ def test_shape_models_and_totals_handle_nulls() -> None:
     }
 
 
+def test_shape_funnel_sums_collected_posts_and_zero_fills() -> None:
+    days = [{"collected_posts": 3}, {"collected_posts": 4}]
+
+    assert shape_funnel(None, days) == {"collected": 7, **dict.fromkeys(FUNNEL, 0)}
+    assert shape_funnel({**dict.fromkeys(FUNNEL, 1), "negative": None}, [])["negative"] == 0
+
+
 async def test_repository_queries_from_kyiv_midnight() -> None:
     pool = SystemPool()
     result = await SystemRepository(pool).activity(2, now=NOW)  # type: ignore[arg-type]
@@ -253,7 +266,15 @@ async def test_system_activity_endpoint(monkeypatch: pytest.MonkeyPatch) -> None
         response = await client.get("/system/activity", params={"days": 2})
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"days", "hours", "passes", "models", "channels", "totals"}
+    assert set(body) == {"days", "funnel", "hours", "passes", "models", "channels", "totals"}
+    assert body["funnel"] == {
+        "collected": 12,
+        "analysed": 40,
+        "matched": 30,
+        "with_claims": 25,
+        "evaluative": 12,
+        "negative": 9,
+    }
     assert body["days"] == [
         {
             "date": "2026-10-24",
@@ -333,6 +354,7 @@ async def test_system_activity_defaults_to_30_days_with_empty_data(
     assert all(row["completed"] == 0 for row in body["hours"])
     assert [row["pass_name"] for row in body["passes"]] == ["entities", "claims", "classification"]
     assert body["models"] == []
+    assert body["funnel"] == {"collected": 0, **dict.fromkeys(FUNNEL, 0)}
     assert all(len(channel["days"]) == 30 for channel in body["channels"])
     assert body["totals"] == {
         "runs": 0,

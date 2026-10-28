@@ -1,0 +1,290 @@
+{
+  "example_id": "golden_v0-574",
+  "channel": "INSIDER UA",
+  "pipeline_version": "inference_v4_9",
+  "model": "MamayLM-Gemma-3-27B-IT",
+  "text": "И.о. директора ЦПК Дарья Каленюк попыталась дискредитировать Fire Point и ее главного конструктора Штилермана\n\nНа вопрос \"что с ним не так?\", возможно дроны компании некачественные или дорогие, или что-то ещё, Каленюк ответила, что она этого не знает, она не эксперт, да и вообще у неё есть разные сомнения (видимо вместо доказательств).\n\nИ это всё именно в момент, когда мы видим большие успехи в дальнобойных ударах и в киллзоне на ЛБС.\n\nINSIDER UA | Прислать контент",
+  "registry_matches": [
+    {
+      "entity_id": "e1",
+      "canonical_name": "Центр протидії корупції",
+      "spans": [
+        {
+          "start": 15,
+          "end": 18
+        }
+      ]
+    },
+    {
+      "entity_id": "e2",
+      "canonical_name": "Дар'я Каленюк",
+      "spans": [
+        {
+          "start": 19,
+          "end": 32
+        },
+        {
+          "start": 210,
+          "end": 217
+        }
+      ]
+    }
+  ],
+  "calls": {
+    "candidates": 1,
+    "entities": 1,
+    "claims": 2,
+    "targets": 1,
+    "classification": 1,
+    "affiliations": 1
+  },
+  "passes": {
+    "candidates": {
+      "candidates": {
+        "r1": {
+          "reason": "ЦПК - Центр протидії корупції",
+          "same_actor": true
+        },
+        "r2": {
+          "reason": "Дарья Каленюк - Дарья Каленюк",
+          "same_actor": true
+        }
+      }
+    },
+    "entities": {
+      "entities": [
+        {
+          "mentions": [
+            "Дарья Каленюк"
+          ]
+        },
+        {
+          "mentions": [
+            "ЦПК"
+          ]
+        },
+        {
+          "mentions": [
+            "Fire Point"
+          ]
+        },
+        {
+          "mentions": [
+            "Штилерман"
+          ]
+        },
+        {
+          "mentions": [
+            "INSIDER UA"
+          ]
+        }
+      ]
+    },
+    "claims": {
+      "claims": [
+        {
+          "normalized_text": "Дар'я Каленюк намагалася дискредитувати Fire Point та її головного конструктора Штилермана.",
+          "entity_ids": [
+            "e2",
+            "e3",
+            "e4"
+          ],
+          "evidence_text": "И.о. директора ЦПК Дарья Каленюк попыталась дискредитировать Fire Point и ее главного конструктора Штилермана",
+          "attribution": {
+            "source_entity_id": null,
+            "source_kind": "channel_editorial"
+          },
+          "epistemic_status": "ствердження"
+        },
+        {
+          "normalized_text": "Дар'я Каленюк не знає, чим саме не подобається Fire Point, і не має доказів.",
+          "entity_ids": [
+            "e2",
+            "e3"
+          ],
+          "evidence_text": "На вопрос \"что с ним не так?\", возможно дроны компании некачественные или дорогие, или что-то ещё, Каленюк ответила, что она этого не знает, она не эксперт, да и вообще у неё есть разные сомнения (видимо вместо доказательств).",
+          "attribution": {
+            "source_entity_id": null,
+            "source_kind": "channel_editorial"
+          },
+          "epistemic_status": "ствердження"
+        }
+      ]
+    },
+    "targets": {
+      "claims": {
+        "c1": {
+          "reason": "Джерело критикує Дар'ю Каленюк за спробу дискредитувати Fire Point та Штилермана.",
+          "evaluated": [
+            "Дар'я Каленюк"
+          ]
+        },
+        "c2": {
+          "reason": "Джерело критикує Дар'ю Каленюк за відсутність знань та доказів щодо Fire Point.",
+          "evaluated": [
+            "Дар'я Каленюк"
+          ]
+        }
+      }
+    },
+    "classification": {
+      "classifications": [
+        {
+          "claim_id": "c1",
+          "entity_id": "e2",
+          "stance": "негативне",
+          "rhetoric": [
+            "делегітимізація"
+          ]
+        },
+        {
+          "claim_id": "c2",
+          "entity_id": "e2",
+          "stance": "негативне",
+          "rhetoric": [
+            "делегітимізація"
+          ]
+        }
+      ]
+    },
+    "affiliations": {
+      "people": {
+        "Дар'я Каленюк": {
+          "reason": "в.о. директора ЦПК",
+          "organizations": [
+            "Центр протидії корупції"
+          ]
+        }
+      }
+    }
+  },
+  "final": {
+    "entities": [
+      {
+        "mentions": [
+          "ЦПК"
+        ],
+        "registry_entity_id": 1,
+        "canonical_name": "Центр протидії корупції",
+        "monitored": true,
+        "id": "e1"
+      },
+      {
+        "mentions": [
+          "Дарья Каленюк",
+          "Каленюк"
+        ],
+        "registry_entity_id": 3,
+        "canonical_name": "Дар'я Каленюк",
+        "monitored": true,
+        "id": "e2"
+      },
+      {
+        "mentions": [
+          "Fire Point"
+        ],
+        "registry_entity_id": null,
+        "canonical_name": null,
+        "monitored": false,
+        "id": "e3"
+      },
+      {
+        "mentions": [
+          "Штилерман"
+        ],
+        "registry_entity_id": null,
+        "canonical_name": null,
+        "monitored": false,
+        "id": "e4"
+      },
+      {
+        "mentions": [
+          "INSIDER UA"
+        ],
+        "registry_entity_id": null,
+        "canonical_name": null,
+        "monitored": false,
+        "id": "e5"
+      }
+    ],
+    "claims": [
+      {
+        "normalized_text": "Дар'я Каленюк намагалася дискредитувати Fire Point та її головного конструктора Штилермана.",
+        "entity_ids": [
+          "e2",
+          "e3",
+          "e4",
+          "e1"
+        ],
+        "evidence_text": "И.о. директора ЦПК Дарья Каленюк попыталась дискредитировать Fire Point и ее главного конструктора Штилермана",
+        "attribution": {
+          "source_entity_id": null,
+          "source_kind": "channel_editorial"
+        },
+        "epistemic_status": "ствердження",
+        "id": "c1",
+        "evidence_start": 0,
+        "evidence_end": 109
+      },
+      {
+        "normalized_text": "Дар'я Каленюк не знає, чим саме не подобається Fire Point, і не має доказів.",
+        "entity_ids": [
+          "e2",
+          "e3",
+          "e1"
+        ],
+        "evidence_text": "На вопрос \"что с ним не так?\", возможно дроны компании некачественные или дорогие, или что-то ещё, Каленюк ответила, что она этого не знает, она не эксперт, да и вообще у неё есть разные сомнения (видимо вместо доказательств).",
+        "attribution": {
+          "source_entity_id": null,
+          "source_kind": "channel_editorial"
+        },
+        "epistemic_status": "ствердження",
+        "id": "c2",
+        "evidence_start": 111,
+        "evidence_end": 337
+      }
+    ],
+    "classifications": [
+      {
+        "claim_id": "c1",
+        "entity_id": "e2",
+        "stance": "негативне",
+        "rhetoric": [
+          "делегітимізація"
+        ]
+      },
+      {
+        "claim_id": "c2",
+        "entity_id": "e2",
+        "stance": "негативне",
+        "rhetoric": [
+          "делегітимізація"
+        ]
+      },
+      {
+        "claim_id": "c1",
+        "entity_id": "e1",
+        "stance": "негативне",
+        "rhetoric": [
+          "делегітимізація"
+        ]
+      },
+      {
+        "claim_id": "c2",
+        "entity_id": "e1",
+        "stance": "негативне",
+        "rhetoric": [
+          "делегітимізація"
+        ]
+      }
+    ]
+  },
+  "gold": {
+    "Дар'я Каленюк": [
+      "негативне"
+    ],
+    "Центр протидії корупції": [
+      "негативне"
+    ]
+  }
+}

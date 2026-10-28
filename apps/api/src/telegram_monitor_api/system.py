@@ -90,7 +90,29 @@ FROM claims AS claim
 JOIN analysis_runs AS run ON run.id = claim.run_id
 WHERE run.completed_at >= $1 AND run.{_FINISHED_FILTER}"""
 
+_MONITORED_STANCE = """EXISTS (
+        SELECT 1 FROM claims AS claim
+        JOIN claim_target_classifications AS target ON target.claim_id = claim.id
+        JOIN post_entities AS entity ON entity.id = target.post_entity_id
+        WHERE claim.run_id = run.id AND entity.monitored AND target.stance {condition})"""
+
+# Each analysed post revision once, however many times it was re-analysed in the window.
+FUNNEL_SQL = f"""SELECT count(DISTINCT run.post_revision_id) AS analysed,
+    count(DISTINCT run.post_revision_id) FILTER (WHERE run.status <> 'filtered_out') AS matched,
+    count(DISTINCT run.post_revision_id) FILTER (
+        WHERE EXISTS (SELECT 1 FROM claims AS claim WHERE claim.run_id = run.id)
+    ) AS with_claims,
+    count(DISTINCT run.post_revision_id) FILTER (
+        WHERE {_MONITORED_STANCE.format(condition="<> 'відсутнє'")}
+    ) AS evaluative,
+    count(DISTINCT run.post_revision_id) FILTER (
+        WHERE {_MONITORED_STANCE.format(condition="= 'негативне'")}
+    ) AS negative
+FROM analysis_runs AS run
+WHERE run.completed_at >= $1 AND run.status IN ({_SUCCESS_STATUSES}, 'filtered_out')"""
+
 _RUN_DAY_KEYS = ("completed", "partial", "fallback", "failed", "filtered_out")
+_FUNNEL_KEYS = ("analysed", "matched", "with_claims", "evaluative", "negative")
 _PASS_COUNT_KEYS = ("attempts", "repairs", "invalid", "failed")
 _PASS_METRIC_KEYS = ("median_ms", "p95_ms", "median_completion_tokens")
 
@@ -240,6 +262,16 @@ def shape_totals(run_row: Mapping[str, Any] | None, claims: object) -> dict[str,
     }
 
 
+def shape_funnel(
+    row: Mapping[str, Any] | None, days: Sequence[Mapping[str, Any]]
+) -> dict[str, int]:
+    """Return how many posts reached each analysis stage, after the collected-post total."""
+    return {
+        "collected": sum(int(day["collected_posts"]) for day in days),
+        **{key: _count(row, key) for key in _FUNNEL_KEYS},
+    }
+
+
 class SystemRepository:
     """Read pipeline throughput, reliability and collection dynamics without writes."""
 
@@ -255,7 +287,7 @@ class SystemRepository:
 
         Returns:
             Zero-filled daily, hourly and per-channel series with pass, model and total
-            aggregates for the window.
+            aggregates for the window, and how many posts reached each analysis stage.
         """
         moment = now or utc_now()
         calendar = report_days(moment, days)
@@ -270,8 +302,11 @@ class SystemRepository:
         channel_post_rows = await self._pool.fetch(CHANNEL_POSTS_DAILY_SQL, start)
         totals = await self._pool.fetchrow(RUN_TOTALS_SQL, start)
         claims = await self._pool.fetchval(CLAIM_TOTAL_SQL, start)
+        funnel = await self._pool.fetchrow(FUNNEL_SQL, start)
+        shaped_days = shape_days(calendar, post_rows, run_rows)
         return {
-            "days": shape_days(calendar, post_rows, run_rows),
+            "days": shaped_days,
+            "funnel": shape_funnel(funnel, shaped_days),
             "hours": shape_hours(hours, hour_rows),
             "passes": shape_passes(pass_rows),
             "models": shape_models(model_rows),

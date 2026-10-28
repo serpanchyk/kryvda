@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Suspense, lazy, useEffect, useId, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ArrowRight, ArrowUp, ExternalLink, Search } from "lucide-react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 
@@ -257,6 +257,9 @@ export function ClaimsPage() {
 
 const relative = (value: string | null | undefined): string => (value ? formatDateTime(value) : "ще не було");
 
+// The methodology tab carries prompts and quality data, so it loads only when opened.
+const MethodView = lazy(() => import("@/components/method").then((module) => ({ default: module.MethodView })));
+
 const ACTIVITY_WINDOWS = ["7", "30", "90"] as const;
 const runDuration = (value: number | null | undefined): string => value == null ? "—" : value < 120 ? `${Math.round(value)} с` : `${Math.round(value / 60)} хв`;
 
@@ -276,8 +279,16 @@ export function SystemPage() {
   const attention = Boolean(jobs?.failed) || isStale(lastRun, 1) || staleChannels.length > 0;
   const setWindow = (value: string) => { const next = new URLSearchParams(params); if (value === "30") next.delete("activity"); else next.set("activity", value); setParams(next, { replace: true }); };
   const pulses = new Map((activity.data?.channels ?? []).map((channel) => [channel.id, channel]));
+  const method = params.get("view") === "method";
+  const setView = (value: "state" | "method") => { const next = new URLSearchParams(params); if (value === "state") next.delete("view"); else next.set("view", value); setParams(next, { replace: true }); };
+  const views = <Segmented label="Розділ системи" value={method ? "method" : "state"} onChange={setView} options={[{ value: "state", label: "Стан" }, { value: "method", label: "Як працює" }]} className="glass" />;
+  if (method) return <PageLayout>
+    <PageHeader title="Як працює аналіз" period={false} dateline={["методологія, промпти та якість"]} dek="Шлях допису від Telegram до оцінки сутності: етапи конвеєра, промпти мовної моделі, вимірювання якості на еталонному наборі й обмеження." aside={<div className="flex flex-wrap items-center gap-3 lg:justify-end">{views}</div>} />
+    <Suspense fallback={<LoadState />}><MethodView activity={activity.data} windowDays={windowDays} /></Suspense>
+  </PageLayout>;
   return <PageLayout>
     <PageHeader title="Система аналізу" period={false} dateline={["поточний стан і динаміка роботи"]} dek="Черга, пропускна здатність, якість відповідей моделі та збір каналів." aside={<div className="flex flex-wrap items-center gap-3 lg:justify-end">
+      {views}
       <span role="status" className={`glass inline-flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold ${attention ? "text-[var(--negative-strong)]" : ""}`}><span aria-hidden="true" className={`size-2.5 rounded-full ${attention ? "bg-[#f5a524] shadow-[0_0_0_4px_rgb(245_165_36/0.18)]" : "bg-[var(--switch-on)] shadow-[0_0_0_4px_rgb(52_199_89/0.18)]"}`} />{attention ? "Потрібна увага" : "Працює"}</span>
       <Segmented label="Період динаміки" value={String(windowDays) as (typeof ACTIVITY_WINDOWS)[number]} onChange={setWindow} options={ACTIVITY_WINDOWS.map((value) => ({ value, label: `${value} днів` }))} className="glass" />
     </div>} />
