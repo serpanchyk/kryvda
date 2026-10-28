@@ -234,8 +234,11 @@ const entityById = (id: string): ExampleEntity | undefined => example.final.enti
 const entityName = (id: string): string => entityById(id)?.canonical_name ?? entityById(id)?.mentions[0] ?? id;
 const claimById = (id: string): ExampleClaim | undefined => example.final.claims.find((item) => item.id === id);
 const monitored = example.final.entities.filter((entity) => entity.monitored);
-const passCalls = (pass: PassName): number => (example.passes as Record<string, unknown[]>)[pass]?.length ?? 0;
-const firstOutput = <K extends PassName>(pass: K) => (example.passes[pass] as unknown[])[0];
+// A pass the example never needed (no negatively evaluated people, say) is simply absent.
+const passOutputs = example.passes as Record<string, unknown[] | undefined>;
+const passCalls = (pass: PassName): number => passOutputs[pass]?.length ?? 0;
+const firstOutput = (pass: PassName): unknown => passOutputs[pass]?.[0];
+interface AffiliationsOutput { people: Record<string, { reason: string; organizations: string[] }> }
 const claimNumber = (id: string): string => id.replace(/^c/, "");
 
 function Panel({ children }: { children: ReactNode }) {
@@ -251,7 +254,7 @@ function StepBody({ pass }: { pass: PassName }) {
     </Panel>)}</ul>;
   }
   if (pass === "entities") return <div className="grid gap-3">
-    <p className="text-sm leading-6 text-muted-foreground">Модель назвала {formatNumber(example.final.entities.length)} {pluralUk(example.final.entities.length, "актора", "акторів", "акторів")}; {formatNumber(monitored.length)} з них є в реєстрі, тож саме для них система шукатиме твердження й оцінки.</p>
+    <p className="text-sm leading-6 text-muted-foreground">Модель назвала {formatNumber(example.final.entities.length)} {pluralUk(example.final.entities.length, "актора", "актори", "акторів")}; {formatNumber(monitored.length)} з них є в реєстрі, тож саме для них система шукатиме твердження й оцінки.</p>
     <ul className="flex flex-wrap gap-2">{example.final.entities.map((entity) => <li key={entity.id} className={`chip !cursor-default ${entity.monitored ? "font-semibold" : "text-muted-foreground"}`}>{entity.mentions.join(" / ")}{entity.monitored ? <span className="text-xs font-medium text-muted-foreground">реєстр</span> : null}</li>)}</ul>
   </div>;
   if (pass === "claims") return <div className="grid gap-3">
@@ -276,10 +279,12 @@ function StepBody({ pass }: { pass: PassName }) {
         <span className="text-sm text-muted-foreground">{claimById(item.claim_id)?.normalized_text}</span>
         {item.rhetoric.length ? <span className="mt-1 flex flex-wrap gap-1.5">{item.rhetoric.map((label) => <span key={label} className="chip !cursor-default !py-0.5 text-xs">{glossary.rhetoric[label as keyof typeof glossary.rhetoric]?.label ?? label}</span>)}</span> : null}
       </Panel>)}</ul>
-      <p className="text-sm leading-6 text-muted-foreground">Пари, де джерело нікого з реєстру не оцінює, модель не класифікує: вони одразу отримують «без оцінки».</p>
+      {example.final.classifications.some((item) => item.stance === "відсутнє") ? <p className="text-sm leading-6 text-muted-foreground">Пари, де джерело нікого з реєстру не оцінює, модель не класифікує: вони одразу отримують «без оцінки».</p> : null}
     </div>;
   }
-  const people = Object.entries((firstOutput("affiliations") as typeof example.passes.affiliations[number]).people);
+  const affiliations = firstOutput("affiliations") as AffiliationsOutput | undefined;
+  if (!affiliations) return <p className="rounded-[18px] bg-foreground/[0.035] px-4 py-3 text-sm leading-6">У дописі немає людей з негативною оцінкою, тож цей прохід не запускався: переносити критику на організацію нема з кого. Якби канал критикував, скажімо, «голову ЦПК», модель перевірила б цей зв'язок і додала б оцінку ЦПК.</p>;
+  const people = Object.entries(affiliations.people);
   return <ul className="grid gap-2">{people.map(([person, item]) => <Panel key={person}>
     <span className="text-sm"><strong className="font-semibold">{person}</strong><span className="text-muted-foreground"> належить до </span><strong className="font-semibold">{item.organizations.join(", ") || "жодної організації реєстру"}</strong></span>
     <span className="text-sm text-muted-foreground">Пояснення моделі: «{item.reason}»</span>
@@ -325,7 +330,7 @@ function WorkedExample() {
           <Crossfade items={STEP_ORDER} id={(pass) => pass} active={(pass) => pass === step} render={(pass) => <>
             <h3 className="font-heading text-lg font-semibold tracking-[-0.02em]">{STAGES.find((stage) => stage.pass === pass)?.title}</h3>
             <div className="mt-3"><StepBody pass={pass} /></div>
-            <Reveal className="mt-4" summary="Відповідь моделі дослівно">{() => <CodeBlock label="відповідь моделі" text={JSON.stringify(passCalls(pass) > 1 ? example.passes[pass] : firstOutput(pass), null, 2)} />}</Reveal>
+            {passCalls(pass) ? <Reveal className="mt-4" summary="Відповідь моделі дослівно">{() => <CodeBlock label="відповідь моделі" text={JSON.stringify(passCalls(pass) > 1 ? passOutputs[pass] : firstOutput(pass), null, 2)} />}</Reveal> : null}
           </>} />
         </div>
         <div className="mt-5 flex items-center justify-between gap-3 border-t border-rule pt-4">

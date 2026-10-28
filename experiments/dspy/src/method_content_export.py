@@ -39,12 +39,12 @@ from entity_stance_report import (
 DATA = Path("experiments/dspy/data")
 TEST_RUNS = DATA / "golden_test_v2_runs"
 CONTENT = Path("apps/frontend/src/content")
-# A Ukrainian pilot100 post (partly reviewed by hand): criticism of a ЦПК representative reaches
-# the organization through the affiliations pass, while the merely mentioned Шабунін stays neutral.
-EXAMPLE_ID = "golden_v0-175"
+# A short Ukrainian pilot100 post (partly reviewed by hand) in which the channel discredits both
+# registry entities it names, ЦПК and НАБУ, and the pipeline matches the reviewed annotations.
+EXAMPLE_ID = "golden_v0-011"
 EXAMPLE_CHANNEL = "Times of Ukraine"
 EXAMPLE_LANGUAGE = "українська"
-EXAMPLE_TITLE = "Розбір допису: критика представниці ЦПК стає критикою самого ЦПК"
+EXAMPLE_TITLE = "Розбір допису: канал дискредитує ЦПК і НАБУ"
 STANCE_KEYS = {"negative": NEGATIVE, "positive": POSITIVE}
 STAGE_KEYS = {
     "1 entity not admitted": "not_admitted",
