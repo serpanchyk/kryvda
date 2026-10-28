@@ -118,7 +118,7 @@ const rankingLabels: Record<RankingSort, string> = {
 function rankingValue(item: Summary, sort: RankingSort): number {
   if (sort === "negative_balance") return item.negative_balance_score ?? 0;
   if (sort === "positive_volume") return item.positive_count;
-  if (sort === "evaluative_volume") return item.evaluative_count ?? item.positive_count + item.negative_count;
+  if (sort === "evaluative_volume") return evaluativeOf(item);
   return item.negative_count;
 }
 
@@ -385,7 +385,7 @@ export function DashboardPage() {
       {query.data && (() => {
         const { summary, daily, entities, channels } = query.data;
         const before = previous.data?.summary;
-        const evaluative = summary.positive_count + summary.negative_count;
+        const evaluative = summary.positive_count + summary.negative_count + (summary.mixed_count ?? 0);
         const negativeShare = evaluative ? summary.negative_count / evaluative : 0;
         const weekly = defaultGranularity(daily.length) === "week";
         const series = weekly ? aggregateWeekly(daily) : daily;
@@ -470,7 +470,7 @@ function LeadTarget({ item, before, total, href }: { item: Summary; before?: Sum
       {growth > 0 ? <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-negative/[0.08] px-2.5 py-1 text-[13px] font-semibold tabular-nums text-[var(--negative-strong)]"><ArrowUp className="size-3" aria-hidden="true" />{formatNumber(growth)}</span> : null}
     </span>
     <span className="mt-2 block text-[13px] text-muted-foreground">негативних дописів із {formatNumber(evaluativeOf(item))} з оцінкою{before ? ` · було ${formatNumber(before.negative_count)}` : ""}</span>
-    <div className="mt-4"><EvaluativeBalanceStrip item={{ ...item, absent_count: 0 }} /></div>
+    <div className="mt-4"><EvaluativeBalanceStrip item={item} /></div>
     <span className="mt-5 flex items-center justify-between border-t border-rule pt-4 text-sm font-semibold">Відкрити профіль<span className="grid size-8 place-items-center rounded-full bg-[image:var(--ink-gloss)] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25)]"><ArrowRight className="size-4" aria-hidden="true" /></span></span>
   </Link>;
 }
@@ -510,7 +510,7 @@ export function EntitiesPage() {
             <span className="text-sm"><span className="block text-xs text-muted-foreground md:sr-only">З оцінкою</span><strong className="tabular-nums">{formatNumber(evaluative)}</strong></span>
             <span className="text-sm"><span className="block text-xs text-muted-foreground md:sr-only">Позитивні</span>{number(entity.positive_count, "text-positive")}</span>
             <span className="text-sm"><span className="block text-xs text-muted-foreground md:sr-only">Негативні</span>{number(entity.negative_count, "text-negative")}</span>
-            {evaluative ? <div className="col-span-3 md:col-span-4"><div className="max-w-md"><EvaluativeBalanceStrip item={{ ...entity, absent_count: 0 }} /></div></div> : null}
+            {evaluative || entity.absent_count ? <div className="col-span-3 md:col-span-4"><div className="max-w-lg"><EvaluativeBalanceStrip item={{ ...entity, absent_count: entity.absent_count ?? 0 }} /></div></div> : null}
           </Link>;
         })}
         <Pager page={query.data} />
@@ -660,10 +660,13 @@ function EntityFilterBar({ profile, entityId, dates }: { profile: EntityProfile;
 }
 
 /** Lead of a profile: the share of negative evaluations, its sample and its change, beside the stance chart. */
-function StanceHero({ current, before, children }: { current: { positive_count: number; negative_count: number }; before?: { positive_count: number; negative_count: number }; children: ReactNode }) {
-  const sample = current.positive_count + current.negative_count;
+type StanceCounts = { positive_count: number; negative_count: number; mixed_count?: number };
+const evaluatedOf = (counts: StanceCounts): number => counts.positive_count + counts.negative_count + (counts.mixed_count ?? 0);
+
+function StanceHero({ current, before, children }: { current: StanceCounts; before?: StanceCounts; children: ReactNode }) {
+  const sample = evaluatedOf(current);
   const share = sample ? current.negative_count / sample : 0;
-  const previousSample = before ? before.positive_count + before.negative_count : 0;
+  const previousSample = before ? evaluatedOf(before) : 0;
   const previous = before && previousSample ? before.negative_count / previousSample : undefined;
   const points = previous === undefined ? 0 : Math.round((share - previous) * 100);
   return <div className="grid gap-6 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:gap-10">
@@ -730,6 +733,8 @@ export function EntityPage() {
               { label: glossary.metric.evaluative.label, term: glossary.metric.evaluative, value: evaluative, delta: relativeChange(evaluative, before ? before.evaluative_count ?? before.evaluative_claim_count ?? before.mention_count : undefined), previous: before ? before.evaluative_count ?? before.evaluative_claim_count ?? before.mention_count : undefined, trend: data.daily.map((day) => day.positive_count + day.negative_count + (day.mixed_count ?? 0)) },
               { label: "Позитивні", term: glossary.metric.positive, value: summary.positive_count, delta: relativeChange(summary.positive_count, before?.positive_count), previous: before?.positive_count, trend: data.daily.map((day) => day.positive_count) },
               { label: "Негативні", term: glossary.metric.negative, value: summary.negative_count, accent: true, delta: relativeChange(summary.negative_count, before?.negative_count), previous: before?.negative_count, deltaTone: "negative", trend: data.daily.map((day) => day.negative_count) },
+              { label: "Змішані", term: glossary.metric.mixed, value: summary.mixed_count ?? 0, delta: relativeChange(summary.mixed_count ?? 0, before?.mixed_count), previous: before?.mixed_count, trend: data.daily.map((day) => day.mixed_count ?? 0) },
+              { label: "Без оцінки", term: glossary.metric.absent, value: summary.absent_count ?? 0, delta: relativeChange(summary.absent_count ?? 0, before?.absent_count), previous: before?.absent_count, trend: data.daily.map((day) => day.absent_count) },
             ]} />
             <Graphic variant="dark" section="Тональність у часі" subject={name} scope={scope} title={stanceThesis(name, summary, before)} dek="Стовпчики — позитивні й негативні дописи, лінія — ковзна частка негативу. Натисніть на стовпчик, щоб звузити профіль до цього проміжку."><StanceHero current={summary} before={before}><DailyChart data={data.daily} mode="stance" onDate={chooseDate} onRange={chooseRange} /></StanceHero></Graphic>
             <div className="grid grid-cols-1 items-start gap-4 md:gap-5 lg:grid-cols-2 xl:grid-cols-3">

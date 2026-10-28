@@ -429,7 +429,7 @@ function DailyTooltip({ active, payload, mode, granularity }: { active?: boolean
   const rows: Array<[string, string, string]> = (mode === "volume"
     ? [["Твердження", day.claim_count, "bg-foreground"], ["Дописи", day.post_count, "bg-neutral"]]
     : mode === "stance"
-      ? [["Негативні", day.negative_count, "bg-negative"], ["Позитивні", day.positive_count, "bg-positive"], ["Без оцінки", day.absent_count, "bg-neutral"]]
+      ? [["Негативні", day.negative_count, "bg-negative"], ["Змішані", day.mixed_count ?? 0, "bg-foreground/35"], ["Позитивні", day.positive_count, "bg-positive"], ["Без оцінки", day.absent_count, "bg-neutral"]]
       : [["Негативні", day.negative_count, "bg-negative"], ["Усі твердження", day.claim_count, "bg-neutral"]]
   ).map(([name, value, tone]) => [String(name), formatNumber(Number(value)), String(tone)]);
   if (mode === "stance" && day.share != null) rows.push([granularity === "week" ? "Частка негативу" : glossary.metric.rollingShare.label, formatPercent(day.share), "bg-foreground"]);
@@ -573,28 +573,29 @@ export function DistributionBars<K extends string>({ items, labels, group, selec
   </div>;
 }
 
+/**
+ * Every group of posts about a subject stays visible: negative, mixed and positive shares of the
+ * evaluated posts in the bar, and the posts that mention it without an evaluation beside them.
+ */
 export function EvaluativeBalanceStrip({ item }: { item: Pick<Summary, "positive_count" | "negative_count" | "mixed_count" | "absent_count" | "evaluative_count" | "negative_share"> }) {
   const mixed = item.mixed_count ?? 0;
+  const absent = item.absent_count ?? 0;
   const evaluative = item.evaluative_count ?? item.positive_count + item.negative_count + mixed;
-  const negativeShare = item.negative_share ?? (evaluative ? item.negative_count / evaluative : 0);
-  const positiveShare = evaluative ? item.positive_count / evaluative : 0;
-  const mixedShare = evaluative ? mixed / evaluative : 0;
+  const share = (count: number) => (evaluative ? count / evaluative : 0);
+  const negativeShare = item.negative_share ?? share(item.negative_count);
+  const groups = [
+    { label: "Негативні", count: item.negative_count, share: negativeShare, tone: "bg-negative" },
+    { label: "Змішані", count: mixed, share: share(mixed), tone: "bg-foreground/35" },
+    { label: "Позитивні", count: item.positive_count, share: share(item.positive_count), tone: "bg-positive" },
+  ];
   return <div>
-    <div className="flex h-2 gap-[3px] overflow-hidden rounded-full" role="img" aria-label={evaluative ? `Негативні ${formatPercent(negativeShare)}, позитивні ${formatPercent(positiveShare)}${mixed ? `, змішані ${formatPercent(mixedShare)}` : ""} з ${formatNumber(evaluative)} дописів з оцінкою` : "Оцінок немає"}>
-      {evaluative ? <>
-        {item.negative_count ? <span className="bar-fill bg-negative" style={{ width: `${negativeShare * 100}%` }} /> : null}
-        {mixed ? <span className="bar-fill bg-foreground/35" style={{ width: `${mixedShare * 100}%`, animationDelay: "60ms" }} /> : null}
-        {item.positive_count ? <span className="bar-fill bg-positive" style={{ width: `${positiveShare * 100}%`, animationDelay: "120ms" }} /> : null}
-      </> : <span className="bar-track h-full w-full" />}
+    <div className="flex h-2 gap-[3px] overflow-hidden rounded-full" role="img" aria-label={`${groups.map((group) => `${group.label.toLocaleLowerCase("uk-UA")} ${formatNumber(group.count)}${evaluative ? ` (${formatPercent(group.share)})` : ""}`).join(", ")}, без оцінки ${formatNumber(absent)}; частки від ${formatNumber(evaluative)} ${glossary.metric.sample.label}`}>
+      {evaluative ? groups.map((group, index) => group.count ? <span key={group.label} className={`bar-fill ${group.tone}`} style={{ width: `${group.share * 100}%`, animationDelay: `${index * 60}ms` }} /> : null) : <span className="bar-track h-full w-full" />}
     </div>
     <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground" aria-hidden="true">
-      {evaluative ? <>
-        <span className="inline-flex items-center gap-1.5"><i className="size-1.5 rounded-full bg-negative" />Негативні <strong className="font-semibold text-foreground">{formatPercent(negativeShare)}</strong></span>
-        <span className="inline-flex items-center gap-1.5"><i className="size-1.5 rounded-full bg-positive" />Позитивні <strong className="font-semibold text-foreground">{formatPercent(positiveShare)}</strong></span>
-        {mixed ? <span className="inline-flex items-center gap-1.5"><i className="size-1.5 rounded-full bg-foreground/35" />Змішані <strong className="font-semibold text-foreground">{formatNumber(mixed)}</strong></span> : null}
-      </> : null}
-      <span>{`${formatNumber(evaluative)} ${glossary.metric.sample.label}`}</span>
-      {item.absent_count ? <span>{formatNumber(item.absent_count)} без оцінки</span> : null}
+      {groups.map((group) => <span key={group.label} className="inline-flex items-center gap-1.5"><i className={`size-1.5 rounded-full ${group.tone}`} />{group.label} <strong className="font-semibold tabular-nums text-foreground">{formatNumber(group.count)}</strong>{evaluative ? <span className="tabular-nums">{formatPercent(group.share)}</span> : null}</span>)}
+      <span className="inline-flex items-center gap-1.5"><i className="size-1.5 rounded-full bg-foreground/15" />Без оцінки <strong className="font-semibold tabular-nums text-foreground">{formatNumber(absent)}</strong></span>
+      <span>частки від {formatNumber(evaluative)} {glossary.metric.sample.label}</span>
     </div>
   </div>;
 }

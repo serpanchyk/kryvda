@@ -39,6 +39,7 @@ export interface Entity {
   positive_count: number;
   negative_count: number;
   mixed_count?: number;
+  absent_count?: number;
   evaluative_count?: number;
   negative_share?: number;
   negative_balance_score?: number;
@@ -130,6 +131,7 @@ export interface Dashboard {
     channel_count: number;
     positive_count: number;
     negative_count: number;
+    mixed_count?: number;
     absent_count: number;
     today_post_count: number;
     today_claim_count: number;
@@ -179,7 +181,7 @@ export interface SourceActorOption {
 }
 export interface EntityProfile {
   entity: Entity;
-  summary: { mention_count: number; evaluative_claim_count?: number; claim_count?: number; evaluative_count?: number; mixed_count?: number; positive_count: number; negative_count: number };
+  summary: { mention_count: number; evaluative_claim_count?: number; claim_count?: number; evaluative_count?: number; mixed_count?: number; absent_count?: number; positive_count: number; negative_count: number };
   channels: Page<Summary>;
   channel_options: Array<Pick<Summary, "id" | "title">>;
   source_entity: Pick<Entity, "id" | "canonical_name"> | null;

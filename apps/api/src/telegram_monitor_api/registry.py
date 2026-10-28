@@ -322,11 +322,14 @@ def _entity_metrics_sql() -> str:
         f"{positive} AS positive_count, {negative} AS negative_count, "
         f"{pairs(MIXED)} AS mixed_count, {total} AS evaluative_count, "
         f"{share} AS negative_share, {score} AS negative_balance_score, "
-        "count(DISTINCT judged.claim_id) AS evaluative_claim_count"
+        f"{pairs(ABSENT)} AS absent_count, "
+        "count(DISTINCT judged.claim_id) FILTER (WHERE judged.claim_stance <> 'відсутнє') "
+        "AS evaluative_claim_count"
     )
 
 
 MIXED = "judged.stance = 'змішане'"
+ABSENT = "judged.stance = 'відсутнє'"
 _ENTITY_METRICS_SQL = _entity_metrics_sql()
 _ENTITY_TOTAL_COLUMNS = (
     "positive_classification_count",
@@ -334,6 +337,7 @@ _ENTITY_TOTAL_COLUMNS = (
     "positive_count",
     "negative_count",
     "mixed_count",
+    "absent_count",
     "evaluative_count",
     "negative_share",
     "negative_balance_score",
@@ -344,6 +348,7 @@ _ENTITY_PAGE_SQL = (
     """
 WITH counted AS (
     SELECT post_entity.registry_entity_id AS entity_id, post.id AS post_id, claim.id AS claim_id,
+        classification.stance AS claim_stance,
         count(*) FILTER (WHERE classification.stance = 'негативне') OVER pair AS negative_claims,
         count(*) FILTER (WHERE classification.stance = 'позитивне') OVER pair AS positive_claims,
         row_number() OVER pair = 1 AS first
@@ -357,7 +362,6 @@ WITH counted AS (
     JOIN post_revisions AS revision ON revision.id = run.post_revision_id
     JOIN raw_posts AS post ON post.id = revision.raw_post_id
     WHERE post_entity.registry_entity_id IS NOT NULL
-      AND classification.stance IN ('позитивне', 'негативне')
       AND post.deleted_at IS NULL AND post.inaccessible_at IS NULL
       AND revision.id = (SELECT latest.id FROM post_revisions AS latest
                          WHERE latest.raw_post_id = post.id

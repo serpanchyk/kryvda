@@ -115,7 +115,7 @@ describe("editorial analytics pages", () => {
     vi.mocked(apiClient.claims).mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 });
     renderRoute("/", "/", <DashboardPage />);
     expect((await screen.findAllByText("Великий обсяг")).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("50 дописів з оцінкою").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("частки від 50 дописів з оцінкою").length).toBeGreaterThan(0);
     expect(screen.getByText(/3 без оцінки/)).toBeInTheDocument();
     expect(screen.getByText("Найбільше негативу — Великий обсяг: 30 негативних дописів")).toBeInTheDocument();
     await userEvent.click(screen.getAllByRole("button", { name: "За негативним балансом" })[0]);

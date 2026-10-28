@@ -33,8 +33,8 @@ export function activityPeakThesis(series: Daily[], weekly: boolean): string {
 }
 
 /** Stance over time for one subject: a change against the previous period, else the negative share. */
-export function stanceThesis(subject: string, current: { negative_count: number; positive_count: number }, previous?: { negative_count: number }): string {
-  const evaluative = current.negative_count + current.positive_count;
+export function stanceThesis(subject: string, current: { negative_count: number; positive_count: number; mixed_count?: number }, previous?: { negative_count: number }): string {
+  const evaluative = current.negative_count + current.positive_count + (current.mixed_count ?? 0);
   if (evaluative < MIN_SAMPLE) return `${subject}: оцінки за днями`;
   if (previous && Math.abs(current.negative_count - previous.negative_count) >= MIN_COUNT && Math.max(current.negative_count, previous.negative_count) >= MIN_SAMPLE) {
     const verb = current.negative_count > previous.negative_count ? "зріс" : "знизився";

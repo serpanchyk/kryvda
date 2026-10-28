@@ -263,8 +263,9 @@ class AnalyticsRepository:
         epistemic = await self._pool.fetch(_ENTITY_EPISTEMIC_SQL, *args)
         attribution = await self._pool.fetch(_ENTITY_ATTRIBUTION_SQL, *args)
         totals = {**_empty_channel_summary(), **(dict(summary) if summary is not None else {})}
-        # Evaluative claims behind the profile, under the names older clients read.
-        totals["evaluative_claim_count"] = totals["mention_count"] = totals["claim_count"]
+        totals.setdefault("evaluative_claim_count", 0)
+        # Older clients read the evaluative claims behind the profile as mention_count.
+        totals["mention_count"] = totals["evaluative_claim_count"]
         return {
             "entity": {**dict(entity), "aliases": [str(row["alias"]) for row in aliases]},
             "summary": totals,
@@ -592,7 +593,7 @@ def _pairs(base: str, stance_arg: str | None = None) -> str:
     )
     return f"""WITH counted AS (
     SELECT post.id AS post_id, post.published_at, channel.id AS channel_id, entity.id AS entity_id,
-        claim.id AS claim_id, classification.rhetoric,
+        claim.id AS claim_id, classification.stance AS claim_stance, classification.rhetoric,
         count(*) FILTER (WHERE classification.stance = 'негативне') OVER pair AS negative_claims,
         count(*) FILTER (WHERE classification.stance = 'позитивне') OVER pair AS positive_claims,
         row_number() OVER pair = 1 AS first
@@ -759,7 +760,6 @@ _ENTITY_ALIASES_SQL = """SELECT alias.alias FROM entity_aliases AS alias
 WHERE alias.entity_id = $1 ORDER BY lower(alias.alias), alias.alias"""
 
 _ENTITY_SCOPE = """ AND entity.id = $1
-  AND classification.stance IN ('позитивне', 'негативне')
   AND ($2::bigint IS NULL OR channel.id = $2)
 """
 _ENTITY_CLAIM_FILTERS = """
@@ -771,10 +771,12 @@ _ENTITY_CLAIM_FILTERS = """
        OR ($8 = 'channel_position' AND claim.source_kind = 'channel_editorial')
        OR ($8 = 'quoted_sources' AND claim.source_kind IN ('named_entity', 'external_unnamed')))"""
 
-# Claim listings filter each claim by stance; aggregates filter the collapsed post evaluation.
+# Claim listings show evaluative claims and filter each by stance; aggregates also count posts
+# that mention the entity without evaluating it, and filter the collapsed post evaluation.
 _ENTITY_BASE = (
     _base("$9", "$10")
     + _ENTITY_SCOPE
+    + "  AND classification.stance IN ('позитивне', 'негативне')"
     + "  AND ($3::text IS NULL OR classification.stance = $3)"
     + _ENTITY_CLAIM_FILTERS
 )
@@ -791,7 +793,12 @@ _ENTITY_CHANNEL_OPTIONS_SQL = (
 
 _ENTITY_DAILY_SQL = _aggregate(_ENTITY_PAIRS, _DAY_KEY, "date") + " ORDER BY 1"
 
-_ENTITY_TOTAL_SQL = _aggregate(_ENTITY_PAIRS)
+_ENTITY_TOTAL_SQL = _aggregate(
+    _ENTITY_PAIRS,
+    extra=""",
+    count(DISTINCT judged.claim_id) FILTER (WHERE judged.claim_stance <> 'відсутнє')
+        AS evaluative_claim_count""",
+)
 
 _ENTITY_RHETORIC_SQL = _pair_rhetoric(_ENTITY_PAIRS)
 

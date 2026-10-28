@@ -225,7 +225,10 @@ positive a positive one, an equal non-zero number «змішане», none «б�
 over the filtered classifications, so a long post weighs no more than a short one. Claim filters
 (attribution, source, epistemic status, rhetoric) select claims before the collapse; the Entity
 stance filter selects whole posts in aggregates and single claims in the evidence feed. Mixed posts
-enter the evaluative denominator but neither the negative nor the positive count. Rhetoric
+enter the evaluative denominator but neither the negative nor the positive count. Entity profiles and
+the entity list also count posts that mention the entity only without an evaluation («без
+оцінки»); balance strips always list negative, mixed, positive and unevaluated posts with counts,
+the shares taken over evaluated posts, and entity profiles show mixed and unevaluated tiles. Rhetoric
 distributions count negative or mixed posts that use each label. The overview's «Спрямовані атаки» tile lists entity-days
 whose negative posts far exceed the entity's own norm: at least 5 negative posts in at least 2
 channels on one Kyiv day, with P(X >= count) < 0.001 for X ~ Poisson(norm), where the norm is the

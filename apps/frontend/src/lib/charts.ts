@@ -21,11 +21,12 @@ export function aggregateWeekly(data: Daily[]): Daily[] {
   const weeks = new Map<string, Daily>();
   for (const day of data) {
     const key = weekStart(day.date);
-    const week = weeks.get(key) ?? { date: key, post_count: 0, claim_count: 0, positive_count: 0, negative_count: 0, absent_count: 0 };
+    const week = weeks.get(key) ?? { date: key, post_count: 0, claim_count: 0, positive_count: 0, negative_count: 0, mixed_count: 0, absent_count: 0 };
     week.post_count += day.post_count;
     week.claim_count += day.claim_count;
     week.positive_count += day.positive_count;
     week.negative_count += day.negative_count;
+    week.mixed_count = (week.mixed_count ?? 0) + (day.mixed_count ?? 0);
     week.absent_count += day.absent_count;
     weeks.set(key, week);
   }
@@ -55,7 +56,7 @@ export function rollingNegativeShare(data: Daily[], window: number, minimum = 5)
   return data.map((_, index) => {
     const slice = data.slice(Math.max(0, index - window + 1), index + 1);
     const negative = slice.reduce((sum, day) => sum + day.negative_count, 0);
-    const evaluative = slice.reduce((sum, day) => sum + day.negative_count + day.positive_count, 0);
+    const evaluative = slice.reduce((sum, day) => sum + day.negative_count + day.positive_count + (day.mixed_count ?? 0), 0);
     return evaluative >= minimum ? negative / evaluative : null;
   });
 }
@@ -88,8 +89,8 @@ export const quadrantOf = (evaluative: number, negativeShare: number, volumeSpli
   return loud ? "favourites" : "periphery";
 };
 
-export const evaluativeOf = (item: Pick<Summary, "positive_count" | "negative_count" | "evaluative_count">): number =>
-  item.evaluative_count ?? item.positive_count + item.negative_count;
+export const evaluativeOf = (item: Pick<Summary, "positive_count" | "negative_count" | "mixed_count" | "evaluative_count">): number =>
+  item.evaluative_count ?? item.positive_count + item.negative_count + (item.mixed_count ?? 0);
 
 export interface Mover {
   item: Summary;
