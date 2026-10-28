@@ -27,7 +27,7 @@ spec:
       - name: ghcr-secret
       containers:
       - name: api
-        image: ghcr.io/serpanchyk/kryvda-api:sha-0ee1b93e6ece6f36518885b248e9f522aeeb0a1e
+        image: ghcr.io/serpanchyk/kryvda-api:sha-3e498d842a7f37bf62feb13094dfc80194078502
         env:
         - name: POSTGRES_DSN
           valueFrom:
