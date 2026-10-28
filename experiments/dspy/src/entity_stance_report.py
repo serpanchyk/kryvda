@@ -108,6 +108,27 @@ def predicted_stances(row: Mapping[str, Any]) -> dict[str, list[tuple[str, str, 
     return predicted
 
 
+def majority_stances(
+    predicted: Mapping[str, list[tuple[str, str, str]]],
+) -> dict[str, list[tuple[str, str, str]]]:
+    """Collapse each entity's classifications into one post evaluation, as the interface does.
+
+    More negative than positive claims is negative, more positive is positive; a tie of evaluative
+    claims is «змішане» and matches neither stance.
+    """
+    collapsed: dict[str, list[tuple[str, str, str]]] = {}
+    for name, rows in predicted.items():
+        negative = sum(value == NEGATIVE for value, _, _ in rows)
+        positive = sum(value == POSITIVE for value, _, _ in rows)
+        if negative > positive:
+            collapsed[name] = [(NEGATIVE, "", "")]
+        elif positive > negative:
+            collapsed[name] = [(POSITIVE, "", "")]
+        else:
+            collapsed[name] = [("змішане", "", "")] if negative else []
+    return collapsed
+
+
 def post_counts(
     golden: Mapping[str, set[str]], predicted: Mapping[str, list[tuple[str, str, str]]], stance: str
 ) -> PostCounts:
@@ -228,18 +249,27 @@ class StanceReport:
             rows[identifier] = row
         return rows
 
-    def counts(self, rows: Mapping[str, Mapping[str, Any]], stance: str) -> dict[str, PostCounts]:
-        """Return per-post counts of one stance."""
+    def counts(
+        self, rows: Mapping[str, Mapping[str, Any]], stance: str, majority: bool = False
+    ) -> dict[str, PostCounts]:
+        """Return per-post counts of one stance; ``majority`` scores the collapsed evaluation."""
         return {
-            identifier: post_counts(self.gold(identifier), predicted_stances(row), stance)
+            identifier: post_counts(self.gold(identifier), self._predicted(row, majority), stance)
             for identifier, row in rows.items()
         }
 
-    def stages(self, rows: Mapping[str, Mapping[str, Any]], stance: str) -> Counter[str]:
+    @staticmethod
+    def _predicted(row: Mapping[str, Any], majority: bool) -> dict[str, list[tuple[str, str, str]]]:
+        predicted = predicted_stances(row)
+        return majority_stances(predicted) if majority else predicted
+
+    def stages(
+        self, rows: Mapping[str, Mapping[str, Any]], stance: str, majority: bool = False
+    ) -> Counter[str]:
         """Count where reviewed (post, entity) pairs of one stance were found or lost."""
         stages: Counter[str] = Counter()
         for identifier, row in rows.items():
-            predicted = predicted_stances(row)
+            predicted = self._predicted(row, majority)
             for name, values in self.gold(identifier).items():
                 if stance in values:
                     stages[loss_stage(name, stance, row, predicted)] += 1

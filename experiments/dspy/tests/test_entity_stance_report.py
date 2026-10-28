@@ -124,3 +124,22 @@ def test_gold_carries_a_linked_persons_criticism_to_the_organization() -> None:
     gold = report.gold("golden_v0-001")
     assert gold["Центр протидії корупції"] == {"відсутнє", "негативне"}
     assert gold["Служба безпеки України"] == {"позитивне"}
+
+
+def test_majority_stances_collapse_claims_like_the_interface() -> None:
+    from entity_stance_report import majority_stances
+
+    predicted = {
+        "А": [("негативне", "", ""), ("негативне", "", ""), ("позитивне", "", "")],
+        "Б": [("негативне", "", ""), ("позитивне", "", "")],
+        "В": [("відсутнє", "", "")],
+        "Г": [("позитивне", "", "")],
+    }
+
+    collapsed = majority_stances(predicted)
+
+    assert collapsed["А"] == [("негативне", "", "")]
+    assert collapsed["Б"] == [("змішане", "", "")]
+    assert collapsed["В"] == []
+    assert collapsed["Г"] == [("позитивне", "", "")]
+    assert post_counts({"Б": {"негативне"}}, {"Б": collapsed["Б"]}, "негативне") == PostCounts(fn=1)

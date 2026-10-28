@@ -244,7 +244,7 @@ export function TargetMap({ items, href, minimum = 5 }: { items: Summary[]; href
         <MapAnnotations points={points} split={split} zDomain={zDomain} />
       </ScatterChart> : null}
     </div>
-    <p className="mt-1 text-center text-xs text-muted-foreground"><TermLabel term={glossary.metric.evaluative}>Кількість оціночних класифікацій</TermLabel> (логарифмічна шкала) · вертикально — <TermLabel term={glossary.metric.negativeShare}>частка негативу</TermLabel> · розмір — кількість тверджень</p>
+    <p className="mt-1 text-center text-xs text-muted-foreground"><TermLabel term={glossary.metric.evaluative}>Кількість дописів з оцінкою</TermLabel> (логарифмічна шкала) · вертикально — <TermLabel term={glossary.metric.negativeShare}>частка негативу</TermLabel> · розмір — кількість тверджень</p>
     <details className="disclosure mt-4" data-export-ignore="true">
       <summary>Мапа списком</summary>
       <div className="pt-3"><QuadrantList points={points} /></div>
@@ -262,7 +262,7 @@ export function MoversList({ movers, label, href }: { movers: Mover[]; label: (i
         <strong className="shrink-0 font-semibold tabular-nums text-negative">+{formatNumber(mover.change)}</strong>
       </span>
       <span className="bar-track mt-2 h-1.5"><span className="bar-fill bg-negative" style={{ width: `${(mover.change / max) * 100}%`, animationDelay: `${index * 60}ms` }} /></span>
-      <span className="mt-1 block text-xs tabular-nums text-muted-foreground">{`${formatNumber(mover.previous)} → ${formatNumber(mover.current)} негативних класифікацій`}</span>
+      <span className="mt-1 block text-xs tabular-nums text-muted-foreground">{`${formatNumber(mover.previous)} → ${formatNumber(mover.current)} негативних дописів`}</span>
     </NavLink>)}
   </div>;
 }

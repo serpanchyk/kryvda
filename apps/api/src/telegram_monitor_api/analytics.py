@@ -80,6 +80,7 @@ def _empty_day(day: date) -> dict[str, Any]:
         "claim_count": 0,
         "positive_count": 0,
         "negative_count": 0,
+        "mixed_count": 0,
         **negative_balance_metrics(0, 0),
         "absent_count": 0,
     }
@@ -187,17 +188,12 @@ class AnalyticsRepository:
         rhetoric = await self._pool.fetch(_ENTITY_RHETORIC_SQL, *args)
         epistemic = await self._pool.fetch(_ENTITY_EPISTEMIC_SQL, *args)
         attribution = await self._pool.fetch(_ENTITY_ATTRIBUTION_SQL, *args)
+        totals = {**_empty_channel_summary(), **(dict(summary) if summary is not None else {})}
+        # Evaluative claims behind the profile, under the names older clients read.
+        totals["evaluative_claim_count"] = totals["mention_count"] = totals["claim_count"]
         return {
             "entity": dict(entity),
-            "summary": dict(summary)
-            if summary is not None
-            else {
-                "evaluative_claim_count": 0,
-                "mention_count": 0,
-                **negative_balance_metrics(0, 0),
-                "positive_count": 0,
-                "negative_count": 0,
-            },
+            "summary": totals,
             "channels": {
                 "items": [dict(row) for row in channels],
                 "total": int(channel_total or 0),
@@ -399,6 +395,7 @@ def _empty_summary() -> dict[str, int | float]:
         "channel_count": 0,
         "positive_count": 0,
         "negative_count": 0,
+        "mixed_count": 0,
         "evaluative_count": 0,
         "negative_share": 0.0,
         "negative_balance_score": 0.0,
@@ -461,34 +458,12 @@ def _empty_channel_summary() -> dict[str, int | float]:
         "entity_count": 0,
         "positive_count": 0,
         "negative_count": 0,
+        "mixed_count": 0,
         "evaluative_count": 0,
         "negative_share": 0.0,
         "negative_balance_score": 0.0,
         "absent_count": 0,
     }
-
-
-_POSITIVE_COUNT_SQL = "count(*) FILTER (WHERE classification.stance = 'позитивне')"
-_NEGATIVE_COUNT_SQL = "count(*) FILTER (WHERE classification.stance = 'негативне')"
-
-
-def _aggregate_metrics_sql() -> str:
-    positive = _POSITIVE_COUNT_SQL
-    negative = _NEGATIVE_COUNT_SQL
-    total = f"({positive} + {negative})"
-    share = f"CASE WHEN {total} = 0 THEN 0::double precision ELSE {negative}::double precision / {total} END"
-    score = (
-        f"CASE WHEN {total} = 0 THEN 0::double precision ELSE (({share}) - 3.8416 / (2 * {total}) "
-        f"- 1.96 * sqrt((({share}) * (1 - ({share})) + 3.8416 / (4 * {total})) / {total})) "
-        f"/ (1 + 3.8416 / {total}) END"
-    )
-    return (
-        f"{positive} AS positive_count, {negative} AS negative_count, {total} AS evaluative_count, "
-        f"{share} AS negative_share, {score} AS negative_balance_score"
-    )
-
-
-_AGGREGATE_METRICS_SQL = _aggregate_metrics_sql()
 
 
 def _base(start_arg: str, end_arg: str) -> str:
@@ -515,61 +490,135 @@ WHERE post.deleted_at IS NULL AND post.inaccessible_at IS NULL
 """
 
 
-_DASHBOARD_SUMMARY_SQL = (
-    """SELECT count(DISTINCT post.id) AS post_count,
-    count(DISTINCT claim.id) AS claim_count, count(DISTINCT entity.id) AS entity_count,
-    count(DISTINCT channel.id) AS channel_count,
+_DISTRIBUTION_SELECT = """SELECT labels.key, COALESCE(counts.count, 0)::bigint AS count,
+       CASE WHEN sum(COALESCE(counts.count, 0)) OVER () = 0 THEN 0::double precision
+            ELSE COALESCE(counts.count, 0)::double precision
+                 / sum(COALESCE(counts.count, 0)) OVER () END AS share
+FROM labels LEFT JOIN counts ON counts.key = labels.key ORDER BY labels.ordinal"""
+
+# A post evaluates a registry entity by the majority of its evaluative claims about it: more
+# negative than positive claims is «негативне», more positive is «позитивне», an equal non-zero
+# number is «змішане», and no evaluative claim at all is «відсутнє». Claims stay the evidence;
+# every analytical count is a count of these post x entity evaluations.
+PAIR_STANCE_SQL = """CASE WHEN negative_claims > positive_claims THEN 'негативне'
+            WHEN positive_claims > negative_claims THEN 'позитивне'
+            WHEN negative_claims > 0 THEN 'змішане' ELSE 'відсутнє' END"""
+_DAY_KEY = "(judged.published_at AT TIME ZONE '" + _REPORT_TIMEZONE + "')::date"
+
+
+def _pairs(base: str, stance_arg: str | None = None) -> str:
+    """Return a CTE of the classifications of ``base``, each carrying its post x entity evaluation.
+
+    One pass with window counts, so no self-join: ``judged`` keeps every classification row with
+    the majority ``stance`` of its post and registry entity and ``first`` marking one row per
+    pair. Pairs whose evaluation differs from ``stance_arg`` (when given) are dropped.
     """
-    + _AGGREGATE_METRICS_SQL
-    + """,
-    count(*) FILTER (WHERE classification.stance = 'відсутнє') AS absent_count,
-    count(DISTINCT post.id) FILTER (WHERE post.published_at >= date_trunc('day', now()))
-        AS today_post_count,
-    count(DISTINCT claim.id) FILTER (WHERE post.published_at >= date_trunc('day', now()))
-        AS today_claim_count
+    keep = (
+        "" if stance_arg is None else f" WHERE {stance_arg}::text IS NULL OR stance = {stance_arg}"
+    )
+    return f"""WITH counted AS (
+    SELECT post.id AS post_id, post.published_at, channel.id AS channel_id, entity.id AS entity_id,
+        claim.id AS claim_id, classification.rhetoric,
+        count(*) FILTER (WHERE classification.stance = 'негативне') OVER pair AS negative_claims,
+        count(*) FILTER (WHERE classification.stance = 'позитивне') OVER pair AS positive_claims,
+        row_number() OVER pair = 1 AS first
+{base}
+    WINDOW pair AS (PARTITION BY post.id, entity.id)
+), judged AS (
+    SELECT * FROM (SELECT counted.*, {PAIR_STANCE_SQL} AS stance FROM counted) AS rows{keep}
+)"""
+
+
+def _pair_metrics_sql() -> str:
+    def pairs(condition: str) -> str:
+        return f"count(*) FILTER (WHERE judged.first AND {condition})"
+
+    mixed = pairs("judged.stance = 'змішане'")
+    absent = pairs("judged.stance = 'відсутнє'")
+    positive = pairs("judged.stance = 'позитивне'")
+    negative = pairs("judged.stance = 'негативне'")
+    total = pairs("judged.stance <> 'відсутнє'")
+    share = f"CASE WHEN {total} = 0 THEN 0::double precision ELSE {negative}::double precision / {total} END"
+    score = (
+        f"CASE WHEN {total} = 0 THEN 0::double precision ELSE (({share}) - 3.8416 / (2 * {total}) "
+        f"- 1.96 * sqrt((({share}) * (1 - ({share})) + 3.8416 / (4 * {total})) / {total})) "
+        f"/ (1 + 3.8416 / {total}) END"
+    )
+    return (
+        f"{positive} AS positive_count, {negative} AS negative_count, "
+        f"{mixed} AS mixed_count, "
+        f"{total} AS evaluative_count, {share} AS negative_share, {score} AS negative_balance_score, "
+        f"{absent} AS absent_count, "
+        "count(DISTINCT judged.post_id) AS post_count, count(DISTINCT judged.claim_id) AS claim_count"
+    )
+
+
+_PAIR_METRICS_SQL = _pair_metrics_sql()
+
+
+def _aggregate(cte: str, key: str | None = None, name: str = "key", extra: str = "") -> str:
+    """Aggregate the judged rows of ``cte``, per ``key`` (an expression over ``judged``) if given."""
+    if key is None:
+        return f"{cte}\nSELECT {_PAIR_METRICS_SQL}{extra} FROM judged"
+    return f"{cte}\nSELECT {key} AS {name}, {_PAIR_METRICS_SQL}{extra} FROM judged GROUP BY 1"
+
+
+def _pair_rhetoric(cte: str) -> str:
+    """Count negative (or mixed) post x entity evaluations that use each rhetoric label."""
+    return (
+        cte
+        + """, labels(key, ordinal) AS (
+    VALUES ('корупція_або_особиста_вигода', 1), ('злочинна_або_незаконна_поведінка', 2),
+           ('делегітимізація', 3), ('лицемірство_або_подвійні_стандарти', 4),
+           ('висміювання_або_особиста_образа', 5), ('зовнішній_контроль_або_нелояльність', 6)
+), counts AS (
+    SELECT feature.key, count(DISTINCT (judged.post_id, judged.entity_id)) AS count
+    FROM judged CROSS JOIN LATERAL jsonb_array_elements_text(judged.rhetoric) AS feature(key)
+    WHERE judged.stance IN ('негативне', 'змішане')
+    GROUP BY feature.key
+)
 """
-    + _base("$1", "$2")
+        + _DISTRIBUTION_SELECT
+    )
+
+
+_DASHBOARD_PAIRS = _pairs(_base("$1", "$2"))
+
+_DASHBOARD_SUMMARY_SQL = _aggregate(
+    _DASHBOARD_PAIRS,
+    extra=""",
+    count(DISTINCT judged.entity_id) AS entity_count, count(DISTINCT judged.channel_id) AS channel_count,
+    count(DISTINCT judged.post_id) FILTER (WHERE judged.published_at >= date_trunc('day', now()))
+        AS today_post_count,
+    count(DISTINCT judged.claim_id) FILTER (WHERE judged.published_at >= date_trunc('day', now()))
+        AS today_claim_count""",
 )
 
-_DAILY_SQL = (
-    """SELECT (post.published_at AT TIME ZONE '"""
-    + _REPORT_TIMEZONE
-    + """')::date AS date,
-    count(DISTINCT post.id) AS post_count, count(DISTINCT claim.id) AS claim_count,
-    """
-    + _AGGREGATE_METRICS_SQL
-    + """,
-    count(*) FILTER (WHERE classification.stance = 'відсутнє') AS absent_count
-"""
-    + _base("$1", "$2")
-    + "GROUP BY 1 ORDER BY 1"
-)
+_DAILY_SQL = _aggregate(_DASHBOARD_PAIRS, _DAY_KEY, "date") + " ORDER BY 1"
 
 _ENTITY_SUMMARY_SQL = (
-    """SELECT entity.id, entity.canonical_name,
-    count(DISTINCT claim.id) AS claim_count, count(DISTINCT post.id) AS post_count,
-    """
-    + _AGGREGATE_METRICS_SQL
-    + """,
-    count(*) FILTER (WHERE classification.stance = 'відсутнє') AS absent_count
-"""
-    + _base("$1", "$2")
-    + "GROUP BY entity.id, entity.canonical_name ORDER BY negative_count DESC, entity.canonical_name"
+    "SELECT entity.id, entity.canonical_name, aggregate.* FROM ("
+    + _aggregate(_DASHBOARD_PAIRS, "judged.entity_id", "entity_id")
+    + ") AS aggregate JOIN registry_entities AS entity ON entity.id = aggregate.entity_id"
+    + " ORDER BY aggregate.negative_count DESC, entity.canonical_name"
 )
 
-_CHANNEL_SUMMARY_SQL = (
-    """SELECT channel.id, channel.title, channel.username, channel.avatar_url,
-    channel.status, max(post.published_at) AS last_published_at,
-    count(DISTINCT entity.id) AS entity_count, count(DISTINCT claim.id) AS claim_count,
-    count(DISTINCT post.id) AS post_count,
-    """
-    + _AGGREGATE_METRICS_SQL
-    + """,
-    count(*) FILTER (WHERE classification.stance = 'відсутнє') AS absent_count
-"""
-    + _base("$1", "$2")
-    + "GROUP BY channel.id, channel.title, channel.username, channel.avatar_url, channel.status ORDER BY {order}"
-)
+_CHANNEL_AGGREGATE_EXTRA = """,
+    max(judged.published_at) AS last_published_at, count(DISTINCT judged.entity_id) AS entity_count"""
+
+
+def _channel_rows(cte: str) -> str:
+    """Join per-channel pair aggregates to the channel columns ranking rows show."""
+    return (
+        "SELECT channel.id, channel.title, channel.username, channel.avatar_url, channel.status, "
+        "aggregate.* FROM ("
+        + _aggregate(cte, "judged.channel_id", "channel_id", _CHANNEL_AGGREGATE_EXTRA)
+        + ") AS aggregate JOIN monitored_channels AS channel ON channel.id = aggregate.channel_id"
+        + " ORDER BY {order}"
+    )
+
+
+_CHANNEL_SUMMARY_SQL = _channel_rows(_DASHBOARD_PAIRS)
 _CHANNEL_PAGE_SQL = _CHANNEL_SUMMARY_SQL + " LIMIT $3 OFFSET $4"
 _CHANNEL_COUNT_SQL = "SELECT count(DISTINCT channel.id) " + _base("$1", "$2")
 
@@ -588,28 +637,7 @@ WHERE post.deleted_at IS NULL AND post.inaccessible_at IS NULL
   AND ($1::timestamptz IS NULL OR post.published_at >= $1)
   AND ($2::timestamptz IS NULL OR post.published_at < $2)"""
 
-_DASHBOARD_RHETORIC_SQL = """WITH labels(key, ordinal) AS (
-    VALUES ('корупція_або_особиста_вигода', 1), ('злочинна_або_незаконна_поведінка', 2),
-           ('делегітимізація', 3), ('лицемірство_або_подвійні_стандарти', 4),
-           ('висміювання_або_особиста_образа', 5), ('зовнішній_контроль_або_нелояльність', 6)
-), counts AS (
-    SELECT feature.key, count(*) AS count FROM claim_target_classifications AS classification
-    JOIN claims AS claim ON claim.id = classification.claim_id
-    JOIN analysis_runs AS run ON run.id = claim.run_id AND run.status IN ('completed', 'completed_with_partial_classification', 'completed_with_entity_fallback')
-    JOIN post_revisions AS revision ON revision.id = run.post_revision_id
-    JOIN raw_posts AS post ON post.id = revision.raw_post_id
-    CROSS JOIN LATERAL jsonb_array_elements_text(classification.rhetoric) AS feature(key)
-    WHERE post.deleted_at IS NULL AND post.inaccessible_at IS NULL
-      AND revision.id = (SELECT latest.id FROM post_revisions AS latest WHERE latest.raw_post_id = post.id ORDER BY latest.revision_number DESC LIMIT 1)
-      AND ($1::timestamptz IS NULL OR post.published_at >= $1)
-      AND ($2::timestamptz IS NULL OR post.published_at < $2)
-    GROUP BY feature.key
-)
-SELECT labels.key, COALESCE(counts.count, 0)::bigint AS count,
-       CASE WHEN sum(COALESCE(counts.count, 0)) OVER () = 0 THEN 0::double precision
-            ELSE COALESCE(counts.count, 0)::double precision / sum(COALESCE(counts.count, 0)) OVER () END AS share
-FROM labels LEFT JOIN counts ON counts.key = labels.key ORDER BY labels.ordinal
-"""
+_DASHBOARD_RHETORIC_SQL = _pair_rhetoric(_DASHBOARD_PAIRS)
 
 _DASHBOARD_SOURCE_ACTORS_SQL = (
     """SELECT source_registry.id, source_registry.canonical_name,
@@ -639,10 +667,11 @@ GROUP BY last_error_kind ORDER BY count DESC, error_kind"""
 _ENTITY_SQL = """SELECT entity.id, entity.canonical_name, entity.coarse_type, entity.monitored
 FROM registry_entities AS entity WHERE entity.id = $1"""
 
-_ENTITY_FILTERS = """ AND entity.id = $1
+_ENTITY_SCOPE = """ AND entity.id = $1
   AND classification.stance IN ('позитивне', 'негативне')
   AND ($2::bigint IS NULL OR channel.id = $2)
-  AND ($3::text IS NULL OR classification.stance = $3)
+"""
+_ENTITY_CLAIM_FILTERS = """
   AND ($4::text IS NULL OR classification.rhetoric ? $4)
   AND ($5::text IS NULL OR claim.epistemic_status = $5)
   AND ($6::text IS NULL OR claim.source_kind = $6)
@@ -651,78 +680,29 @@ _ENTITY_FILTERS = """ AND entity.id = $1
        OR ($8 = 'channel_position' AND claim.source_kind = 'channel_editorial')
        OR ($8 = 'quoted_sources' AND claim.source_kind IN ('named_entity', 'external_unnamed')))"""
 
-_ENTITY_BASE = _base("$9", "$10") + _ENTITY_FILTERS
-
-_ENTITY_CHANNEL_SQL = (
-    """SELECT channel.id, channel.title, channel.username, channel.avatar_url,
-    channel.status, max(post.published_at) AS last_published_at,
-    count(DISTINCT entity.id) AS entity_count,
-    count(DISTINCT claim.id) AS claim_count,
-    count(DISTINCT post.id) AS post_count,
-    """
-    + _AGGREGATE_METRICS_SQL
-    + """,
-    0 AS absent_count
-"""
-    + _ENTITY_BASE
-    + """ GROUP BY channel.id, channel.title, channel.username, channel.avatar_url, channel.status
-ORDER BY {order}"""
+# Claim listings filter each claim by stance; aggregates filter the collapsed post evaluation.
+_ENTITY_BASE = (
+    _base("$9", "$10")
+    + _ENTITY_SCOPE
+    + "  AND ($3::text IS NULL OR classification.stance = $3)"
+    + _ENTITY_CLAIM_FILTERS
 )
+_ENTITY_PAIRS = _pairs(_base("$9", "$10") + _ENTITY_SCOPE + _ENTITY_CLAIM_FILTERS, "$3")
+
+_ENTITY_CHANNEL_SQL = _channel_rows(_ENTITY_PAIRS)
 _ENTITY_CHANNEL_PAGE_SQL = _ENTITY_CHANNEL_SQL + " LIMIT $11 OFFSET $12"
-_ENTITY_CHANNEL_COUNT_SQL = "SELECT count(DISTINCT channel.id) " + _ENTITY_BASE
+_ENTITY_CHANNEL_COUNT_SQL = _ENTITY_PAIRS + " SELECT count(DISTINCT judged.channel_id) FROM judged"
 _ENTITY_CHANNEL_OPTIONS_SQL = (
-    "SELECT DISTINCT channel.id, channel.title " + _ENTITY_BASE + " ORDER BY channel.title"
+    _ENTITY_PAIRS
+    + " SELECT DISTINCT channel.id, channel.title FROM judged"
+    + " JOIN monitored_channels AS channel ON channel.id = judged.channel_id ORDER BY channel.title"
 )
 
-_ENTITY_DAILY_SQL = (
-    """SELECT (post.published_at AT TIME ZONE '"""
-    + _REPORT_TIMEZONE
-    + """')::date AS date,
-    count(DISTINCT post.id) AS post_count, count(DISTINCT claim.id) AS claim_count,
-    """
-    + _AGGREGATE_METRICS_SQL
-    + """,
-    0 AS absent_count
-"""
-    + _ENTITY_BASE
-    + " GROUP BY 1 ORDER BY 1"
-)
+_ENTITY_DAILY_SQL = _aggregate(_ENTITY_PAIRS, _DAY_KEY, "date") + " ORDER BY 1"
 
-_ENTITY_TOTAL_SQL = (
-    """SELECT count(DISTINCT claim.id) AS mention_count,
-    """
-    + _AGGREGATE_METRICS_SQL
-    + """
-"""
-    + _ENTITY_BASE
-)
+_ENTITY_TOTAL_SQL = _aggregate(_ENTITY_PAIRS)
 
-_DISTRIBUTION_SELECT = """SELECT labels.key, COALESCE(counts.count, 0)::bigint AS count,
-       CASE WHEN sum(COALESCE(counts.count, 0)) OVER () = 0 THEN 0::double precision
-            ELSE COALESCE(counts.count, 0)::double precision
-                 / sum(COALESCE(counts.count, 0)) OVER () END AS share
-FROM labels LEFT JOIN counts ON counts.key = labels.key ORDER BY labels.ordinal"""
-
-_ENTITY_RHETORIC_SQL = (
-    """WITH labels(key, ordinal) AS (
-    VALUES
-        ('корупція_або_особиста_вигода', 1),
-        ('злочинна_або_незаконна_поведінка', 2),
-        ('делегітимізація', 3),
-        ('лицемірство_або_подвійні_стандарти', 4),
-        ('висміювання_або_особиста_образа', 5),
-        ('зовнішній_контроль_або_нелояльність', 6)
-), counts AS (
-    SELECT feature.key, count(*) AS count
-    FROM (SELECT classification.rhetoric """
-    + _ENTITY_BASE
-    + """) AS filtered
-    CROSS JOIN LATERAL jsonb_array_elements_text(filtered.rhetoric) AS feature(key)
-    GROUP BY feature.key
-)
-"""
-    + _DISTRIBUTION_SELECT
-)
+_ENTITY_RHETORIC_SQL = _pair_rhetoric(_ENTITY_PAIRS)
 
 _ENTITY_EPISTEMIC_SQL = (
     """WITH labels(key, ordinal) AS (
@@ -769,76 +749,26 @@ LEFT JOIN raw_posts AS post ON post.channel_id = channel.id
 WHERE channel.id = $1
 GROUP BY channel.id, channel.title, channel.username, channel.avatar_url, channel.status"""
 
-_CHANNEL_TOTAL_SQL = (
-    """SELECT count(DISTINCT post.id) AS post_count,
-    count(DISTINCT claim.id) AS claim_count, count(DISTINCT entity.id) AS entity_count,
-    """
-    + _AGGREGATE_METRICS_SQL
-    + """,
-    count(*) FILTER (WHERE classification.stance = 'відсутнє') AS absent_count
-"""
-    + _base("$2", "$3")
-    + " AND channel.id = $1"
+_CHANNEL_PAIRS = _pairs(_base("$2", "$3") + " AND channel.id = $1")
+
+_CHANNEL_TOTAL_SQL = _aggregate(
+    _CHANNEL_PAIRS, extra=", count(DISTINCT judged.entity_id) AS entity_count"
 )
 
-_CHANNEL_DAILY_SQL = (
-    """SELECT (post.published_at AT TIME ZONE '"""
-    + _REPORT_TIMEZONE
-    + """')::date AS date,
-    count(DISTINCT post.id) AS post_count, count(DISTINCT claim.id) AS claim_count,
-    """
-    + _AGGREGATE_METRICS_SQL
-    + """,
-    count(*) FILTER (WHERE classification.stance = 'відсутнє') AS absent_count
-"""
-    + _base("$2", "$3")
-    + " AND channel.id = $1 GROUP BY 1 ORDER BY 1"
-)
+_CHANNEL_DAILY_SQL = _aggregate(_CHANNEL_PAIRS, _DAY_KEY, "date") + " ORDER BY 1"
 
 _CHANNEL_ENTITY_SQL = (
-    """SELECT entity.id, entity.canonical_name,
-    count(DISTINCT claim.id) AS claim_count, count(DISTINCT post.id) AS post_count,
-    """
-    + _AGGREGATE_METRICS_SQL
-    + """,
-    count(*) FILTER (WHERE classification.stance = 'відсутнє') AS absent_count
-"""
-    + _base("$2", "$3")
-    + """ AND channel.id = $1 GROUP BY entity.id, entity.canonical_name
-ORDER BY {order}"""
+    "SELECT entity.id, entity.canonical_name, aggregate.* FROM ("
+    + _aggregate(_CHANNEL_PAIRS, "judged.entity_id", "entity_id")
+    + ") AS aggregate JOIN registry_entities AS entity ON entity.id = aggregate.entity_id"
+    + " ORDER BY {order}"
 )
 _CHANNEL_ENTITY_PAGE_SQL = _CHANNEL_ENTITY_SQL + " LIMIT $4 OFFSET $5"
 _CHANNEL_ENTITY_COUNT_SQL = (
     "SELECT count(DISTINCT entity.id) " + _base("$2", "$3") + " AND channel.id = $1"
 )
 
-_CHANNEL_RHETORIC_SQL = (
-    """WITH labels(key, ordinal) AS (
-    VALUES
-        ('корупція_або_особиста_вигода', 1),
-        ('злочинна_або_незаконна_поведінка', 2),
-        ('делегітимізація', 3),
-        ('лицемірство_або_подвійні_стандарти', 4),
-        ('висміювання_або_особиста_образа', 5),
-        ('зовнішній_контроль_або_нелояльність', 6)
-), counts AS (
-    SELECT feature.key, count(*) AS count
-    FROM claim_target_classifications AS classification
-    JOIN claims AS claim ON claim.id = classification.claim_id
-    JOIN analysis_runs AS run ON run.id = claim.run_id AND run.status IN ('completed', 'completed_with_partial_classification', 'completed_with_entity_fallback')
-    JOIN post_revisions AS revision ON revision.id = run.post_revision_id
-    JOIN raw_posts AS post ON post.id = revision.raw_post_id
-    CROSS JOIN LATERAL jsonb_array_elements_text(classification.rhetoric) AS feature(key)
-    WHERE post.channel_id = $1 AND post.deleted_at IS NULL AND post.inaccessible_at IS NULL
-      AND revision.id = (SELECT latest.id FROM post_revisions AS latest
-          WHERE latest.raw_post_id = post.id ORDER BY latest.revision_number DESC LIMIT 1)
-      AND ($2::timestamptz IS NULL OR post.published_at >= $2)
-      AND ($3::timestamptz IS NULL OR post.published_at < $3)
-    GROUP BY feature.key
-)
-"""
-    + _DISTRIBUTION_SELECT
-)
+_CHANNEL_RHETORIC_SQL = _pair_rhetoric(_CHANNEL_PAIRS)
 
 _CHANNEL_EPISTEMIC_SQL = (
     """WITH labels(key, ordinal) AS (

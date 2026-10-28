@@ -17,10 +17,15 @@ from telegram_monitor_api.analytics import (
     _CHANNEL_SQL,
     _CHANNEL_TOTAL_SQL,
     _CLAIMS_COUNT_SQL,
+    _DAILY_SQL,
+    _DASHBOARD_RHETORIC_SQL,
+    _DASHBOARD_SUMMARY_SQL,
     _ENTITY_CHANNEL_PAGE_SQL,
+    _ENTITY_TOTAL_SQL,
     _EVIDENCE_SQL,
     _SOURCE_ACTOR_COUNT_SQL,
     _SOURCE_ACTOR_PAGE_SQL,
+    PAIR_STANCE_SQL,
     AnalyticsRepository,
     EntityAnalyticsFilters,
     _fill_daily,
@@ -287,6 +292,7 @@ def test_fill_daily_inserts_zero_days_between_sparse_rows() -> None:
         "claim_count": 0,
         "positive_count": 0,
         "negative_count": 0,
+        "mixed_count": 0,
         **negative_balance_metrics(0, 0),
         "absent_count": 0,
     }
@@ -320,3 +326,15 @@ def test_fill_daily_uses_kyiv_report_days(start: datetime, expected_first: date)
 
     assert days[0]["date"] == expected_first
     assert days[-1]["date"] == date(2026, 9, 3)
+
+
+def test_aggregates_count_post_entity_evaluations_not_claims() -> None:
+    """Every aggregate collapses claims into one majority evaluation per post and entity."""
+    for query in (_DASHBOARD_SUMMARY_SQL, _DAILY_SQL, _CHANNEL_TOTAL_SQL, _ENTITY_TOTAL_SQL):
+        assert "WINDOW pair AS (PARTITION BY post.id, entity.id)" in query
+        assert "count(*) FILTER (WHERE judged.first AND judged.stance = 'негативне')" in query
+    assert "WHEN negative_claims > 0 THEN 'змішане'" in PAIR_STANCE_SQL
+    # The entity stance filter keeps whole posts in aggregates but single claims as evidence.
+    assert "$3::text IS NULL OR stance = $3" in _ENTITY_TOTAL_SQL
+    assert "classification.stance = $3" in _EVIDENCE_SQL
+    assert "count(DISTINCT (judged.post_id, judged.entity_id))" in _DASHBOARD_RHETORIC_SQL

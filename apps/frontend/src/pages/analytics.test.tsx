@@ -91,14 +91,14 @@ describe("editorial analytics pages", () => {
     });
     vi.mocked(apiClient.claims).mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 });
     renderRoute("/?period=all", "/", <DashboardPage />);
-    expect(await screen.findByText("Хто і як стає мішенню негативних тверджень")).toBeInTheDocument();
+    expect(await screen.findByText("Хто і як стає мішенню негативних дописів")).toBeInTheDocument();
     expect((await screen.findAllByText("7")).length).toBeGreaterThan(0);
     expect(screen.queryByText("Черга AI-воркера")).not.toBeInTheDocument();
     expect(screen.getByText("Відкрити пошук тверджень →")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Твердження" })).toHaveAttribute("href", "/claims?period=all");
     expect(screen.getByRole("link", { name: "Сутності" })).toHaveAttribute("href", "/entities?period=all");
     expect(screen.getAllByRole("link", { name: /Віталій Шабунін/ })[0]).toHaveAttribute("href", "/entities/4?period=all");
-    expect(document.title).toBe("Хто і як стає мішенню негативних тверджень — Кривда");
+    expect(document.title).toBe("Хто і як стає мішенню негативних дописів — Кривда");
   });
 
   test("switches dashboard rankings and shows evaluative sample sizes", async () => {
@@ -115,9 +115,9 @@ describe("editorial analytics pages", () => {
     vi.mocked(apiClient.claims).mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 });
     renderRoute("/", "/", <DashboardPage />);
     expect((await screen.findAllByText("Великий обсяг")).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("вибірка 50").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("50 дописів з оцінкою").length).toBeGreaterThan(0);
     expect(screen.getByText(/3 без оцінки/)).toBeInTheDocument();
-    expect(screen.getByText("Найбільше негативу — Великий обсяг: 30 негативних класифікацій")).toBeInTheDocument();
+    expect(screen.getByText("Найбільше негативу — Великий обсяг: 30 негативних дописів")).toBeInTheDocument();
     await userEvent.click(screen.getAllByRole("button", { name: "За негативним балансом" })[0]);
     const ranking = screen.getByText("Рейтинг сутностей").closest("section") as HTMLElement;
     const entityLinks = within(ranking).getAllByRole("link", { name: /Великий обсяг|Стабільний негатив/ });
@@ -187,7 +187,7 @@ describe("editorial analytics pages", () => {
     vi.mocked(toPng).mockResolvedValueOnce("data:image/png;base64,AA").mockRejectedValueOnce(new Error("canvas"));
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
     renderRoute("/?period=all", "/", <DashboardPage />);
-    const title = "Негативні класифікації за днями";
+    const title = "Негативні дописи за днями";
     expect(await screen.findByText(title)).toBeInTheDocument();
     const [save] = screen.getAllByRole("button", { name: "Зберегти зображення" });
     await userEvent.click(save);
@@ -225,7 +225,7 @@ describe("editorial analytics pages", () => {
     vi.mocked(apiClient.dashboard).mockRejectedValueOnce(new Error("down")).mockResolvedValueOnce(dashboardData([]));
     renderRoute("/?period=all", "/", <DashboardPage />);
     await userEvent.click(await screen.findByRole("button", { name: "Спробувати ще раз" }));
-    expect(await screen.findByText("Негативні класифікації за днями")).toBeInTheDocument();
+    expect(await screen.findByText("Негативні дописи за днями")).toBeInTheDocument();
   });
 
   test("maps the entities one channel evaluated and links to their channel-filtered profiles", async () => {
@@ -255,7 +255,7 @@ describe("editorial analytics pages", () => {
     vi.mocked(apiClient.dashboard).mockImplementation((range) => Promise.resolve(range.start?.startsWith("2026-08") ? earlier : current));
     renderRoute("/?start=2026-09-01T00:00:00.000Z&end=2026-09-11T00:00:00.000Z", "/", <DashboardPage />);
     expect(await screen.findByText("+10")).toBeInTheDocument();
-    expect(screen.getByText("2 → 12 негативних класифікацій")).toBeInTheDocument();
+    expect(screen.getByText("2 → 12 негативних дописів")).toBeInTheDocument();
     expect(screen.queryByText("+1")).not.toBeInTheDocument();
     expect(screen.getAllByText("до попереднього періоду").length).toBeGreaterThan(0);
     expect(screen.getByText("(було 14)")).toBeInTheDocument();
@@ -270,7 +270,7 @@ describe("editorial analytics pages", () => {
     vi.mocked(apiClient.dashboard).mockResolvedValue(data);
     renderRoute("/?period=all", "/", <DashboardPage />);
     expect(await screen.findByText("Порівняння недоступне для періоду «Увесь час».")).toBeInTheDocument();
-    expect(screen.getByText(/Пік атак — 11 вер\.: 40 негативних класифікацій/)).toBeInTheDocument();
+    expect(screen.getByText(/Пік атак — 11 вер\.: 40 негативних дописів/)).toBeInTheDocument();
     const weeks = screen.getByRole("button", { name: "Тижні" });
     expect(weeks).toHaveAttribute("aria-pressed", "false");
     await userEvent.click(weeks);

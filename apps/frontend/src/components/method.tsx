@@ -35,7 +35,7 @@ const STAGES: Stage[] = [
   { key: "targets", label: "Цілі", title: "Кого оцінюють", pass: "targets", text: "Для кожного твердження модель визначає, кого саме джерело оцінює. Мовець, який лише переказує новину, і нейтральне тло (місце служби, адресат) ціллю не стають.", input: "Твердження та його джерело", output: "Оцінювані актори кожного твердження" },
   { key: "classification", label: "Оцінка", title: "Ставлення джерела", pass: "classification", text: "Для кожної пари «твердження — ціль» модель визначає ставлення джерела твердження: негативне, позитивне чи без оцінки, а для негативу ще до двох риторичних прийомів.", input: "Пари «твердження — ціль»", output: "Оцінка й риторика кожної пари", funnel: "evaluative" },
   { key: "affiliations", label: "Зв'язки", title: "Критика людей — критика організацій", pass: "affiliations", text: "Для людей з негативною оцінкою модель перевіряє, чи допис називає їх очільниками, членами чи працівниками (зокрема колишніми) організацій реєстру. Тоді негативна оцінка тих самих тверджень переноситься й на організацію. Зв'язок має бути названий у дописі, знання моделі не враховуються.", input: "Негативно оцінені люди та організації реєстру", output: "Організації кожної людини", funnel: "negative" },
-  { key: "aggregate", label: "Агрегати", title: "Від оцінок до аналітики", text: "Оцінки складаються в щоденні ряди, рейтинги сутностей і каналів та добірки тверджень. Кожне число в інтерфейсі веде до тверджень і дописів, з яких його пораховано.", input: "Оцінки всіх дописів", output: "Огляд, профілі, пошук тверджень" },
+  { key: "aggregate", label: "Агрегати", title: "Від оцінок до аналітики", text: "Твердження про кожну сутність згортаються в одну оцінку допису: більше негативних — негативний допис, більше позитивних — позитивний, порівну — змішаний. Усі числа в інтерфейсі рахують саме дописи, а твердження лишаються доказами: кожне число веде до них і до самих дописів.", input: "Оцінки тверджень кожного допису", output: "Огляд, профілі, пошук тверджень" },
 ];
 
 const FUNNEL_STEPS: Array<{ key: FunnelKey; label: string; hint: string }> = [
@@ -44,7 +44,7 @@ const FUNNEL_STEPS: Array<{ key: FunnelKey; label: string; hint: string }> = [
   { key: "matched", label: "Збіг підтверджено", hint: "модель підтвердила хоча б одну сутність" },
   { key: "with_claims", label: "Є твердження", hint: "модель знайшла твердження про сутність" },
   { key: "evaluative", label: "Є оцінка", hint: "джерело оцінює моніторингову сутність" },
-  { key: "negative", label: "Є негативна оцінка", hint: "хоча б одна негативна оцінка" },
+  { key: "negative", label: "Є негативна оцінка", hint: "допис негативний хоча б щодо однієї сутності" },
 ];
 
 const PASS_LABELS: Record<PassName, string> = { candidates: "Кандидати", entities: "Сутності", claims: "Твердження", targets: "Цілі", classification: "Оцінка", affiliations: "Зв'язки" };
@@ -60,7 +60,7 @@ const stanceTone = (stance: string): string => stance === "негативне" ?
 
 function StanceBadge({ stance }: { stance: string }) {
   const dot = stance === "негативне" ? "bg-negative" : stance === "позитивне" ? "bg-positive" : "bg-neutral";
-  return <span className={`inline-flex items-center gap-1.5 text-sm font-semibold ${stanceTone(stance)}`}><i aria-hidden="true" className={`size-2 rounded-full ${dot}`} />{glossary.stance[stance as Stance]?.label ?? stance}</span>;
+  return <span className={`inline-flex items-center gap-1.5 text-sm font-semibold ${stanceTone(stance)}`}><i aria-hidden="true" className={`size-2 rounded-full ${dot}`} />{glossary.stance[stance as Stance]?.label ?? (stance === "змішане" ? "Змішане" : stance)}</span>;
 }
 
 /** Lazily rendered disclosure: model output and prompts carry Latin field names, so they mount only when opened. */
@@ -302,10 +302,13 @@ function WorkedExample() {
   const index = STEP_ORDER.indexOf(step);
   const result = monitored.map((entity) => {
     const rows = example.final.classifications.filter((item) => item.entity_id === entity.id);
-    const stance = rows.some((item) => item.stance === "негативне") ? "негативне" : rows.some((item) => item.stance === "позитивне") ? "позитивне" : "відсутнє";
+    const negative = rows.filter((item) => item.stance === "негативне").length;
+    const positive = rows.filter((item) => item.stance === "позитивне").length;
+    // The interface evaluates a post by the majority of its claims about the entity.
+    const stance = negative > positive ? "негативне" : positive > negative ? "позитивне" : negative ? "змішане" : "відсутнє";
     const gold = (example.gold as Record<string, string[]>)[entity.canonical_name ?? ""] ?? [];
     const agrees = stance === "відсутнє" ? !gold.some((value) => EVALUATIVE.includes(value)) : gold.includes(stance);
-    return { entity, stance, evaluations: rows.filter((item) => item.stance === stance).length, agrees };
+    return { entity, stance, negative, positive, agrees };
   });
   return <Graphic section="Приклад" title={example.title} dek={`Справжній допис з еталонного набору, розмітку якого перевірено вручну. Нижче — що повернула модель на кожному етапі версії ${pipelineVersion(example.pipeline_version)}.`} exportable={false}>
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-8">
@@ -314,7 +317,7 @@ function WorkedExample() {
         <div>
           <h3 className="text-sm font-semibold">Результат, який бачить аналітик</h3>
           <ul className="mt-2">{result.map((row) => <li key={row.entity.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-rule py-3 last:border-0">
-            <span className="min-w-0"><strong className="block font-semibold">{row.entity.canonical_name}</strong><span className="text-xs text-muted-foreground">{row.stance === "відсутнє" ? "згадано, але не оцінено" : `${formatNumber(row.evaluations)} ${pluralUk(row.evaluations, "оцінка", "оцінки", "оцінок")}`}</span></span>
+            <span className="min-w-0"><strong className="block font-semibold">{row.entity.canonical_name}</strong><span className="text-xs text-muted-foreground">{row.stance === "відсутнє" ? "згадано, але не оцінено" : `негативних тверджень ${formatNumber(row.negative)}, позитивних ${formatNumber(row.positive)}`}</span></span>
             <span className="flex items-center gap-3"><StanceBadge stance={row.stance} /><span className={`inline-flex items-center gap-1 text-xs font-semibold ${row.agrees ? "" : "text-negative"}`}>{row.agrees ? <Check className="size-3.5" aria-hidden="true" /> : null}{row.agrees ? "як в еталоні" : "розходиться з еталоном"}</span></span>
           </li>)}</ul>
         </div>
@@ -488,7 +491,7 @@ function LossStages() {
 
 function DatasetTile() {
   const { dataset } = quality;
-  return <Graphic className="lg:col-span-12" section="Еталонний набір" title={`Як ми міряємо: ${formatNumber(dataset.posts)} дописів з ручною розміткою`} dek="Одиниця вимірювання — пара «допис × сутність реєстру»: чи є в дописі негативна (позитивна) оцінка цієї сутності. Саме так рахує й аналітика в інтерфейсі." exportable={false}>
+  return <Graphic className="lg:col-span-12" section="Еталонний набір" title={`Як ми міряємо: ${formatNumber(dataset.posts)} дописів з ручною розміткою`} dek="Одиниця вимірювання — пара «допис × сутність реєстру»: чи негативний (позитивний) допис щодо цієї сутності. Оцінку системи взято за більшістю тверджень — так само, як її рахує інтерфейс." exportable={false}>
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:gap-10">
       <dl className="grid gap-4 sm:grid-cols-2">
         {(["dev", "test"] as const).map((part) => <div key={part} className="rounded-[22px] bg-foreground/[0.035] p-4">
@@ -520,7 +523,7 @@ const CONVENTIONS: Array<{ stance: Stance; text: string; examples: string[] }> =
 const PRINCIPLES: Array<{ title: string; text: string }> = [
   { title: "Важить, хто говорить", text: "Оцінка належить джерелу твердження. Якщо канал переказує чужу атаку, це оцінка названої особи чи неназваного джерела, а не позиція каналу; фільтр «Позиція каналу» показує лише власні оцінки каналу." },
   { title: "Критика очільника — критика організації", text: "Коли допис сам називає людину очільником, членом чи працівником організації реєстру, негативна оцінка людини переноситься на організацію. Позитив не переноситься." },
-  { title: "Одна атака — це ще не кампанія", text: "Система оцінює окремі твердження. Інформаційна атака — висновок про багато тверджень у багатьох каналах за період, його робить аналітик, а не модель." },
+  { title: "Рахуємо дописи, а не речення", text: "Допис оцінює сутність за більшістю тверджень про неї; порівну — змішаний допис. Довгий допис з багатьма реченнями важить у рейтингах стільки ж, скільки короткий. Інформаційну атаку — висновок про багато дописів у багатьох каналах — робить аналітик, а не модель." },
 ];
 
 function Conventions() {
@@ -555,7 +558,7 @@ function RegistryTile() {
 }
 
 const LIMITATIONS: string[] = [
-  `Приблизно кожна третя негативна оцінка може бути хибною, а кожна п'ята справжня — пропущеною. Окремий висновок завжди перевіряйте за цитатою-доказом і дописом.`,
+  `Приблизно ${Math.round((1 - current.negative.precision) * 10)} з 10 негативних дописів можуть бути хибними, а ${Math.round((1 - current.negative.recall) * 10)} з 10 справжніх — пропущеними. Окремий висновок завжди перевіряйте за цитатою-доказом і дописом.`,
   "Позитив система визначає гірше, ніж негатив: вона обережна й частину позитивних подань вважає нейтральними.",
   "Найважче моделі даються сарказм без явних маркерів, натяки, розраховані на контекст, і довгі дописи з багатьма акторами.",
   "Аналізується лише текст допису: зображення, відео та вміст посилань система не бачить.",

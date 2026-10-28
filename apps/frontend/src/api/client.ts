@@ -36,6 +36,7 @@ export interface Entity {
   negative_classification_count?: number;
   positive_count: number;
   negative_count: number;
+  mixed_count?: number;
   evaluative_count?: number;
   negative_share?: number;
   negative_balance_score?: number;
@@ -54,6 +55,8 @@ export interface Summary {
   post_count: number;
   positive_count: number;
   negative_count: number;
+  /** Posts with as many negative as positive claims about the entity. */
+  mixed_count?: number;
   evaluative_count?: number;
   negative_share?: number;
   negative_balance_score?: number;
@@ -68,6 +71,7 @@ export interface Daily {
   claim_count: number;
   positive_count: number;
   negative_count: number;
+  mixed_count?: number;
   absent_count: number;
 }
 export interface Evidence {
@@ -170,7 +174,7 @@ export interface SourceActorOption {
 }
 export interface EntityProfile {
   entity: Entity;
-  summary: { mention_count: number; evaluative_claim_count?: number; positive_count: number; negative_count: number };
+  summary: { mention_count: number; evaluative_claim_count?: number; claim_count?: number; evaluative_count?: number; mixed_count?: number; positive_count: number; negative_count: number };
   channels: Page<Summary>;
   channel_options: Array<Pick<Summary, "id" | "title">>;
   source_entity: Pick<Entity, "id" | "canonical_name"> | null;

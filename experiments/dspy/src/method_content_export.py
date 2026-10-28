@@ -9,7 +9,8 @@ writes two small JSON files under ``apps/frontend/src/content``:
   the pipeline agrees with the reviewed annotations.
 
 Every version is scored against the current gold (conventions, supplement and affiliations), so
-older runs are comparable with the latest one.
+older runs are comparable with the latest one. Predictions are collapsed per post and entity by
+the majority of their claims, exactly as the interface counts them.
 
 Example:
     uv run python experiments/dspy/src/method_content_export.py
@@ -153,7 +154,10 @@ def compare(
     shared = set.intersection(*(set(rows) for rows in loaded))
     results: list[dict[str, Any]] = [{"version": version} for version, _ in runs]
     for key, stance in STANCE_KEYS.items():
-        counts = [report.counts({name: rows[name] for name in shared}, stance) for rows in loaded]
+        counts = [
+            report.counts({name: rows[name] for name in shared}, stance, majority=True)
+            for rows in loaded
+        ]
         draws = bootstrap(counts, samples=SAMPLES)
         for index, result in enumerate(results):
             result[key] = scores(counts[index], [draw[index] for draw in draws])
@@ -169,7 +173,8 @@ def difference(
     result: dict[str, dict[str, Any]] = {}
     for key, stance in STANCE_KEYS.items():
         counts = [
-            report.counts({name: rows[name] for name in shared}, stance) for rows in (first, second)
+            report.counts({name: rows[name] for name in shared}, stance, majority=True)
+            for rows in (first, second)
         ]
         draws = bootstrap(counts, samples=SAMPLES)
         low, high = interval([draw[1] - draw[0] for draw in draws])
@@ -213,7 +218,7 @@ def quality(report: StanceReport) -> dict[str, Any]:
     stages = {
         key: {
             STAGE_KEYS[stage]: count
-            for stage, count in sorted(report.stages(latest, stance).items())
+            for stage, count in sorted(report.stages(latest, stance, majority=True).items())
         }
         for key, stance in STANCE_KEYS.items()
     }

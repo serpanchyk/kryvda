@@ -219,7 +219,15 @@ always-open list, movers and the rhetoric distribution. Edge refraction (an SVG 
 in `backdrop-filter`) renders on Chromium for pills and the dark and accent tiles; other engines
 keep the frosted blur. Motion and refraction stop under `prefers-reduced-motion`, and glass turns
 solid under `prefers-reduced-transparency`.
-The overview leads with negative classifications, temporal activity, attacked-entity rankings,
+Every analytical count is a count of post evaluations: the claims of one post about one registry
+entity are collapsed by majority (more negative than positive claims is a negative post, more
+positive a positive one, an equal non-zero number «змішане», none «без оцінки»), in one window pass
+over the filtered classifications, so a long post weighs no more than a short one. Claim filters
+(attribution, source, epistemic status, rhetoric) select claims before the collapse; the Entity
+stance filter selects whole posts in aggregates and single claims in the evidence feed. Mixed posts
+enter the evaluative denominator but neither the negative nor the positive count. Rhetoric
+distributions count negative or mixed posts that use each label. The overview leads with negative
+posts, temporal activity, attacked-entity rankings,
 channel comparisons, and auditable claims. Entity profiles add stance-over-time, epistemic-status,
 and attribution distributions. Their URL-backed global filters distinguish publication channel from
 claim attribution: a single `Джерело твердження` control offers all claims, channel position, or quoted
@@ -235,9 +243,9 @@ attribution for every extracted claim.
 
 Analytical lists use server-side offset pagination (25 records by default). Entity and channel
 rankings distinguish absolute negative volume from negative evaluative balance: the latter ranks the
-Wilson lower bound (z = 1.96) of negative classifications among positive and negative evaluations.
+Wilson lower bound (z = 1.96) of negative posts among all evaluated (negative, positive, mixed) posts.
 Rows show positive and negative shares, their evaluative sample size, and separately report the
-technical `відсутнє` classification, which never enters that denominator. Full analytical lists offer
+posts that mention the entity without evaluating it, which never enter that denominator. Full analytical lists offer
 negative volume, negative balance, positive volume, and total evaluative-volume ordering; the
 dashboard exposes volume and balance as separate quick views. Registry aliases remain search-only
 internal data and are never included in analytical responses. The shared 7, 30, and
@@ -298,10 +306,10 @@ against the equally long previous period (fetched as a second request; unavailab
 час»). Daily charts render bars, never interpolated areas, with a day/week toggle (weeks by default
 beyond 120 days), spikes highlighted when a bin exceeds the period mean + 2σ and at least 5, and a
 dashed mean line; clicking a bar narrows the page to that day or week. Stance-over-time stacks
-negative and positive classifications with a trailing 7-day negative-share line (hidden below 5
+negative and positive posts with a trailing 7-day negative-share line (hidden below 5
 evaluations). A target map plots entities by evaluative volume (log scale) against negative share,
 split at the median volume and 50% into four named quadrants, and «Кого атакували більше, ніж
-раніше» lists the largest growth in negative classifications against the previous period. Entity
+раніше» lists the largest growth in negative posts against the previous period. Entity
 and channel rankings are diverging bars: negative extends left and positive right from one shared
 axis and scale, with the evaluative sample size per row. Negative is red (`--negative`) and positive
 is blue (`--positive: #2d5d9f`) for colour-vision-deficiency safety.
@@ -332,7 +340,7 @@ services remain unchanged.
 work belongs in `tasks/backlog/`; operational records belong in `problems/backlog/`.
 ## Claims Explorer and analytical completeness
 
-`/claims` is the primary investigation workspace for URL-backed claim filtering. Analytical aggregates include valid persisted records from `completed_with_partial_classification` and `completed_with_entity_fallback` runs; the Dashboard exposes completeness counts so degraded and unfinished coverage is visible. Operational AI queue details live on `/system`, not the main Dashboard. Entity-facing evaluative-claim totals are labelled as claims/classifications rather than mentions.
+`/claims` is the primary investigation workspace for URL-backed claim filtering. Analytical aggregates include valid persisted records from `completed_with_partial_classification` and `completed_with_entity_fallback` runs; the Dashboard exposes completeness counts so degraded and unfinished coverage is visible. Operational AI queue details live on `/system`, not the main Dashboard. Entity-facing totals count posts with an evaluation («Дописи з оцінкою»); claim counts remain as evidence volume.
 
 ## Kubernetes deployment
 

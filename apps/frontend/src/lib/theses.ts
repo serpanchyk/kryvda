@@ -9,7 +9,7 @@ import { formatDate, formatNumber, formatPercent, pluralUk } from "@/lib/editori
 export const MIN_SAMPLE = 10;
 export const MIN_COUNT = 5;
 
-const negatives = (count: number) => `${formatNumber(count)} ${pluralUk(count, "негативна класифікація", "негативні класифікації", "негативних класифікацій")}`;
+const negatives = (count: number) => `${formatNumber(count)} ${pluralUk(count, "негативний допис", "негативні дописи", "негативних дописів")}`;
 const claims = (count: number) => `${formatNumber(count)} ${pluralUk(count, "твердження", "твердження", "тверджень")}`;
 
 function top<T>(items: T[], value: (item: T) => number): T | undefined {
@@ -22,7 +22,7 @@ function when(day: Daily, weekly: boolean): string {
 
 export function attackPeakThesis(series: Daily[], weekly: boolean): string {
   const peak = top(series, (day) => day.negative_count);
-  if (!peak || peak.negative_count < MIN_COUNT) return "Негативні класифікації за днями";
+  if (!peak || peak.negative_count < MIN_COUNT) return "Негативні дописи за днями";
   return `Пік атак — ${when(peak, weekly)}: ${negatives(peak.negative_count)}`;
 }
 

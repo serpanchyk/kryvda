@@ -30,11 +30,14 @@ self-explanatory outside the app.
 
 ## Positioning
 
-The unit of analysis is an attributed, atomic claim about a specific registry entity, not a post
-and not a keyword hit. Stance is attribution-aware: a channel reporting someone else's attack, an
-adverse event, or a poll is not counted as the channel's own negative stance. An Information
-Attack is only ever an aggregate finding across channels and time, never a label on one post.
-Every number in the interface traces back to auditable claims and source posts.
+The unit of analysis is a post's evaluation of a specific registry entity, not a sentence and not
+a keyword hit. The model classifies attributed, atomic claims; the interface collapses the claims
+of one post about one entity by their majority (a tie is «змішане») and counts posts, so a long
+post weighs no more than a short one. Claims remain the evidence behind every number. Stance is
+attribution-aware: a channel reporting someone else's attack, an adverse event, or a poll is not
+counted as the channel's own negative stance. An Information Attack is only ever an aggregate
+finding across channels and time, never a label on one post. Every number in the interface traces
+back to auditable claims and source posts.
 
 ## Operating Context
 

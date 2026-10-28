@@ -96,6 +96,16 @@ _MONITORED_STANCE = """EXISTS (
         JOIN post_entities AS entity ON entity.id = target.post_entity_id
         WHERE claim.run_id = run.id AND entity.monitored AND target.stance {condition})"""
 
+# A post is negative about an entity when most of its evaluative claims about it are negative.
+_NEGATIVE_POST = """EXISTS (
+        SELECT 1 FROM claims AS claim
+        JOIN claim_target_classifications AS target ON target.claim_id = claim.id
+        JOIN post_entities AS entity ON entity.id = target.post_entity_id
+        WHERE claim.run_id = run.id AND entity.monitored
+        GROUP BY entity.registry_entity_id
+        HAVING count(*) FILTER (WHERE target.stance = 'негативне')
+             > count(*) FILTER (WHERE target.stance = 'позитивне'))"""
+
 # Over the whole history: each analysed post revision once, however often it was re-analysed.
 FUNNEL_SQL = f"""SELECT count(DISTINCT run.post_revision_id) AS analysed,
     count(DISTINCT run.post_revision_id) FILTER (WHERE run.status <> 'filtered_out') AS matched,
@@ -106,7 +116,7 @@ FUNNEL_SQL = f"""SELECT count(DISTINCT run.post_revision_id) AS analysed,
         WHERE {_MONITORED_STANCE.format(condition="<> 'відсутнє'")}
     ) AS evaluative,
     count(DISTINCT run.post_revision_id) FILTER (
-        WHERE {_MONITORED_STANCE.format(condition="= 'негативне'")}
+        WHERE {_NEGATIVE_POST}
     ) AS negative
 FROM analysis_runs AS run
 WHERE run.status IN ({_SUCCESS_STATUSES}, 'filtered_out')"""
