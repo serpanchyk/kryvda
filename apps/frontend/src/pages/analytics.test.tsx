@@ -19,7 +19,7 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 vi.mock("@/api/client", async () => {
   const actual = await vi.importActual<typeof import("@/api/client")>("@/api/client");
-  return { ...actual, apiClient: { ...actual.apiClient, dashboard: vi.fn(), claims: vi.fn(), entity: vi.fn(), evidence: vi.fn(), sourceActors: vi.fn(), entities: vi.fn(), post: vi.fn(), claimChannels: vi.fn(), claimSourceActors: vi.fn(), analysisHealth: vi.fn(), collectionHealth: vi.fn(), systemActivity: vi.fn(), channel: vi.fn() } };
+  return { ...actual, apiClient: { ...actual.apiClient, dashboard: vi.fn(), claims: vi.fn(), entity: vi.fn(), evidence: vi.fn(), sourceActors: vi.fn(), entities: vi.fn(), post: vi.fn(), claimChannels: vi.fn(), claimSourceActors: vi.fn(), analysisHealth: vi.fn(), collectionHealth: vi.fn(), systemActivity: vi.fn(), systemFunnel: vi.fn(), channel: vi.fn() } };
 });
 
 afterEach(() => cleanup());
@@ -316,12 +316,13 @@ describe("editorial analytics pages", () => {
     vi.mocked(apiClient.systemActivity).mockResolvedValue({
       days: [], hours: [], passes: [], models: [], channels: [],
       totals: { runs: 0, avg_run_seconds: null, median_run_seconds: null, claims: 0 },
-      funnel: { collected: 900, analysed: 400, matched: 380, with_claims: 300, evaluative: 200, negative: 120 },
     });
+    vi.mocked(apiClient.systemFunnel).mockResolvedValue({ collected: 900, analysed: 400, matched: 380, with_claims: 300, evaluative: 200, negative: 120 });
     renderRoute("/system?view=method", "/system", <SystemPage />);
     expect(await screen.findByRole("heading", { name: "Як працює аналіз" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Як працює" })).toHaveAttribute("aria-pressed", "true");
-    expect(await screen.findByText("Оцінку отримує 50% дописів, які пройшли префільтр")).toBeInTheDocument();
+    expect(await screen.findByText("З 900 зібраних дописів оцінку сутностей реєстру отримали 200")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Період динаміки", hidden: true }).closest("[aria-hidden]")).toHaveAttribute("aria-hidden", "true");
 
     await userEvent.click(screen.getByRole("button", { name: "Зв'язки" }));
     expect(screen.getByRole("heading", { name: "Критика людей — критика організацій" })).toBeInTheDocument();

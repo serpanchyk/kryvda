@@ -87,10 +87,10 @@ pipeline and claim analytics; registry mutations remain outside the UI.
   failed, median/p95 duration and median completion tokens per inference pass), `models` (runs
   per model and pipeline version, most runs first), `channels` (collected posts per monitored
   channel per day) and `totals` (finished runs, mean `completed_at - created_at`, the median of
-  that duration over plain `completed` runs, claims of runs finished in the window) and `funnel`
-  (posts collected in the window, then distinct post revisions whose analysis finished in it:
-  analysed, past the candidate check, with claims, with an evaluation of a monitored entity, with
-  a negative one). A
+  that duration over plain `completed` runs, claims of runs finished in the window).
+  `GET /system/funnel` counts the whole history: collected posts, then distinct analysed post
+  revisions, those past the candidate check, with claims, with an evaluation of a monitored
+  entity, and with a negative one. A
   `superseded` run counts as completed work; any non-first attempt (`repair`, `retry`,
   `batch_retry`, `individual_retry`) counts as a repair. A run row is reused across job retries,
   so its duration includes retry waits and the mean is outlier-sensitive; read the median for
@@ -280,7 +280,7 @@ share, median and 95th-percentile latency, completion tokens), the last 48 hours
 collection pulses with freshness, retry reasons, and model/pipeline usage. It reads
 `/analysis/health`, `/channels/collection-health` and `/system/activity`. Its «Як працює» tab
 (`/system?view=method`, loaded on demand) explains the methodology: an interactive pipeline
-diagram with live funnel counts, a worked dev example traced pass by pass, the measure-only test
+diagram with all-time funnel counts, a worked dev example traced pass by pass, the measure-only test
 comparison of v3.6 and v4.9 with bootstrap intervals, the dev history of every version, where
 reviewed evaluations get lost, the stance conventions, registry aliases, limitations and every
 pass prompt and response schema word for word. Its static content lives in

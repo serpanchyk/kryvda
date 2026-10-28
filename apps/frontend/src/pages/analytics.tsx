@@ -288,9 +288,10 @@ export function SystemPage() {
     <PageHeader title={method ? "Як працює аналіз" : "Система аналізу"} period={false} dateline={[method ? "методологія, промпти та якість" : "поточний стан і динаміка роботи"]} dek={method ? "Етапи конвеєра, промпти моделі, якість на еталонному наборі й обмеження." : "Черга, пропускна здатність, якість відповідей моделі та збір каналів."} aside={<div className="flex flex-wrap items-center gap-3 lg:justify-end">
       {views}
       <span role="status" className={`glass inline-flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold ${attention ? "text-[var(--negative-strong)]" : ""}`}><span aria-hidden="true" className={`size-2.5 rounded-full ${attention ? "bg-[#f5a524] shadow-[0_0_0_4px_rgb(245_165_36/0.18)]" : "bg-[var(--switch-on)] shadow-[0_0_0_4px_rgb(52_199_89/0.18)]"}`} />{attention ? "Потрібна увага" : "Працює"}</span>
-      <Segmented label="Період динаміки" value={String(windowDays) as (typeof ACTIVITY_WINDOWS)[number]} onChange={setWindow} options={ACTIVITY_WINDOWS.map((value) => ({ value, label: `${value} днів` }))} className="glass" />
+      {/* The methodology tab is not windowed; the period keeps its place so the header stays still. */}
+      <span aria-hidden={method} className={`transition-opacity duration-300 ${method ? "invisible opacity-0" : "opacity-100"}`}><Segmented label="Період динаміки" value={String(windowDays) as (typeof ACTIVITY_WINDOWS)[number]} onChange={setWindow} options={ACTIVITY_WINDOWS.map((value) => ({ value, label: `${value} днів` }))} className="glass" /></span>
     </div>} />
-    {method ? <Suspense fallback={<LoadState />}><MethodView activity={activity.data} windowDays={windowDays} /></Suspense> : <>
+    {method ? <Suspense fallback={<LoadState />}><MethodView /></Suspense> : <>
     <QueryBoundary loading={query.isLoading} error={query.isError} onRetry={() => void query.refetch()}>
       {jobs && <>
         {jobs.failed || isStale(lastRun, 1) ? <div className="glass rounded-[22px] px-5 py-3.5 text-sm" role="status">

@@ -22,7 +22,7 @@ export interface PassHealth { pass_name: PassName; attempts: number; repairs: nu
 export interface ModelUsage { model_name: string; pipeline_version: string; runs: number; last_used_at: string | null; }
 export interface ChannelActivity { id: number; title: string | null; days: Array<{ date: string; posts: number }>; }
 export interface AnalysisFunnel { collected: number; analysed: number; matched: number; with_claims: number; evaluative: number; negative: number; }
-export interface SystemActivity { days: ActivityDay[]; funnel?: AnalysisFunnel; hours: ActivityHour[]; passes: PassHealth[]; models: ModelUsage[]; channels: ChannelActivity[]; totals: { runs: number; avg_run_seconds: number | null; median_run_seconds?: number | null; claims: number }; }
+export interface SystemActivity { days: ActivityDay[]; hours: ActivityHour[]; passes: PassHealth[]; models: ModelUsage[]; channels: ChannelActivity[]; totals: { runs: number; avg_run_seconds: number | null; median_run_seconds?: number | null; claims: number }; }
 export interface Entity {
   id: number;
   canonical_name: string;
@@ -274,4 +274,5 @@ export const apiClient = {
   post: (id: string): Promise<PostDetail> => get(`/posts/${id}`),
   collectionHealth: (): Promise<ChannelHealth[]> => get("/channels/collection-health"),
   systemActivity: (days: number): Promise<SystemActivity> => get(`/system/activity?days=${days}`),
+  systemFunnel: (): Promise<AnalysisFunnel> => get("/system/funnel"),
 };

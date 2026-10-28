@@ -96,7 +96,7 @@ _MONITORED_STANCE = """EXISTS (
         JOIN post_entities AS entity ON entity.id = target.post_entity_id
         WHERE claim.run_id = run.id AND entity.monitored AND target.stance {condition})"""
 
-# Each analysed post revision once, however many times it was re-analysed in the window.
+# Over the whole history: each analysed post revision once, however often it was re-analysed.
 FUNNEL_SQL = f"""SELECT count(DISTINCT run.post_revision_id) AS analysed,
     count(DISTINCT run.post_revision_id) FILTER (WHERE run.status <> 'filtered_out') AS matched,
     count(DISTINCT run.post_revision_id) FILTER (
@@ -109,7 +109,9 @@ FUNNEL_SQL = f"""SELECT count(DISTINCT run.post_revision_id) AS analysed,
         WHERE {_MONITORED_STANCE.format(condition="= 'негативне'")}
     ) AS negative
 FROM analysis_runs AS run
-WHERE run.completed_at >= $1 AND run.status IN ({_SUCCESS_STATUSES}, 'filtered_out')"""
+WHERE run.status IN ({_SUCCESS_STATUSES}, 'filtered_out')"""
+
+COLLECTED_TOTAL_SQL = "SELECT count(*) FROM raw_posts"
 
 _RUN_DAY_KEYS = ("completed", "partial", "fallback", "failed", "filtered_out")
 _FUNNEL_KEYS = ("analysed", "matched", "with_claims", "evaluative", "negative")
@@ -262,12 +264,10 @@ def shape_totals(run_row: Mapping[str, Any] | None, claims: object) -> dict[str,
     }
 
 
-def shape_funnel(
-    row: Mapping[str, Any] | None, days: Sequence[Mapping[str, Any]]
-) -> dict[str, int]:
+def shape_funnel(row: Mapping[str, Any] | None, collected: object) -> dict[str, int]:
     """Return how many posts reached each analysis stage, after the collected-post total."""
     return {
-        "collected": sum(int(day["collected_posts"]) for day in days),
+        "collected": int(collected) if isinstance(collected, int) else 0,
         **{key: _count(row, key) for key in _FUNNEL_KEYS},
     }
 
@@ -287,7 +287,7 @@ class SystemRepository:
 
         Returns:
             Zero-filled daily, hourly and per-channel series with pass, model and total
-            aggregates for the window, and how many posts reached each analysis stage.
+            aggregates for the window.
         """
         moment = now or utc_now()
         calendar = report_days(moment, days)
@@ -302,14 +302,17 @@ class SystemRepository:
         channel_post_rows = await self._pool.fetch(CHANNEL_POSTS_DAILY_SQL, start)
         totals = await self._pool.fetchrow(RUN_TOTALS_SQL, start)
         claims = await self._pool.fetchval(CLAIM_TOTAL_SQL, start)
-        funnel = await self._pool.fetchrow(FUNNEL_SQL, start)
-        shaped_days = shape_days(calendar, post_rows, run_rows)
         return {
-            "days": shaped_days,
-            "funnel": shape_funnel(funnel, shaped_days),
+            "days": shape_days(calendar, post_rows, run_rows),
             "hours": shape_hours(hours, hour_rows),
             "passes": shape_passes(pass_rows),
             "models": shape_models(model_rows),
             "channels": shape_channels(calendar, channel_rows, channel_post_rows),
             "totals": shape_totals(totals, claims),
         }
+
+    async def funnel(self) -> dict[str, int]:
+        """Return how many posts reached each analysis stage over the whole history."""
+        row = await self._pool.fetchrow(FUNNEL_SQL)
+        collected = await self._pool.fetchval(COLLECTED_TOTAL_SQL)
+        return shape_funnel(row, collected)

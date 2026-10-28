@@ -103,6 +103,8 @@ class SystemPool:
 
     async def fetchval(self, query: str, *args: object) -> int:
         self.calls.append((query, args))
+        if query == system.COLLECTED_TOTAL_SQL:
+            return 0 if self.empty else 900
         assert "FROM claims" in query
         return 0 if self.empty else 321
 
@@ -238,11 +240,32 @@ def test_shape_models_and_totals_handle_nulls() -> None:
     }
 
 
-def test_shape_funnel_sums_collected_posts_and_zero_fills() -> None:
-    days = [{"collected_posts": 3}, {"collected_posts": 4}]
+def test_shape_funnel_zero_fills_missing_counts() -> None:
+    assert shape_funnel(None, None) == {"collected": 0, **dict.fromkeys(FUNNEL, 0)}
+    assert shape_funnel({**dict.fromkeys(FUNNEL, 1), "negative": None}, 7) == {
+        "collected": 7,
+        **dict.fromkeys(FUNNEL, 1),
+        "negative": 0,
+    }
 
-    assert shape_funnel(None, days) == {"collected": 7, **dict.fromkeys(FUNNEL, 0)}
-    assert shape_funnel({**dict.fromkeys(FUNNEL, 1), "negative": None}, [])["negative"] == 0
+
+@pytest.mark.parametrize("empty", [False, True])
+async def test_system_funnel_covers_the_whole_history(
+    monkeypatch: pytest.MonkeyPatch, empty: bool
+) -> None:
+    pool = SystemPool(empty=empty)
+
+    async def fake_pool(_: str, **__: object) -> SystemPool:
+        return pool
+
+    monkeypatch.setattr(main.asyncpg, "create_pool", fake_pool)
+    transport = ASGITransport(app=create_app())
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/system/funnel")
+    assert response.status_code == 200
+    expected = (0, 0, 0, 0, 0, 0) if empty else (900, 40, 30, 25, 12, 9)
+    assert response.json() == dict(zip(("collected", *FUNNEL), expected, strict=True))
+    assert all(not args for query, args in pool.calls)
 
 
 async def test_repository_queries_from_kyiv_midnight() -> None:
@@ -266,15 +289,7 @@ async def test_system_activity_endpoint(monkeypatch: pytest.MonkeyPatch) -> None
         response = await client.get("/system/activity", params={"days": 2})
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"days", "funnel", "hours", "passes", "models", "channels", "totals"}
-    assert body["funnel"] == {
-        "collected": 12,
-        "analysed": 40,
-        "matched": 30,
-        "with_claims": 25,
-        "evaluative": 12,
-        "negative": 9,
-    }
+    assert set(body) == {"days", "hours", "passes", "models", "channels", "totals"}
     assert body["days"] == [
         {
             "date": "2026-10-24",
@@ -354,7 +369,6 @@ async def test_system_activity_defaults_to_30_days_with_empty_data(
     assert all(row["completed"] == 0 for row in body["hours"])
     assert [row["pass_name"] for row in body["passes"]] == ["entities", "claims", "classification"]
     assert body["models"] == []
-    assert body["funnel"] == {"collected": 0, **dict.fromkeys(FUNNEL, 0)}
     assert all(len(channel["days"]) == 30 for channel in body["channels"])
     assert body["totals"] == {
         "runs": 0,

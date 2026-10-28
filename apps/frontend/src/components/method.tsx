@@ -1,9 +1,10 @@
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Check, Copy } from "lucide-react";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 
-import type { AnalysisFunnel, PassName, SystemActivity } from "@/api/client";
+import { apiClient, type AnalysisFunnel, type PassName } from "@/api/client";
 import { Graphic, TermLabel } from "@/components/editorial";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import example from "@/content/method-example.json";
@@ -38,6 +39,7 @@ const STAGES: Stage[] = [
 ];
 
 const FUNNEL_STEPS: Array<{ key: FunnelKey; label: string; hint: string }> = [
+  { key: "collected", label: "Зібрано дописів", hint: "усі дописи каналів пулу" },
   { key: "analysed", label: "Пройшли префільтр", hint: "у тексті є назва чи аліас з реєстру" },
   { key: "matched", label: "Збіг підтверджено", hint: "модель підтвердила хоча б одну сутність" },
   { key: "with_claims", label: "Є твердження", hint: "модель знайшла твердження про сутність" },
@@ -133,7 +135,7 @@ function Crossfade<T>({ items, active, id, render, className = "" }: { items: T[
 }
 
 /** The dark lead tile: the post's path through the system, one stage open at a time. */
-function PipelineDiagram({ funnel, windowDays }: { funnel?: AnalysisFunnel; windowDays: number }) {
+function PipelineDiagram({ funnel }: { funnel?: AnalysisFunnel }) {
   const [selected, setSelected] = useState("claims");
   const { root, thumb } = useGlide(selected);
   const node = (item: Stage) => {
@@ -157,7 +159,7 @@ function PipelineDiagram({ funnel, windowDays }: { funnel?: AnalysisFunnel; wind
       <dl className="grid content-start gap-4 text-sm">
         <div><dt className="text-muted-foreground">Отримує</dt><dd className="mt-0.5 font-semibold">{stage.input}</dd></div>
         <div><dt className="text-muted-foreground">Повертає</dt><dd className="mt-0.5 font-semibold">{stage.output}</dd></div>
-        {count !== undefined ? <div><dt className="text-muted-foreground">За {windowDays} {pluralUk(windowDays, "день", "дні", "днів")}</dt><dd className="mt-0.5 font-heading text-[34px] font-bold leading-none tracking-[-0.04em] tabular-nums">{formatNumber(count)}</dd><dd className="mt-1 text-xs text-muted-foreground">{stage.funnel === "collected" ? "зібрано дописів" : FUNNEL_STEPS.find((step) => step.key === stage.funnel)?.label.toLocaleLowerCase("uk-UA")}</dd></div> : null}
+        {count !== undefined ? <div><dt className="text-muted-foreground">За весь час</dt><dd className="mt-0.5 font-heading text-[34px] font-bold leading-none tracking-[-0.04em] tabular-nums">{formatNumber(count)}</dd><dd className="mt-1 text-xs text-muted-foreground">{FUNNEL_STEPS.find((step) => step.key === stage.funnel)?.label.toLocaleLowerCase("uk-UA")}</dd></div> : null}
       </dl>
     </div>;
   };
@@ -177,14 +179,13 @@ function PipelineDiagram({ funnel, windowDays }: { funnel?: AnalysisFunnel; wind
   </Graphic>;
 }
 
-/** Live counts of posts reaching each stage; the last bar is red because it counts negatives. */
-function Funnel({ funnel, windowDays }: { funnel: AnalysisFunnel; windowDays: number }) {
+/** Live counts of posts reaching each stage over the whole history; the last bar is red because it counts negatives. */
+function Funnel({ funnel }: { funnel: AnalysisFunnel }) {
   const top = Math.max(...FUNNEL_STEPS.map((step) => funnel[step.key]), 1);
-  const share = funnel.analysed ? funnel.evaluative / funnel.analysed : 0;
-  const title = funnel.analysed
-    ? `Оцінку отримує ${formatPercent(share)} дописів, які пройшли префільтр`
-    : "За цей період аналізів ще не було";
-  return <Graphic section="Воронка" title={title} dek={`Дописи, аналіз яких завершився за ${windowDays} ${pluralUk(windowDays, "день", "дні", "днів")}, і скільки з них дійшли до кожного етапу. Кожен допис рахується один раз, навіть якщо його аналізували повторно; за той самий час зібрано ${formatNumber(funnel.collected)} нових ${pluralUk(funnel.collected, "допис", "дописи", "дописів")}.`} exportable={false}>
+  const title = funnel.collected
+    ? `З ${formatNumber(funnel.collected)} зібраних дописів оцінку сутностей реєстру отримали ${formatNumber(funnel.evaluative)}`
+    : "Дописів ще не зібрано";
+  return <Graphic section="Воронка" title={title} dek="Усі дописи за весь час роботи системи і скільки з них дійшли до кожного етапу. Кожен допис рахується один раз, навіть якщо його аналізували повторно; дописи, що ще чекають аналізу в черзі, до етапів після збору не входять." exportable={false}>
     <ol className="grid gap-3.5">
       {FUNNEL_STEPS.map((step, index) => {
         const value = funnel[step.key];
@@ -592,10 +593,11 @@ function PromptLibrary() {
 }
 
 /** «Як працює»: the methodology tab of the system page. */
-export function MethodView({ activity, windowDays }: { activity?: SystemActivity; windowDays: number }) {
+export function MethodView() {
+  const funnel = useQuery({ queryKey: ["system-funnel"], queryFn: apiClient.systemFunnel, staleTime: 5 * 60_000 });
   return <>
-    <PipelineDiagram funnel={activity?.funnel} windowDays={windowDays} />
-    {activity?.funnel ? <Funnel funnel={activity.funnel} windowDays={windowDays} /> : null}
+    <PipelineDiagram funnel={funnel.data} />
+    {funnel.data ? <Funnel funnel={funnel.data} /> : null}
     <WorkedExample />
     <div className="grid grid-cols-1 items-stretch gap-4 md:gap-5 lg:grid-cols-12">
       <HeadlineTile />
