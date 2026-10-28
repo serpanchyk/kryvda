@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Check, Copy } from "lucide-react";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
@@ -89,31 +89,66 @@ function CodeBlock({ text, label }: { text: string; label: string }) {
   </div>;
 }
 
+interface GlideBox { x: number; y: number; w: number; h: number; animate: boolean }
+
+/**
+ * A glossy thumb that glides to the selected control inside a positioned root, as the segmented
+ * controls do. Offsets ignore the press-scale transform, and the first placement or a resize snaps.
+ */
+function useGlide(active: string) {
+  const root = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState<GlideBox | null>(null);
+  const measure = useCallback((animate: boolean) => {
+    const base = root.current;
+    const target = base?.querySelector<HTMLElement>('[data-glide="on"]');
+    if (!base || !target) return;
+    let x = 0;
+    let y = 0;
+    for (let node: HTMLElement | null = target; node && node !== base; node = node.offsetParent as HTMLElement | null) {
+      x += node.offsetLeft;
+      y += node.offsetTop;
+    }
+    setBox((previous) => ({ x, y, w: target.offsetWidth, h: target.offsetHeight, animate: animate && previous !== null }));
+  }, []);
+  useLayoutEffect(() => { measure(true); }, [active, measure]);
+  useEffect(() => {
+    const base = root.current;
+    if (!base || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => measure(false));
+    observer.observe(base);
+    return () => observer.disconnect();
+  }, [measure]);
+  const thumb = (className = "") => <span aria-hidden="true" className={`glide-thumb ${className}`} style={box ? { width: box.w, height: box.h, transform: `translate(${box.x}px, ${box.y}px)`, transition: box.animate ? undefined : "none" } : { opacity: 0 }} />;
+  return { root, thumb };
+}
+
+/** Every panel shares one grid cell, so switching cross-fades without changing the block's height. */
+function Crossfade<T>({ items, active, id, render, className = "" }: { items: T[]; active: (item: T) => boolean; id: (item: T) => string; render: (item: T) => ReactNode; className?: string }) {
+  return <div className={`grid ${className}`}>
+    {items.map((item) => {
+      const shown = active(item);
+      return <div key={id(item)} aria-hidden={!shown} className={`min-w-0 [grid-area:1/1] transition-[opacity,visibility,transform] duration-300 ease-out motion-reduce:transform-none ${shown ? "visible opacity-100" : "pointer-events-none invisible translate-y-1 opacity-0"}`}>{render(item)}</div>;
+    })}
+  </div>;
+}
+
 /** The dark lead tile: the post's path through the system, one stage open at a time. */
 function PipelineDiagram({ funnel, windowDays }: { funnel?: AnalysisFunnel; windowDays: number }) {
   const [selected, setSelected] = useState("claims");
-  const stage = STAGES.find((item) => item.key === selected) ?? STAGES[0];
-  const count = stage.funnel && funnel ? funnel[stage.funnel] : undefined;
+  const { root, thumb } = useGlide(selected);
   const node = (item: Stage) => {
     const active = item.key === selected;
-    return <button key={item.key} type="button" aria-pressed={active} aria-controls="pipeline-stage" onClick={() => setSelected(item.key)}
-      className={`hit relative z-[1] flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-full px-3 text-[13px] font-semibold transition-[background-color,color,box-shadow,transform] duration-300 active:scale-[0.97] ${active ? "gloss text-[#0e0f12]" : "bg-white/[0.07] text-foreground/80 shadow-[inset_0_1px_0_rgb(255_255_255/0.12)] hover:bg-white/[0.14] hover:text-foreground"}`}>
+    return <button key={item.key} type="button" aria-pressed={active} aria-controls="pipeline-stage" data-glide={active ? "on" : undefined} onClick={() => setSelected(item.key)}
+      className={`hit relative z-[1] flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-full px-3 text-[13px] font-semibold transition-[background-color,color,box-shadow,transform] duration-300 active:scale-[0.97] ${active ? "bg-transparent text-[#0e0f12] shadow-none" : "bg-white/[0.07] text-foreground/80 shadow-[inset_0_1px_0_rgb(255_255_255/0.12)] hover:bg-white/[0.14] hover:text-foreground"}`}>
       <span className="truncate">{item.label}</span>
     </button>;
   };
   const before = STAGES.filter((item) => !item.pass && item.key !== "aggregate");
   const model = STAGES.filter((item) => item.pass);
   const after = STAGES.filter((item) => item.key === "aggregate");
-  return <Graphic variant="dark" section="Конвеєр аналізу" title="Шлях допису: від Telegram до оцінки сутності" dek="Дев'ять етапів, шість із них виконує мовна модель. Оберіть етап, щоб побачити, що він робить." exportable={false}>
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,6.4fr)_minmax(0,1fr)] lg:items-end lg:gap-2">
-      <div className="grid grid-cols-2 gap-2 lg:flex">{before.map(node)}</div>
-      <div className="rounded-[26px] bg-white/[0.045] p-2 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]">
-        <p className="px-2 pb-2 pt-0.5 text-xs font-medium text-muted-foreground">Мовна модель <span className="text-foreground/90">{example.model}</span> на платформі Lapathoniia</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:flex">{model.map(node)}</div>
-      </div>
-      <div className="grid gap-2 lg:flex">{after.map(node)}</div>
-    </div>
-    <div id="pipeline-stage" aria-live="polite" className="mt-6 grid gap-6 border-t border-rule pt-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-10">
+  const detail = (stage: Stage) => {
+    const count = stage.funnel && funnel ? funnel[stage.funnel] : undefined;
+    return <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-10">
       <div className="min-w-0">
         <h3 className="font-heading text-[26px] font-bold leading-tight tracking-[-0.03em] md:text-[30px]">{stage.title}</h3>
         <p className="mt-3 max-w-[62ch] text-[15px] leading-7 text-foreground/85">{stage.text}</p>
@@ -124,6 +159,20 @@ function PipelineDiagram({ funnel, windowDays }: { funnel?: AnalysisFunnel; wind
         <div><dt className="text-muted-foreground">Повертає</dt><dd className="mt-0.5 font-semibold">{stage.output}</dd></div>
         {count !== undefined ? <div><dt className="text-muted-foreground">За {windowDays} {pluralUk(windowDays, "день", "дні", "днів")}</dt><dd className="mt-0.5 font-heading text-[34px] font-bold leading-none tracking-[-0.04em] tabular-nums">{formatNumber(count)}</dd><dd className="mt-1 text-xs text-muted-foreground">{stage.funnel === "collected" ? "зібрано дописів" : FUNNEL_STEPS.find((step) => step.key === stage.funnel)?.label.toLocaleLowerCase("uk-UA")}</dd></div> : null}
       </dl>
+    </div>;
+  };
+  return <Graphic variant="dark" section="Конвеєр аналізу" title="Шлях допису: від Telegram до оцінки сутності" dek="Дев'ять етапів, шість із них виконує мовна модель. Оберіть етап, щоб побачити, що він робить." exportable={false}>
+    <div ref={root} role="group" aria-label="Етапи конвеєра" className="relative grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,6.4fr)_minmax(0,1fr)] lg:items-end lg:gap-2">
+      {thumb("glide-thumb-dark")}
+      <div className="grid grid-cols-2 gap-2 lg:flex">{before.map(node)}</div>
+      <div className="rounded-[26px] bg-white/[0.045] p-2 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]">
+        <p className="px-2 pb-2 pt-0.5 text-xs font-medium text-muted-foreground">Мовна модель <span className="text-foreground/90">{example.model}</span> на платформі Lapathoniia</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:flex">{model.map(node)}</div>
+      </div>
+      <div className="grid gap-2 lg:flex">{after.map(node)}</div>
+    </div>
+    <div id="pipeline-stage" aria-live="polite" className="mt-6 border-t border-rule pt-6">
+      <Crossfade items={STAGES} id={(stage) => stage.key} active={(stage) => stage.key === selected} render={detail} />
     </div>
   </Graphic>;
 }
@@ -151,6 +200,8 @@ function Funnel({ funnel, windowDays }: { funnel: AnalysisFunnel; windowDays: nu
 }
 
 type ExampleEntity = (typeof example.final.entities)[number];
+type ExampleClaim = (typeof example.final.claims)[number];
+const EVALUATIVE = ["негативне", "позитивне"];
 
 /** The example text with registry matches marked and the evidence of negative claims underlined. */
 function ExampleText() {
@@ -170,8 +221,8 @@ function ExampleText() {
     return <span key={start} className={`${match ? "rounded-[6px] bg-foreground/[0.09] px-[2px] font-semibold" : ""} ${evidence ? "underline decoration-negative decoration-2 underline-offset-[5px]" : ""}`}>{text}</span>;
   });
   return <figure className="rounded-[24px] bg-white/55 p-5 shadow-[inset_0_1px_0_#fff,inset_0_0_0_1px_rgb(14_15_18/0.05)] md:p-6">
-    <figcaption className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span className="font-semibold text-foreground">{example.channel}</span><span>мова допису: російська</span></figcaption>
-    <blockquote lang="ru" className="mt-3 whitespace-pre-line text-[15px] leading-7">{pieces}</blockquote>
+    <figcaption className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span className="font-semibold text-foreground">{example.channel}</span><span>мова допису: {example.language}</span></figcaption>
+    <blockquote lang="uk" className="mt-3 whitespace-pre-line text-[15px] leading-7">{pieces}</blockquote>
     <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-rule pt-3 text-xs text-muted-foreground">
       <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-3 w-5 rounded-[4px] bg-foreground/[0.12]" />збіг з реєстром</span>
       <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-0.5 w-5 rounded-full bg-negative" />доказ негативної оцінки</span>
@@ -179,85 +230,108 @@ function ExampleText() {
   </figure>;
 }
 
-const entityName = (id: string): string => {
-  const entity = example.final.entities.find((item) => item.id === id) as ExampleEntity | undefined;
-  return entity?.canonical_name ?? entity?.mentions[0] ?? id;
-};
+const entityById = (id: string): ExampleEntity | undefined => example.final.entities.find((item) => item.id === id);
+const entityName = (id: string): string => entityById(id)?.canonical_name ?? entityById(id)?.mentions[0] ?? id;
+const claimById = (id: string): ExampleClaim | undefined => example.final.claims.find((item) => item.id === id);
+const monitored = example.final.entities.filter((entity) => entity.monitored);
+const passCalls = (pass: PassName): number => (example.passes as Record<string, unknown[]>)[pass]?.length ?? 0;
+const firstOutput = <K extends PassName>(pass: K) => (example.passes[pass] as unknown[])[0];
+const claimNumber = (id: string): string => id.replace(/^c/, "");
+
+function Panel({ children }: { children: ReactNode }) {
+  return <li className="grid gap-1 rounded-[18px] bg-foreground/[0.035] px-4 py-3">{children}</li>;
+}
 
 function StepBody({ pass }: { pass: PassName }) {
-  const passes = example.passes;
   if (pass === "candidates") {
-    const names = example.registry_matches.map((match) => match.canonical_name);
-    return <ul className="grid gap-3">{Object.values(passes.candidates.candidates).map((item, index) => <li key={index} className="grid gap-1 rounded-[18px] bg-foreground/[0.035] px-4 py-3">
-      <span className="flex flex-wrap items-center justify-between gap-2"><strong className="font-semibold">{names[index]}</strong><span className="inline-flex items-center gap-1 text-xs font-semibold"><Check className="size-3.5" aria-hidden="true" />{item.same_actor ? "та сама сутність" : "випадковий збіг"}</span></span>
-      <span className="text-sm text-muted-foreground">Пояснення моделі: «{item.reason}»</span>
-    </li>)}</ul>;
+    const decisions = Object.values((firstOutput("candidates") as typeof example.passes.candidates[number]).candidates);
+    return <ul className="grid gap-2.5">{decisions.map((item, index) => <Panel key={index}>
+      <span className="flex flex-wrap items-center justify-between gap-2"><strong className="font-semibold">{example.registry_matches[index]?.canonical_name ?? item.reason}</strong><span className="inline-flex items-center gap-1 text-xs font-semibold">{item.same_actor ? <Check className="size-3.5" aria-hidden="true" /> : null}{item.same_actor ? "та сама сутність" : "випадковий збіг"}</span></span>
+      <span className="text-sm text-muted-foreground">Знайдено як «{example.registry_matches[index]?.spans.map((span) => example.text.slice(span.start, span.end)).join("», «")}»</span>
+    </Panel>)}</ul>;
   }
   if (pass === "entities") return <div className="grid gap-3">
-    <p className="text-sm text-muted-foreground">Модель назвала п'ятьох акторів. Двоє з них є в реєстрі, тож саме для них система шукатиме твердження й оцінки.</p>
+    <p className="text-sm leading-6 text-muted-foreground">Модель назвала {formatNumber(example.final.entities.length)} {pluralUk(example.final.entities.length, "актора", "акторів", "акторів")}; {formatNumber(monitored.length)} з них є в реєстрі, тож саме для них система шукатиме твердження й оцінки.</p>
     <ul className="flex flex-wrap gap-2">{example.final.entities.map((entity) => <li key={entity.id} className={`chip !cursor-default ${entity.monitored ? "font-semibold" : "text-muted-foreground"}`}>{entity.mentions.join(" / ")}{entity.monitored ? <span className="text-xs font-medium text-muted-foreground">реєстр</span> : null}</li>)}</ul>
   </div>;
   if (pass === "claims") return <div className="grid gap-3">
-    <p className="text-sm text-muted-foreground">По одному запиту на кожну сутність реєстру — {formatNumber(example.calls.claims)} {pluralUk(example.calls.claims, "виклик", "виклики", "викликів")}. Обидва повернули ті самі два твердження: про Каленюк, без прямого зв'язку з ЦПК.</p>
-    <ol className="grid gap-3">{passes.claims.claims.map((claim, index) => <li key={index} className="grid gap-1.5 rounded-[18px] bg-foreground/[0.035] px-4 py-3">
-      <strong className="text-[15px] font-semibold leading-6">{claim.normalized_text}</strong>
-      <span className="text-xs text-muted-foreground">джерело: {SOURCE_LABELS[claim.attribution.source_kind] ?? claim.attribution.source_kind} · {claim.epistemic_status}</span>
-    </li>)}</ol>
+    <p className="text-sm leading-6 text-muted-foreground">По одному запиту на кожну сутність реєстру — {formatNumber(passCalls("claims"))} {pluralUk(passCalls("claims"), "виклик", "виклики", "викликів")}. Разом вони дали {formatNumber(example.final.claims.length)} {pluralUk(example.final.claims.length, "твердження", "твердження", "тверджень")}.</p>
+    <ol className="grid gap-2">{example.final.claims.map((claim) => <Panel key={claim.id}>
+      <span className="text-[15px] leading-6"><span className="mr-1.5 text-xs font-semibold tabular-nums text-muted-foreground">{claimNumber(claim.id)}</span>{claim.normalized_text}</span>
+      <span className="text-xs text-muted-foreground">джерело: {SOURCE_LABELS[claim.attribution.source_kind] ?? claim.attribution.source_kind}</span>
+    </Panel>)}</ol>
   </div>;
-  if (pass === "targets") return <ol className="grid gap-3">{Object.entries(passes.targets.claims).map(([id, item]) => <li key={id} className="grid gap-1 rounded-[18px] bg-foreground/[0.035] px-4 py-3">
-    <span className="text-sm"><span className="text-muted-foreground">Оцінюють: </span><strong className="font-semibold">{item.evaluated.join(", ")}</strong></span>
+  if (pass === "targets") return <ol className="grid gap-2">{Object.entries((firstOutput("targets") as typeof example.passes.targets[number]).claims).map(([id, item]) => {
+    const named = item.evaluated.filter((name) => monitored.some((entity) => entity.canonical_name === name));
+    return <Panel key={id}>
+      <span className="text-sm"><span className="mr-1.5 text-xs font-semibold tabular-nums text-muted-foreground">{claimNumber(id)}</span><span className="text-muted-foreground">Оцінюють: </span><strong className="font-semibold">{named.length ? named.join(", ") : "нікого з реєстру"}</strong></span>
+      <span className="text-sm text-muted-foreground">«{item.reason}»</span>
+    </Panel>;
+  })}</ol>;
+  if (pass === "classification") {
+    const rows = (firstOutput("classification") as typeof example.passes.classification[number]).classifications;
+    return <div className="grid gap-3">
+      <ul className="grid gap-2">{rows.map((item, index) => <Panel key={index}>
+        <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"><span className="text-sm"><span className="mr-1.5 text-xs font-semibold tabular-nums text-muted-foreground">{claimNumber(item.claim_id)}</span><strong className="font-semibold">{entityName(item.entity_id)}</strong></span><StanceBadge stance={item.stance} /></span>
+        <span className="text-sm text-muted-foreground">{claimById(item.claim_id)?.normalized_text}</span>
+        {item.rhetoric.length ? <span className="mt-1 flex flex-wrap gap-1.5">{item.rhetoric.map((label) => <span key={label} className="chip !cursor-default !py-0.5 text-xs">{glossary.rhetoric[label as keyof typeof glossary.rhetoric]?.label ?? label}</span>)}</span> : null}
+      </Panel>)}</ul>
+      <p className="text-sm leading-6 text-muted-foreground">Пари, де джерело нікого з реєстру не оцінює, модель не класифікує: вони одразу отримують «без оцінки».</p>
+    </div>;
+  }
+  const people = Object.entries((firstOutput("affiliations") as typeof example.passes.affiliations[number]).people);
+  return <ul className="grid gap-2">{people.map(([person, item]) => <Panel key={person}>
+    <span className="text-sm"><strong className="font-semibold">{person}</strong><span className="text-muted-foreground"> належить до </span><strong className="font-semibold">{item.organizations.join(", ") || "жодної організації реєстру"}</strong></span>
     <span className="text-sm text-muted-foreground">Пояснення моделі: «{item.reason}»</span>
-  </li>)}</ol>;
-  if (pass === "classification") return <ul className="grid gap-2">{passes.classification.classifications.map((item, index) => <li key={index} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-[18px] bg-foreground/[0.035] px-4 py-3">
-    <span className="text-sm"><span className="text-muted-foreground">Твердження {index + 1} → </span><strong className="font-semibold">{entityName(item.entity_id)}</strong></span>
-    <span className="flex flex-wrap items-center gap-2"><StanceBadge stance={item.stance} />{item.rhetoric.map((label) => <span key={label} className="chip !cursor-default !py-0.5 text-xs">{glossary.rhetoric[label as keyof typeof glossary.rhetoric]?.label ?? label}</span>)}</span>
-  </li>)}</ul>;
-  return <ul className="grid gap-3">{Object.entries(passes.affiliations.people).map(([person, item]) => <li key={person} className="grid gap-1 rounded-[18px] bg-foreground/[0.035] px-4 py-3">
-    <span className="text-sm"><strong className="font-semibold">{person}</strong><span className="text-muted-foreground"> належить до </span><strong className="font-semibold">{item.organizations.join(", ")}</strong></span>
-    <span className="text-sm text-muted-foreground">Пояснення моделі: «{item.reason}»</span>
-    <span className="mt-1 text-sm">Тож обидві негативні оцінки Каленюк переносяться й на <strong className="font-semibold">{item.organizations.join(", ")}</strong>.</span>
-  </li>)}</ul>;
+    {item.organizations.length ? <span className="mt-1 text-sm leading-6">Тож кожна негативна оцінка {person} переноситься й на <strong className="font-semibold">{item.organizations.join(", ")}</strong> — у тих самих твердженнях.</span> : null}
+  </Panel>)}</ul>;
 }
+
+const STEP_ORDER: PassName[] = ["candidates", "entities", "claims", "targets", "classification", "affiliations"];
 
 /** The worked example: one verified post, pass by pass, ending in the evaluations the analyst sees. */
 function WorkedExample() {
-  const order: PassName[] = ["candidates", "entities", "claims", "targets", "classification", "affiliations"];
   const [step, setStep] = useState<PassName>("candidates");
-  const index = order.indexOf(step);
-  const result = example.final.entities.filter((entity) => entity.monitored).map((entity) => {
+  const { root, thumb } = useGlide(step);
+  const index = STEP_ORDER.indexOf(step);
+  const result = monitored.map((entity) => {
     const rows = example.final.classifications.filter((item) => item.entity_id === entity.id);
     const stance = rows.some((item) => item.stance === "негативне") ? "негативне" : rows.some((item) => item.stance === "позитивне") ? "позитивне" : "відсутнє";
     const gold = (example.gold as Record<string, string[]>)[entity.canonical_name ?? ""] ?? [];
-    return { entity, stance, claims: rows.length, agrees: gold.includes(stance) };
+    const agrees = stance === "відсутнє" ? !gold.some((value) => EVALUATIVE.includes(value)) : gold.includes(stance);
+    return { entity, stance, evaluations: rows.filter((item) => item.stance === stance).length, agrees };
   });
-  return <Graphic section="Приклад" title="Розбір допису: як критика Каленюк стає критикою ЦПК" dek={`Справжній допис з еталонного набору, перевіреного вручну. Нижче — що повернула модель на кожному етапі версії ${pipelineVersion(example.pipeline_version)}.`} exportable={false}>
+  return <Graphic section="Приклад" title={example.title} dek={`Справжній допис з еталонного набору, розмітку якого перевірено вручну. Нижче — що повернула модель на кожному етапі версії ${pipelineVersion(example.pipeline_version)}.`} exportable={false}>
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-8">
       <div className="grid content-start gap-5">
         <ExampleText />
         <div>
           <h3 className="text-sm font-semibold">Результат, який бачить аналітик</h3>
           <ul className="mt-2">{result.map((row) => <li key={row.entity.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-rule py-3 last:border-0">
-            <span className="min-w-0"><strong className="block font-semibold">{row.entity.canonical_name}</strong><span className="text-xs text-muted-foreground">{formatNumber(row.claims)} {pluralUk(row.claims, "оцінка", "оцінки", "оцінок")} у {formatNumber(row.claims)} {pluralUk(row.claims, "твердженні", "твердженнях", "твердженнях")}</span></span>
+            <span className="min-w-0"><strong className="block font-semibold">{row.entity.canonical_name}</strong><span className="text-xs text-muted-foreground">{row.stance === "відсутнє" ? "згадано, але не оцінено" : `${formatNumber(row.evaluations)} ${pluralUk(row.evaluations, "оцінка", "оцінки", "оцінок")}`}</span></span>
             <span className="flex items-center gap-3"><StanceBadge stance={row.stance} /><span className={`inline-flex items-center gap-1 text-xs font-semibold ${row.agrees ? "" : "text-negative"}`}>{row.agrees ? <Check className="size-3.5" aria-hidden="true" /> : null}{row.agrees ? "як в еталоні" : "розходиться з еталоном"}</span></span>
           </li>)}</ul>
         </div>
       </div>
       <div className="min-w-0">
-        <div role="group" aria-label="Етапи розбору" className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
-          {order.map((pass, position) => <button key={pass} type="button" aria-pressed={pass === step} onClick={() => setStep(pass)} className={`hit flex min-h-11 flex-col items-start justify-center rounded-[16px] px-3 py-2 text-left transition-[background-color,box-shadow,transform] duration-300 active:scale-[0.97] ${pass === step ? "gloss" : "bg-foreground/[0.045] hover:bg-white/60"}`}>
+        <div ref={root} role="group" aria-label="Етапи розбору" className="relative grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+          {thumb("!rounded-[16px]")}
+          {STEP_ORDER.map((pass, position) => <button key={pass} type="button" aria-pressed={pass === step} data-glide={pass === step ? "on" : undefined} onClick={() => setStep(pass)} className={`hit relative z-[1] flex min-h-11 flex-col items-start justify-center rounded-[16px] px-3 py-2 text-left transition-[background-color,color,transform] duration-300 active:scale-[0.97] ${pass === step ? "bg-transparent" : "bg-foreground/[0.045] hover:bg-white/60"}`}>
             <span className="text-[11px] font-medium tabular-nums text-muted-foreground">крок {position + 1}</span>
-            <span className={`text-[13px] ${pass === step ? "font-semibold" : "font-medium"}`}>{PASS_LABELS[pass]}</span>
+            <span className="text-[13px] font-semibold">{PASS_LABELS[pass]}</span>
           </button>)}
         </div>
-        <div className="mt-5 min-h-[17rem]" aria-live="polite">
-          <h3 className="font-heading text-lg font-semibold tracking-[-0.02em]">{STAGES.find((stage) => stage.pass === step)?.title}</h3>
-          <div className="mt-3"><StepBody pass={step} /></div>
-          <Reveal className="mt-4" summary="Відповідь моделі дослівно">{() => <CodeBlock label="відповідь моделі" text={JSON.stringify(example.passes[step], null, 2)} />}</Reveal>
+        <div className="mt-5" aria-live="polite">
+          <Crossfade items={STEP_ORDER} id={(pass) => pass} active={(pass) => pass === step} render={(pass) => <>
+            <h3 className="font-heading text-lg font-semibold tracking-[-0.02em]">{STAGES.find((stage) => stage.pass === pass)?.title}</h3>
+            <div className="mt-3"><StepBody pass={pass} /></div>
+            <Reveal className="mt-4" summary="Відповідь моделі дослівно">{() => <CodeBlock label="відповідь моделі" text={JSON.stringify(passCalls(pass) > 1 ? example.passes[pass] : firstOutput(pass), null, 2)} />}</Reveal>
+          </>} />
         </div>
         <div className="mt-5 flex items-center justify-between gap-3 border-t border-rule pt-4">
-          <button type="button" disabled={index === 0} onClick={() => setStep(order[index - 1])} className="hit inline-flex h-9 items-center rounded-full bg-foreground/[0.06] px-4 text-sm font-semibold transition-[background-color,transform] duration-200 hover:bg-foreground/[0.1] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40">← Назад</button>
-          <span className="text-xs tabular-nums text-muted-foreground">{index + 1} з {order.length}</span>
-          <button type="button" disabled={index === order.length - 1} onClick={() => setStep(order[index + 1])} className="hit inline-flex h-9 items-center rounded-full bg-[image:var(--ink-gloss)] px-4 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_6px_14px_-6px_rgb(14_15_18/0.5)] transition-transform duration-200 hover:-translate-y-px active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40">Далі →</button>
+          <button type="button" disabled={index === 0} onClick={() => setStep(STEP_ORDER[index - 1])} className="hit inline-flex h-9 items-center rounded-full bg-foreground/[0.06] px-4 text-sm font-semibold transition-[background-color,opacity,transform] duration-200 hover:bg-foreground/[0.1] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40">← Назад</button>
+          <span className="text-xs tabular-nums text-muted-foreground">{index + 1} з {STEP_ORDER.length}</span>
+          <button type="button" disabled={index === STEP_ORDER.length - 1} onClick={() => setStep(STEP_ORDER[index + 1])} className="hit inline-flex h-9 items-center rounded-full bg-[image:var(--ink-gloss)] px-4 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_6px_14px_-6px_rgb(14_15_18/0.5)] transition-[opacity,transform] duration-200 hover:-translate-y-px active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40">Далі →</button>
         </div>
       </div>
     </div>

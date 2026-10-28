@@ -39,8 +39,12 @@ from entity_stance_report import (
 DATA = Path("experiments/dspy/data")
 TEST_RUNS = DATA / "golden_test_v2_runs"
 CONTENT = Path("apps/frontend/src/content")
-EXAMPLE_ID = "golden_v0-574"
-EXAMPLE_CHANNEL = "INSIDER UA"
+# A Ukrainian pilot100 post (partly reviewed by hand): criticism of a ЦПК representative reaches
+# the organization through the affiliations pass, while the merely mentioned Шабунін stays neutral.
+EXAMPLE_ID = "golden_v0-175"
+EXAMPLE_CHANNEL = "Times of Ukraine"
+EXAMPLE_LANGUAGE = "українська"
+EXAMPLE_TITLE = "Розбір допису: критика представниці ЦПК стає критикою самого ЦПК"
 STANCE_KEYS = {"negative": NEGATIVE, "positive": POSITIVE}
 STAGE_KEYS = {
     "1 entity not admitted": "not_admitted",
@@ -252,15 +256,15 @@ def example(report: StanceReport, path: Path, identifier: str) -> dict[str, Any]
     row = report.rows(path, "dev")[identifier]
     text = row["input"]["post_text"]
     final = row["final_output"]
-    passes: dict[str, Any] = {}
-    calls: dict[str, int] = {}
+    passes: dict[str, list[Any]] = {}
     for attempt in row["attempts"]:
-        calls[attempt["pass"]] = calls.get(attempt["pass"], 0) + 1
-        passes.setdefault(attempt["pass"], attempt["sanitized_payload"])
+        passes.setdefault(attempt["pass"], []).append(attempt["sanitized_payload"])
     monitored = [entity for entity in final["entities"] if entity.get("monitored")]
     return {
         "example_id": identifier,
         "channel": EXAMPLE_CHANNEL,
+        "language": EXAMPLE_LANGUAGE,
+        "title": EXAMPLE_TITLE,
         "pipeline_version": row["run_metadata"]["pipeline_version"],
         "model": row["run_metadata"]["model"],
         "text": text,
@@ -272,7 +276,6 @@ def example(report: StanceReport, path: Path, identifier: str) -> dict[str, Any]
             }
             for entity in monitored
         ],
-        "calls": calls,
         "passes": passes,
         "final": {key: final[key] for key in ("entities", "claims", "classifications")},
         "gold": {name: sorted(values) for name, values in sorted(report.gold(identifier).items())},

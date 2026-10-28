@@ -280,18 +280,17 @@ export function SystemPage() {
   const setWindow = (value: string) => { const next = new URLSearchParams(params); if (value === "30") next.delete("activity"); else next.set("activity", value); setParams(next, { replace: true }); };
   const pulses = new Map((activity.data?.channels ?? []).map((channel) => [channel.id, channel]));
   const method = params.get("view") === "method";
+  useEffect(() => { void import("@/components/method"); }, []);
   const setView = (value: "state" | "method") => { const next = new URLSearchParams(params); if (value === "state") next.delete("view"); else next.set("view", value); setParams(next, { replace: true }); };
   const views = <Segmented label="Розділ системи" value={method ? "method" : "state"} onChange={setView} options={[{ value: "state", label: "Стан" }, { value: "method", label: "Як працює" }]} className="glass" />;
-  if (method) return <PageLayout>
-    <PageHeader title="Як працює аналіз" period={false} dateline={["методологія, промпти та якість"]} dek="Шлях допису від Telegram до оцінки сутності: етапи конвеєра, промпти мовної моделі, вимірювання якості на еталонному наборі й обмеження." aside={<div className="flex flex-wrap items-center gap-3 lg:justify-end">{views}</div>} />
-    <Suspense fallback={<LoadState />}><MethodView activity={activity.data} windowDays={windowDays} /></Suspense>
-  </PageLayout>;
+  // The same header serves both tabs, so the switch never remounts or moves when it is pressed.
   return <PageLayout>
-    <PageHeader title="Система аналізу" period={false} dateline={["поточний стан і динаміка роботи"]} dek="Черга, пропускна здатність, якість відповідей моделі та збір каналів." aside={<div className="flex flex-wrap items-center gap-3 lg:justify-end">
+    <PageHeader title={method ? "Як працює аналіз" : "Система аналізу"} period={false} dateline={[method ? "методологія, промпти та якість" : "поточний стан і динаміка роботи"]} dek={method ? "Етапи конвеєра, промпти моделі, якість на еталонному наборі й обмеження." : "Черга, пропускна здатність, якість відповідей моделі та збір каналів."} aside={<div className="flex flex-wrap items-center gap-3 lg:justify-end">
       {views}
       <span role="status" className={`glass inline-flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold ${attention ? "text-[var(--negative-strong)]" : ""}`}><span aria-hidden="true" className={`size-2.5 rounded-full ${attention ? "bg-[#f5a524] shadow-[0_0_0_4px_rgb(245_165_36/0.18)]" : "bg-[var(--switch-on)] shadow-[0_0_0_4px_rgb(52_199_89/0.18)]"}`} />{attention ? "Потрібна увага" : "Працює"}</span>
       <Segmented label="Період динаміки" value={String(windowDays) as (typeof ACTIVITY_WINDOWS)[number]} onChange={setWindow} options={ACTIVITY_WINDOWS.map((value) => ({ value, label: `${value} днів` }))} className="glass" />
     </div>} />
+    {method ? <Suspense fallback={<LoadState />}><MethodView activity={activity.data} windowDays={windowDays} /></Suspense> : <>
     <QueryBoundary loading={query.isLoading} error={query.isError} onRetry={() => void query.refetch()}>
       {jobs && <>
         {jobs.failed || isStale(lastRun, 1) ? <div className="glass rounded-[22px] px-5 py-3.5 text-sm" role="status">
@@ -358,6 +357,7 @@ export function SystemPage() {
         </div>
       </>}
     </QueryBoundary>
+    </>}
   </PageLayout>;
 }
 

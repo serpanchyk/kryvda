@@ -329,9 +329,10 @@ describe("editorial analytics pages", () => {
 
     const steps = screen.getByRole("group", { name: "Етапи розбору" });
     await userEvent.click(within(steps).getByRole("button", { name: /Зв'язки/ }));
-    expect(screen.getByText(/обидві негативні оцінки Каленюк переносяться/)).toBeInTheDocument();
-    expect(screen.getAllByText("як в еталоні")).toHaveLength(2);
-    expectNoLatin(document.body, ["Telegram", "Lapathoniia", "INSIDER UA", "Fire Point", "MamayLM-Gemma-3-27B-IT"]);
+    expect(screen.getByText(/кожна негативна оцінка Олена Щербан переноситься/)).toBeInTheDocument();
+    expect(screen.getAllByText("як в еталоні")).toHaveLength(3);
+    expect(screen.getByText("згадано, але не оцінено")).toBeInTheDocument();
+    expectNoLatin(document.body, ["Telegram", "Lapathoniia", "Times of Ukraine", "MamayLM-Gemma-3-27B-IT"]);
 
     expect(screen.queryByText(/Текст Telegram-поста є даними/)).not.toBeInTheDocument();
     await userEvent.click(screen.getAllByText("Промпт")[0]);
