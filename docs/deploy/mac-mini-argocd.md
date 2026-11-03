@@ -67,6 +67,18 @@ Kubernetes доповнює звичайний Docker Compose deployment.
     Перевірте також /api/channels/collection-health, /api/analysis/health,
     появу аватарок і завершення реального аналізу.
 
+## Діагностика без доступу до кластера
+
+`https://kryvda.thesis-i.com/api/health/db` показує, чи відповідає PostgreSQL: окремо
+свіже з'єднання (`direct`) і спільний пул API (`pool`). Помилка подається лише класом
+і SQLSTATE, без тексту повідомлення. Якщо `/api/health` повертає 502, под API не
+запущений або недоступний для frontend.
+
+Перезапуск через Git: змінити анотацію `kubectl.kubernetes.io/restartedAt` у шаблоні
+пода й зробити push у main; Argo CD перезапустить под під час синку. Синк іде хвилями:
+PostgreSQL (`-1`) має стати healthy, а Job міграцій (`0`) — завершитися, перш ніж
+застосовуються хвилі `1` і `2`. Тому за непрацюючої бази зміни у хвилі `2` не доїдуть.
+
 ## Backup та відновлення
 
 CronJob postgres-backup виконує одноразовий pg_dump щодня о 02:00 Europe/Kyiv,

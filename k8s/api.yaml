@@ -4,7 +4,9 @@ metadata:
   name: api
   namespace: kryvda
   annotations:
-    argocd.argoproj.io/sync-wave: '2'
+    # Incident 2026-11-03: synced before PostgreSQL and migrations so that a broken
+    # database cannot block API diagnostics. Restore '2' once the incident is closed.
+    argocd.argoproj.io/sync-wave: '-2'
 spec:
   replicas: 1
   strategy:
@@ -14,6 +16,8 @@ spec:
       app: api
   template:
     metadata:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: '2026-11-03T18:00:00Z'
       labels:
         app: api
     spec:
@@ -56,13 +60,9 @@ spec:
           timeoutSeconds: 5
           failureThreshold: 30
         readinessProbe:
-          exec:
-            command:
-            - python
-            - -c
-            - "import asyncio,os,asyncpg\nasync def check():\n c=await asyncpg.connect(os.environ['POSTGRES_DSN'],timeout=3)\n\
-              \ await c.fetchval('SELECT 1 FROM monitored_channels LIMIT 1')\n await\
-              \ c.close()\nasyncio.run(check())"
+          httpGet:
+            path: /health
+            port: 8000
           periodSeconds: 10
           timeoutSeconds: 5
         livenessProbe:

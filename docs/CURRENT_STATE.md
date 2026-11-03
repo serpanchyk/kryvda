@@ -358,3 +358,12 @@ work belongs in `tasks/backlog/`; operational records belong in `problems/backlo
 ordered database initialization/migrations, node-local persistent storage, and daily backups.
 Compose remains supported. See `docs/deploy/mac-mini-argocd.md` for bootstrap requirements;
 external integration credentials must be supplied before activating the Application.
+
+Incident 2026-11-03: every public `/api/*` request returned 502 and no cluster access was
+available, so the response goes through Git only. API `/health/db` (public as
+`/api/health/db`) reports a fresh-connection and a shared-pool PostgreSQL check with the
+failure class and SQLSTATE only, plus database size and connection counts when reachable.
+API readiness now checks HTTP only: with one replica, dropping the pod from the Service turned
+database errors into opaque 502s. The API Deployment is temporarily in sync wave `-2`, ahead of
+PostgreSQL and the migration hook, and API/PostgreSQL pod templates carry a `restartedAt`
+annotation that restarts them on sync. Restore the API wave to `2` after the incident.

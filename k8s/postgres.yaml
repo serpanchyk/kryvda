@@ -27,6 +27,8 @@ spec:
       app: postgres
   template:
     metadata:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: '2026-11-03T18:00:00Z'
       labels:
         app: postgres
     spec:

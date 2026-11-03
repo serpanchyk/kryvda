@@ -67,7 +67,7 @@ The optional `k8s/` runtime uses Argo CD/Kustomize and GitHub Actions GHCR image
 PostgreSQL runs on mac-master; API and the single Recreate scraper share a local-path
 avatar PVC on mac-node1; daily backup dumps use a PVC on mac-node2. This topology
 provides persistence, not failover. Database init SQL is packaged with migrations;
-a Sync hook gates application rollout. API readiness checks the database schema,
-while liveness checks only HTTP. Frontend retains the read-only API proxy.
+a Sync hook gates application rollout. API readiness and liveness check only HTTP;
+`/health/db` reports PostgreSQL reachability for diagnosis without cluster access. Frontend retains the read-only API proxy.
 Secrets are sealed for the target cluster; plain Secret templates and the bootstrap
 Application are excluded from the managed resource list. See the deployment runbook.

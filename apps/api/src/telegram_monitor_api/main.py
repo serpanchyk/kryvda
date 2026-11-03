@@ -98,6 +98,55 @@ class SharedPool:
             self._pool = None
 
 
+DATABASE_PROBE_TIMEOUT_SECONDS = 5.0
+
+
+def database_failure(error: BaseException) -> dict[str, object]:
+    """Describe a database failure by class and SQLSTATE only.
+
+    Exception messages can carry internal addresses and the endpoint is public.
+    """
+    return {
+        "status": "error",
+        "error": type(error).__name__,
+        "sqlstate": getattr(error, "sqlstate", None),
+    }
+
+
+async def probe_database(dsn: str, database: SharedPool) -> dict[str, object]:
+    """Check PostgreSQL through a fresh connection and through the shared pool.
+
+    A failing fresh connection points at PostgreSQL or the network; a failing pool
+    with a working fresh connection points at stale API process state.
+    """
+    direct: dict[str, object]
+    try:
+        connection = await asyncpg.connect(dsn, timeout=DATABASE_PROBE_TIMEOUT_SECONDS)
+        try:
+            row = await connection.fetchrow(
+                """SELECT pg_database_size(current_database()) AS size_bytes,
+                   (SELECT count(*) FROM pg_stat_activity) AS connections,
+                   current_setting('max_connections')::int AS max_connections,
+                   pg_is_in_recovery() AS in_recovery""",
+                timeout=DATABASE_PROBE_TIMEOUT_SECONDS,
+            )
+        finally:
+            await connection.close()
+        direct = {"status": "ok", **dict(row)}
+    except Exception as error:
+        direct = database_failure(error)
+    shared: dict[str, object]
+    try:
+        pool = await asyncio.wait_for(database.get(), DATABASE_PROBE_TIMEOUT_SECONDS)
+        await pool.fetchval(
+            "SELECT 1 FROM monitored_channels LIMIT 1", timeout=DATABASE_PROBE_TIMEOUT_SECONDS
+        )
+        shared = {"status": "ok"}
+    except Exception as error:
+        shared = database_failure(error)
+    return {"direct": direct, "pool": shared}
+
+
 def create_app(settings: ApiSettings | None = None) -> FastAPI:
     """Build the API health, collection-status, and channel-image endpoints.
 
@@ -128,6 +177,13 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     async def health() -> dict[str, str]:
         logger.info("health check")
         return {"status": "ok", "service": settings.service_name}
+
+    @app.get("/health/db")
+    async def database_health() -> dict[str, object]:
+        """Report whether PostgreSQL answers, so outages are diagnosable without cluster access."""
+        result = await probe_database(settings.postgres_dsn, database)
+        logger.info("database health check", extra={"database_health": result})
+        return result
 
     @app.get("/channels/collection-health")
     async def collection_health() -> list[dict[str, object]]:

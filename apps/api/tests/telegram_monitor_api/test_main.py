@@ -95,6 +95,70 @@ async def test_analysis_health_endpoint(monkeypatch: object) -> None:
     }
 
 
+class ProbeConnection:
+    """Answer the fresh-connection database probe."""
+
+    async def fetchrow(self, query: str, timeout: float) -> dict[str, object]:
+        assert "pg_database_size" in query
+        return {"size_bytes": 1024, "connections": 4, "max_connections": 100, "in_recovery": False}
+
+    async def close(self) -> None:
+        return None
+
+
+class ProbePool(FakePool):
+    """Answer the shared-pool database probe."""
+
+    async def fetchval(self, query: str, *args: object, timeout: float | None = None) -> int:
+        assert "monitored_channels" in query
+        return 1
+
+
+async def test_database_health_reports_working_database(monkeypatch: object) -> None:
+    async def connect(_: str, **__: object) -> ProbeConnection:
+        return ProbeConnection()
+
+    async def create_pool(_: str, **__: object) -> ProbePool:
+        return ProbePool()
+
+    monkeypatch.setattr(main.asyncpg, "connect", connect)  # type: ignore[union-attr]
+    monkeypatch.setattr(main.asyncpg, "create_pool", create_pool)  # type: ignore[union-attr]
+    transport = ASGITransport(app=create_app())
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/health/db")
+    assert response.status_code == 200
+    assert response.json() == {
+        "direct": {
+            "status": "ok",
+            "size_bytes": 1024,
+            "connections": 4,
+            "max_connections": 100,
+            "in_recovery": False,
+        },
+        "pool": {"status": "ok"},
+    }
+
+
+async def test_database_health_names_failures_without_messages(monkeypatch: object) -> None:
+    async def connect(_: str, **__: object) -> ProbeConnection:
+        raise ConnectionRefusedError("Connect call failed ('10.43.0.7', 5432)")
+
+    async def create_pool(_: str, **__: object) -> ProbePool:
+        raise main.asyncpg.exceptions.TooManyConnectionsError("sorry, too many clients")
+
+    monkeypatch.setattr(main.asyncpg, "connect", connect)  # type: ignore[union-attr]
+    monkeypatch.setattr(main.asyncpg, "create_pool", create_pool)  # type: ignore[union-attr]
+    transport = ASGITransport(app=create_app())
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/health/db")
+    assert response.status_code == 200
+    assert response.json() == {
+        "direct": {"status": "error", "error": "ConnectionRefusedError", "sqlstate": None},
+        "pool": {"status": "error", "error": "TooManyConnectionsError", "sqlstate": "53300"},
+    }
+    assert "10.43" not in response.text
+
+
 class FakeAnalytics:
     """Return API-shaped analytical data without a PostgreSQL dependency."""
 
