@@ -42,7 +42,7 @@ spec:
       - name: ghcr-secret
       containers:
       - name: postgres
-        image: ghcr.io/serpanchyk/kryvda-database:sha-23e6be62eb24f1e86be4263fced07a78ca6565c9
+        image: ghcr.io/serpanchyk/kryvda-database:sha-bcc8579890b7682bc0da4dc194d326127992be65
         env:
         - name: POSTGRES_USER
           value: telegram_monitor
