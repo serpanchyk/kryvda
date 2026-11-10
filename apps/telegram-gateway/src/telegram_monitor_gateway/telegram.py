@@ -4,8 +4,17 @@ import base64
 from collections.abc import Callable
 from typing import Any
 
-from telethon import TelegramClient
-from telethon.errors import FloodWaitError
+from telethon import TelegramClient, functions
+from telethon.errors import (
+    AuthKeyDuplicatedError,
+    AuthKeyError,
+    FloodWaitError,
+    RPCError,
+    UnauthorizedError,
+    UserDeactivatedBanError,
+    UserDeactivatedError,
+)
+from telethon.errors.rpcerrorlist import rpc_errors_dict
 from telethon.sessions import StringSession
 
 from telegram_monitor_gateway.contract import (
@@ -17,9 +26,35 @@ from telegram_monitor_gateway.contract import (
 )
 from telegram_monitor_gateway.settings import GatewaySettings
 
+# Telethon keeps the base class code (``UNAUTHORIZED``) in ``message`` of a specific error, so the
+# Telegram error string is recovered from its own code-to-class table.
+_TELEGRAM_CODES = {error_class: code for code, error_class in rpc_errors_dict.items()}
+
 
 class SessionNotAuthorizedError(RuntimeError):
     """The configured Telegram session string is missing, revoked, or expired."""
+
+    @classmethod
+    def from_rpc(cls, error: RPCError) -> "SessionNotAuthorizedError":
+        """Name Telegram's reason and the operator action it calls for.
+
+        Args:
+            error: Authorization error returned by Telegram.
+
+        Returns:
+            Error whose message carries the Telegram error code and a remedy.
+        """
+        if isinstance(error, (UserDeactivatedBanError, UserDeactivatedError)):
+            remedy = "the Telegram account is banned or deleted; a new session string will not help"
+        elif isinstance(error, AuthKeyDuplicatedError):
+            remedy = (
+                "the session was used from two places at once; generate a new "
+                "TELEGRAM_SESSION_STRING and use it only in this gateway"
+            )
+        else:
+            remedy = "generate a new TELEGRAM_SESSION_STRING"
+        code = _TELEGRAM_CODES.get(type(error), type(error).__name__)
+        return cls(f"Telegram session is not authorized ({code}); {remedy}")
 
 
 class TelegramRateLimitedError(RuntimeError):
@@ -79,13 +114,14 @@ class TelegramChannelReader:
         client = self._client_factory()
         await client.connect()
         try:
-            if not await client.is_user_authorized():
-                raise SessionNotAuthorizedError(
-                    "Telegram session is not authorized; generate a new TELEGRAM_SESSION_STRING"
-                )
+            # ``is_user_authorized`` turns every Telegram error into False and hides the reason
+            # (revoked, duplicated, banned), so the same probe request is made directly.
+            await client(functions.updates.GetStateRequest())
             return await self._fetch(client, request)
         except FloodWaitError as error:
             raise TelegramRateLimitedError(int(error.seconds)) from error
+        except (UnauthorizedError, AuthKeyError) as error:
+            raise SessionNotAuthorizedError.from_rpc(error) from error
         finally:
             await client.disconnect()
 

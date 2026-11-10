@@ -63,9 +63,14 @@ channel.
 
 ## Operations
 
-- **Revoked session** (scraper reports `returned 503`): generate a new session, replace
-  `TELEGRAM_SESSION_STRING` in Vercel, and redeploy. Old sessions can be terminated in Telegram
-  under *Settings → Devices*.
+- **Revoked session** (scraper reports `returned 503`; every UI page shows «Нові дописи не
+  надходять з …» once no channel has been polled for three hours): the 503 detail names
+  Telegram's code. `AUTH_KEY_UNREGISTERED` or `SESSION_REVOKED`: the session was terminated
+  (from *Settings → Devices*, by a new login that ended other sessions, or by Telegram); generate
+  a new session, replace `TELEGRAM_SESSION_STRING` in Vercel, and redeploy, because environment
+  changes apply only to new deployments. `AUTH_KEY_DUPLICATED`: the same, and make sure nothing
+  else uses the new string. `USER_DEACTIVATED_BAN`: the account is banned and a new session will
+  not help. The scraper's live cursor pages through every post missed during the outage.
 - **Rotating the token**: change `TELEGRAM_GATEWAY_TOKEN` in Vercel, redeploy, then update the
   department `.env` and run `docker compose up -d`.
 - **Logs**: Vercel project → *Logs*. Each fetch logs the channel, page sizes, and duration.

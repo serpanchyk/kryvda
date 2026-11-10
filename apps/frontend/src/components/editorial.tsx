@@ -2,11 +2,11 @@ import { Suspense, lazy, useEffect, useId, useLayoutEffect, useRef, useState, ty
 import { Dialog } from "@base-ui/react/dialog";
 import { ArrowDown, ArrowUp, CalendarDays, ChevronLeft, ChevronRight, Clock3, Download, ExternalLink, Menu, RotateCw, X } from "lucide-react";
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { useIsFetching } from "@tanstack/react-query";
+import { useIsFetching, useQuery } from "@tanstack/react-query";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceArea, ReferenceLine, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 
-import type { Daily, Distribution, Page, Summary } from "@/api/client";
+import { apiClient, type Daily, type Distribution, type Page, type Summary } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { AmbientToggle, AsciiField, LiquidLens, Segmented, emitRipple } from "@/components/liquid";
 import { PhotoCredits } from "@/components/avatars";
 import { aggregateWeekly, defaultGranularity, detectSpikes, rangeFrom, rollingNegativeShare, type Granularity } from "@/lib/charts";
+import { collectionOutage } from "@/lib/collection";
 import { glossary, termOf, type GlossaryGroup, type Term } from "@/lib/glossary";
 import {
   PAGE_SIZE,
@@ -22,6 +23,7 @@ import {
   datesFromParams,
   exportFileName,
   formatDate,
+  formatDateTime,
   formatNumber,
   formatPercent,
   isoEnd,
@@ -132,7 +134,22 @@ export function Shell() {
         </div>
       </div>
     </header>
-    <div className="relative z-[1]"><Outlet /><SiteFooter /></div>
+    <div className="relative z-[1]"><CollectionAlert /><Outlet /><SiteFooter /></div>
+  </div>;
+}
+
+/** Says on every page that collection has stopped, so an outage is seen the day it starts. */
+function CollectionAlert() {
+  const collection = useQuery({ queryKey: ["collection-health"], queryFn: apiClient.collectionHealth, refetchInterval: 10 * 60_000 });
+  const outage = collection.data ? collectionOutage(collection.data) : null;
+  if (!outage) return null;
+  return <div className="mx-auto max-w-[1320px] px-3 pt-2 md:px-8">
+    <div role="status" className="glass flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-[22px] px-5 py-3.5 text-sm">
+      <span aria-hidden="true" className="size-2.5 shrink-0 self-center rounded-full bg-[#f5a524] shadow-[0_0_0_4px_rgb(245_165_36/0.18)]" />
+      <strong className="font-semibold text-[var(--negative-strong)]">Нові дописи не надходять з {formatDateTime(outage.since)}.</strong>
+      <span className="text-muted-foreground">{outage.reason} Дані показано станом на цей час.</span>
+      <Link to="/system" className="font-semibold underline underline-offset-4">Стан системи</Link>
+    </div>
   </div>;
 }
 

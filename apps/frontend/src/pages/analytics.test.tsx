@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { apiClient } from "@/api/client";
 import { PostPage, Shell } from "@/App";
@@ -23,6 +23,9 @@ vi.mock("@/api/client", async () => {
 });
 
 afterEach(() => cleanup());
+
+// The shell asks for collection health on every page; tests that care override this.
+beforeEach(() => vi.mocked(apiClient.collectionHealth).mockResolvedValue([]));
 
 beforeAll(() => {
   class ResizeObserver {
@@ -307,6 +310,8 @@ describe("editorial analytics pages", () => {
     expect(screen.getByText("Відповідь поза схемою")).toBeInTheDocument();
     expect(screen.getByText("Невідома помилка")).toBeInTheDocument();
     expect(await screen.findByText("1 канал не оновлювався понад добу")).toBeInTheDocument();
+    expect(screen.getByText(/Нові дописи не надходять з/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Стан системи" })).toHaveAttribute("href", "/system");
     expect(screen.getByText(/2 дописи не вдалося проаналізувати/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Зберегти зображення" })).not.toBeInTheDocument();
     expectNoLatin();

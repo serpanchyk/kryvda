@@ -367,3 +367,14 @@ API readiness now checks HTTP only: with one replica, dropping the pod from the 
 database errors into opaque 502s. The API Deployment is temporarily in sync wave `-2`, ahead of
 PostgreSQL and the migration hook, and API/PostgreSQL pod templates carry a `restartedAt`
 annotation that restarts them on sync. Restore the API wave to `2` after the incident.
+
+Incident 2026-10-31: collection stopped at 14:12 UTC because Telegram dropped the gateway's
+session (`AUTH_KEY_UNREGISTERED`; the separate local Compose session was dropped too), and it went
+unnoticed for ten days. The gateway now probes the session with the request
+`is_user_authorized` used to swallow and returns Telegram's error code and remedy in the 503
+detail (`AUTH_KEY_UNREGISTERED`/`SESSION_REVOKED`: new session; `AUTH_KEY_DUPLICATED`: new
+session used only in Vercel; `USER_DEACTIVATED_BAN`: the account itself is lost); a session
+revoked mid-fetch is reported the same way instead of as 502. The scraper stores that detail as
+each channel's `last_error`. Every UI page shows a status banner with the stop time and a
+Ukrainian reason when no active channel has been polled successfully for three hours.
+Collection resumes only after a new `TELEGRAM_SESSION_STRING` is installed in Vercel.

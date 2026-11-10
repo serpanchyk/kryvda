@@ -82,7 +82,7 @@ def create_app(
                     headers={"Retry-After": str(error.seconds)},
                 ) from error
             except SessionNotAuthorizedError as error:
-                logger.error("telegram session not authorized")
+                logger.error("telegram session not authorized", extra={"reason": str(error)})
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(error)
                 ) from error

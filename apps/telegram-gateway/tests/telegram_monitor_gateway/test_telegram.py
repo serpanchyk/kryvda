@@ -18,7 +18,14 @@ from telegram_monitor_gateway.telegram import (
     TelegramChannelReader,
     TelegramRateLimitedError,
 )
-from telethon.errors import FloodWaitError
+from telethon.errors import (
+    AuthKeyDuplicatedError,
+    AuthKeyUnregisteredError,
+    FloodWaitError,
+    SessionRevokedError,
+    UserDeactivatedBanError,
+)
+from telethon.tl.functions.updates import GetStateRequest
 
 PUBLIC = GatewayChannel(configured_reference="example_channel", access_kind="public")
 
@@ -44,7 +51,8 @@ class FakeTelegramClient:
 
     def __init__(self, messages: list[SimpleNamespace] | None = None) -> None:
         self.messages = sorted(messages or [], key=lambda item: item.id)
-        self.authorized = True
+        self.auth_error: Exception | None = None
+        self.requests: list[object] = []
         self.avatar: object = None
         self.avatar_error: Exception | None = None
         self.dialogs: list[SimpleNamespace] = []
@@ -58,8 +66,11 @@ class FakeTelegramClient:
     async def disconnect(self) -> None:
         self.disconnected = True
 
-    async def is_user_authorized(self) -> bool:
-        return self.authorized
+    async def __call__(self, request: object) -> object:
+        self.requests.append(request)
+        if self.auth_error is not None:
+            raise self.auth_error
+        return SimpleNamespace()
 
     async def get_entity(self, reference: str) -> SimpleNamespace:
         return SimpleNamespace(id=55, username=reference, title="Example")
@@ -264,11 +275,38 @@ async def test_avatar_formats_are_detected(content: bytes, content_type: str) ->
     assert response.avatar.content_type == content_type
 
 
-async def test_unauthorized_session_is_reported() -> None:
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (
+            AuthKeyUnregisteredError(request=None),
+            "(AUTH_KEY_UNREGISTERED); generate a new TELEGRAM_SESSION_STRING",
+        ),
+        (SessionRevokedError(request=None), "(SESSION_REVOKED); generate a new"),
+        (AuthKeyDuplicatedError(request=None), "(AUTH_KEY_DUPLICATED); the session was used"),
+        (UserDeactivatedBanError(request=None), "(USER_DEACTIVATED_BAN); the Telegram account"),
+    ],
+)
+async def test_unauthorized_session_names_telegram_reason(error: Exception, expected: str) -> None:
     client = FakeTelegramClient()
-    client.authorized = False
+    client.auth_error = error
 
-    with pytest.raises(SessionNotAuthorizedError):
+    with pytest.raises(SessionNotAuthorizedError) as raised:
+        await reader_for(client).fetch(ChannelFetchRequest(channel=PUBLIC))
+
+    assert expected in str(raised.value)
+    assert isinstance(client.requests[0], GetStateRequest)
+    assert client.disconnected
+
+
+async def test_session_revoked_mid_fetch_is_reported_as_unauthorized() -> None:
+    class RevokedClient(FakeTelegramClient):
+        async def get_entity(self, reference: str) -> SimpleNamespace:
+            raise SessionRevokedError(request=None)
+
+    client = RevokedClient()
+
+    with pytest.raises(SessionNotAuthorizedError, match="SESSION_REVOKED"):
         await reader_for(client).fetch(ChannelFetchRequest(channel=PUBLIC))
     assert client.disconnected
 
